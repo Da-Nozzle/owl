@@ -1,0 +1,26 @@
+storage:
+  postgres:
+    postgres_db:
+      # SQLAlchemy 2.1 defaults to psycopg 3; dagster-postgres only installs psycopg2.
+      scheme: postgresql+psycopg2
+      hostname:
+        env: DAGSTER_PG_HOST
+      port:
+        env: DAGSTER_PG_PORT
+      username:
+        env: DAGSTER_PG_USER
+      password:
+        env: DAGSTER_PG_PASSWORD
+      db_name:
+        env: DAGSTER_PG_DB
+
+run_coordinator:
+  module: dagster.core.run_coordinator
+  class: QueuedRunCoordinator
+
+run_launcher:
+  module: dagster.core.launcher
+  class: DefaultRunLauncher
+
+telemetry:
+  enabled: false # potnetially set to true if I get to OTeL implementation in time

@@ -1,0 +1,34 @@
+[postgres]
+host = "postgres"
+port = 5432
+user = "leads"
+password = "leads" # local only; also set in .devcontainer/compose.yml
+# Production example:
+# host = "leads.abc123.eu-central-1.rds.amazonaws.com"
+# password = { secret_store = "prod", secret_name = "leads/postgres-password" }
+
+# Created by .devcontainer/postgres/initdb locally; by infrastructure code in production.
+[postgres.databases]
+dagster = "dagster"
+ducklake_catalog = "ducklake_catalog"
+marquez = "marquez"
+app = "app"
+
+[lake]
+data_path = "s3://leads-lake/"
+# data_path = "s3://leads-lake-prod/" # production
+
+[lake.s3]
+endpoint = "s3mock:9090"
+region = "eu-central-1"
+url_style = "path"
+use_ssl = false
+key_id = "s3mock"
+secret = "s3mock"
+# Production example (AWS S3). An instance role instead of keys would need the dbt profile's
+# credential_chain provider, which the LEADS_S3_* variables cannot express yet.
+# endpoint = "s3.eu-central-1.amazonaws.com"
+# url_style = "vhost"
+# use_ssl = true
+# key_id = { secret_store = "prod", secret_name = "leads/lake-s3-key-id" }
+# secret = { secret_store = "prod", secret_name = "leads/lake-s3-secret" }

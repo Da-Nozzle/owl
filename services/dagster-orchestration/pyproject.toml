@@ -1,0 +1,31 @@
+[project]
+name = "leads-dagster-orchestration"
+version = "0.1.0"
+description = "Dagster definitions and the composition root for pipeline runs"
+requires-python = ">=3.14,<3.15"
+dependencies = [
+    "leads-config",
+    "dagster==1.13.26",
+    "dagster-webserver==1.13.26",
+    "dagster-postgres==0.29.26",
+    "dagster-dbt==0.29.26",
+    "dagster-dlt==0.29.26",
+    "dbt-core>=1.12,<1.13",
+    "dbt-duckdb>=1.11,<1.12",
+    "dlt[ducklake,postgres,s3]>=1.31,<2",
+    "duckdb==1.5.6",
+]
+
+[project.scripts]
+leads-dagster-dev = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dagster_dev"
+leads-dbt = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt"
+
+[tool.uv.sources]
+leads-config = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/leads_dagster_orchestration"]

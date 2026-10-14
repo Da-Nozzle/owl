@@ -1,0 +1,81 @@
+[project]
+name = "poc-data-pipeline-excercise"
+version = "0.1.0"
+description = "Homework"
+requires-python = ">=3.14,<3.15"
+dependencies = ["leads-config", "leads-dagster-orchestration"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.14"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["services/*"]
+exclude = ["services/transform"]
+
+[tool.uv.sources]
+leads-config = { workspace = true }
+leads-dagster-orchestration = { workspace = true }
+
+[[tool.uv.dependency-metadata]]
+name = "dagster-dbt"
+version = "0.29.26"
+requires-python = ">=3.10,<3.15"
+requires-dist = [
+    "dagster==1.13.26",
+    "gitpython",
+    "jinja2",
+    "networkx",
+    "orjson",
+    "packaging",
+    "requests",
+    "rich",
+    "sqlglot[rs]",
+    "typer>=0.9.0",
+    "dbt-core>=1.7,<1.13; extra == 'dbt-core'",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py314"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "N",
+    "UP",
+    "B",
+    "SIM",
+    "C4",
+    "RET",
+    "PTH",
+    "ERA",
+    "PT",
+    "TID",
+    "RUF",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["leads_*"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"pydantic".msg = "No runtime type validation. Use frozen dataclasses."
+"os.environ".msg = "Read config from TOML."
+"os.getenv".msg = "Read config from TOML."
+
+[tool.ruff.lint.per-file-ignores]
+"services/dagster-orchestration/src/leads_dagster_orchestration/entrypoints/tool_launchers.py" = [
+    "TID251",
+]
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
+testpaths = ["services"]

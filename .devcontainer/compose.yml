@@ -1,0 +1,82 @@
+name: leads
+
+volumes:
+  postgres-data:
+  s3mock-data:
+  uv-cache:
+  gh-config:
+
+services:
+  dev:
+    # Built by initializeCommand in devcontainer.json, not Compose
+    image: leads-dev:local
+    pull_policy: never
+    command: sleep infinity
+    volumes:
+      - ..:/workspace:cached
+      - ../config/local:/etc/leads:ro
+      - uv-cache:/home/dev/.cache/uv
+      - gh-config:/home/dev/.config/gh # gh auth login survives rebuilds
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      s3mock:
+        condition: service_started
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: leads
+      POSTGRES_DB: dagster
+      POSTGRES_PASSWORD: leads # also in config/local/storage.toml
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "pg_isready", "--host", "127.0.0.1", "--username", "leads", "--dbname", "app"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  s3mock:
+    image: adobe/s3mock:5.2.3
+    environment:
+      COM_ADOBE_TESTING_S3MOCK_STORE_ROOT: /s3mockroot
+      COM_ADOBE_TESTING_S3MOCK_STORE_INITIAL_BUCKETS: leads-lake
+      COM_ADOBE_TESTING_S3MOCK_STORE_RETAIN_FILES_ON_EXIT: "true"
+      COM_ADOBE_TESTING_S3MOCK_STORE_REGION: eu-central-1
+    volumes:
+      - s3mock-data:/s3mockroot
+    restart: unless-stopped
+
+  marquez:
+    image: marquezproject/marquez:0.51.1
+    environment:
+      MARQUEZ_CONFIG: /etc/marquez/marquez.yml
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: marquez
+      POSTGRES_USER: leads
+      POSTGRES_PASSWORD: leads
+    volumes:
+      - ./marquez/marquez.yml:/etc/marquez/marquez.yml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  marquez-web:
+    image: marquezproject/marquez-web:0.51.1
+    environment:
+      MARQUEZ_HOST: marquez
+      MARQUEZ_PORT: "5000"
+      WEB_PORT: "3000"
+    ports:
+      - "3001:3000"
+    depends_on:
+      marquez:
+        condition: service_started
+    restart: unless-stopped

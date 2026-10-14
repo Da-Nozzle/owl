@@ -1,0 +1,25 @@
+leads:
+  target: local
+  outputs:
+    local:
+      type: duckdb
+      path: ":memory:"
+      database: lake
+      threads: 4
+      extensions:
+        - httpfs
+        - postgres
+        - ducklake
+      secrets:
+        - type: s3
+          key_id: "{{ env_var('LEADS_S3_KEY_ID') }}"
+          secret: "{{ env_var('LEADS_S3_SECRET') }}"
+          region: "{{ env_var('LEADS_S3_REGION') }}"
+          endpoint: "{{ env_var('LEADS_S3_ENDPOINT') }}"
+          url_style: "{{ env_var('LEADS_S3_URL_STYLE') }}"
+          use_ssl: "{{ env_var('LEADS_S3_USE_SSL') }}"
+      attach:
+        - path: "ducklake:postgres:{{ env_var('LEADS_DUCKLAKE_CATALOG') }}"
+          alias: lake
+          options:
+            data_path: "{{ env_var('LEADS_LAKE_DATA_PATH') }}"

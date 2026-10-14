@@ -1,0 +1,34 @@
+{
+    "name": "homework",
+    "dockerComposeFile": "compose.yml",
+    "service": "dev",
+    "workspaceFolder": "/workspace",
+    "shutdownAction": "stopCompose",
+    "initializeCommand": "docker build --tag leads-dev:local .devcontainer",
+    "postCreateCommand": "sh .devcontainer/post-create.sh",
+    "remoteUser": "dev",
+    "updateRemoteUserUID": true,
+    "features": {
+        "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+            "moby": false,
+            "installDockerBuildx": true,
+            "installDockerComposeSwitch": false
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "charliermarsh.ruff",
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "fill-labs.dependi",
+                "esbenp.prettier-vscode",
+                "tamasfe.even-better-toml",
+                "ms-azuretools.vscode-containers"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python"
+            }
+        }
+    }
+}

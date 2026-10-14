@@ -1,0 +1,7 @@
+[pipeline]
+mode = "replay"
+# mode = "live" # production
+
+[google]
+backend = "places_api"
+api_key = { secret_store = "local", secret_name = "google_places_api_key" }
