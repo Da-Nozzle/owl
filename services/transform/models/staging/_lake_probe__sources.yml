@@ -1,0 +1,16 @@
+version: 2
+
+sources:
+  - name: lake_probe
+    description: Fixed rows loaded by dlt to prove dlt and dbt share one DuckLake. Remove once a real source lands.
+    schema: raw_lake_probe
+    tables:
+      - name: probe_rows
+
+models:
+  - name: stg_lake_probe__probe_rows
+    columns:
+      - name: probe_id
+        data_tests:
+          - unique
+          - not_null

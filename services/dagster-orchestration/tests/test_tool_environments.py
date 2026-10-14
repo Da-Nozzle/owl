@@ -18,6 +18,7 @@ def build_local_like_config(password: str) -> Configuration:
             },
             "lake": {
                 "data_path": "s3://leads-lake/",
+                "metadata_schema": "ducklake",
                 "s3": {
                     "endpoint": "s3mock:9090",
                     "region": "eu-central-1",

@@ -3,7 +3,12 @@ name = "poc-data-pipeline-excercise"
 version = "0.1.0"
 description = "Homework"
 requires-python = ">=3.14,<3.15"
-dependencies = ["leads-config", "leads-dagster-orchestration"]
+dependencies = [
+    "leads-config",
+    "leads-dagster-orchestration",
+    "leads-ingest",
+    "leads-lake",
+]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.14"]
@@ -12,12 +17,14 @@ dev = ["pytest>=8", "ruff>=0.14"]
 package = false
 
 [tool.uv.workspace]
-members = ["services/*"]
+members = ["services/*", "libs/*"]
 exclude = ["services/transform"]
 
 [tool.uv.sources]
 leads-config = { workspace = true }
 leads-dagster-orchestration = { workspace = true }
+leads-ingest = { workspace = true }
+leads-lake = { workspace = true }
 
 [[tool.uv.dependency-metadata]]
 name = "dagster-dbt"
@@ -78,4 +85,4 @@ ban-relative-imports = "all"
 
 [tool.pytest.ini_options]
 addopts = ["--import-mode=importlib"]
-testpaths = ["services"]
+testpaths = ["services", "libs"]

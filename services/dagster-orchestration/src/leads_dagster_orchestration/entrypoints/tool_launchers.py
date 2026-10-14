@@ -26,7 +26,7 @@ def run_dagster_dev() -> NoReturn:
             "--module-name",
             DEFINITIONS_MODULE,
         ],
-        extra_environment=dagster_storage_environment(config),
+        extra_environment=dagster_storage_environment(config) | dbt_environment(config),
     )
 
 

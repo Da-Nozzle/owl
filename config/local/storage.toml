@@ -16,6 +16,9 @@ app = "app"
 
 [lake]
 data_path = "s3://leads-lake/"
+# Postgres schema in ducklake_catalog that holds the lake's metadata.
+# dlt and dbt MUST use the same schema
+metadata_schema = "ducklake"
 # data_path = "s3://leads-lake-prod/" # production
 
 [lake.s3]

@@ -23,3 +23,4 @@ leads:
           alias: lake
           options:
             data_path: "{{ env_var('LEADS_LAKE_DATA_PATH') }}"
+            metadata_schema: "{{ env_var('LEADS_DUCKLAKE_METADATA_SCHEMA') }}"
