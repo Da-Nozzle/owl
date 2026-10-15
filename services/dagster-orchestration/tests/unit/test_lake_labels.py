@@ -2,26 +2,18 @@ import dagster as dg
 
 from leads_dagster_orchestration.lake_labels import lake_labels, with_labels
 from leads_ingest.settings import PipelineMode
-from leads_lake.settings import LakeCatalog, LakeSettings, LakeStorage
-
-REPLAY_LAKE = LakeSettings(
-    catalog=LakeCatalog("postgres", 5432, "ducklake_catalog", "leads", "leads", "ducklake_replay"),
-    storage=LakeStorage(
-        "s3://leads-lake/replay/",
-        "s3://leads-lake/archive/",
-        "s3mock:9090",
-        "eu-central-1",
-        "path",
-        False,
-        "s3mock",
-        "s3mock",
-    ),
-)
+from leads_lake.settings import load_lake_settings
+from leads_testing.config import build_config
 
 
 def test_labels_name_the_mode_and_its_lake() -> None:
+    # Arrange
+    replay_lake = load_lake_settings(
+        build_config({"lake.replay.metadata_schema": "ducklake_replay"}), replay=True
+    )
+
     # Act
-    labels = lake_labels(PipelineMode.REPLAY, REPLAY_LAKE)
+    labels = lake_labels(PipelineMode.REPLAY, replay_lake)
 
     # Assert
     assert labels == {"leads/mode": "replay", "leads/lake": "ducklake_replay"}

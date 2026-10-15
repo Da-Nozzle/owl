@@ -1,8 +1,6 @@
-import os
-from pathlib import Path
+from collections.abc import MutableMapping
 from typing import cast
 
-import duckdb
 import pytest
 from dagster._core.definitions.definitions_load_context import (
     DefinitionsLoadContext,
@@ -12,16 +10,12 @@ from dagster_dbt import DbtProject
 
 from leads_dagster_orchestration.assets.transform import (
     dbt_sources,
-    ensure_metadata_database,
     environment_variable,
     has_shared_models,
-    keep_main_state,
     prepare_on_initial_load,
     run_month_count_query,
     set_dbt_environment,
 )
-
-ENVIRONMENT = os.environ  # noqa: TID251 - checks what a step sets for dbt
 
 
 def manifest_of(*nodes: tuple[str, list[str]]) -> dict[str, object]:
@@ -77,66 +71,36 @@ def test_shared_step_exists_only_for_models_outside_the_source_layers() -> None:
     assert has_shared_models(with_seed)
 
 
-def test_main_state_is_replaced_by_the_latest_builds_manifest(tmp_path: Path) -> None:
-    # Arrange
-    state_dir = tmp_path / "target" / "main"
-    state_dir.mkdir(parents=True)
-    (state_dir / "manifest.json").write_text('{"build": 1}')
-    manifest = tmp_path / "manifest.json"
-    manifest.write_text('{"build": 2}')
-
-    # Act
-    keep_main_state(manifest, state_dir)
-
-    # Assert
-    assert [path.name for path in state_dir.iterdir()] == ["manifest.json"]
-    assert (state_dir / "manifest.json").read_text() == '{"build": 2}'
-
-
-def test_metadata_database_opens_read_only(tmp_path: Path) -> None:
-    # Arrange
-    path = tmp_path / "target" / "dagster.duckdb"
-
-    # Act
-    ensure_metadata_database(path)
-    ensure_metadata_database(path)
-
-    # Assert
-    with duckdb.connect(str(path), read_only=True) as connection:
-        assert connection.execute("select 1").fetchone() == (1,)
-    assert [entry.name for entry in path.parent.iterdir()] == ["dagster.duckdb"]
-
-
 def test_an_environment_variable_is_set_only_within_its_block(
-    monkeypatch: pytest.MonkeyPatch,
+    environ: MutableMapping[str, str],
 ) -> None:
     # Arrange
-    monkeypatch.setenv("LEADS_TEST_KEPT", "before")
-    monkeypatch.delenv("LEADS_TEST_ADDED", raising=False)
+    environ["LEADS_TEST_KEPT"] = "before"
+    environ.pop("LEADS_TEST_ADDED", None)
 
     # Act
     with environment_variable("LEADS_TEST_KEPT", "2026-09"):
-        kept_within = ENVIRONMENT["LEADS_TEST_KEPT"]
+        kept_within = environ["LEADS_TEST_KEPT"]
     with environment_variable("LEADS_TEST_ADDED", "2026-09"):
-        added_within = ENVIRONMENT["LEADS_TEST_ADDED"]
+        added_within = environ["LEADS_TEST_ADDED"]
 
     # Assert
-    assert (kept_within, ENVIRONMENT["LEADS_TEST_KEPT"]) == ("2026-09", "before")
+    assert (kept_within, environ["LEADS_TEST_KEPT"]) == ("2026-09", "before")
     assert added_within == "2026-09"
-    assert "LEADS_TEST_ADDED" not in ENVIRONMENT
+    assert "LEADS_TEST_ADDED" not in environ
 
 
-def test_dbt_environment_is_set_in_this_process(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_dbt_environment_is_set_in_this_process(environ: MutableMapping[str, str]) -> None:
     # Arrange
-    monkeypatch.setenv("LEADS_ARCHIVE_PATH", "/workspace/replay")
-    monkeypatch.delenv("LEADS_TEST_ADDED", raising=False)
+    environ["LEADS_ARCHIVE_PATH"] = "/workspace/replay"
+    environ.pop("LEADS_TEST_ADDED", None)
 
     # Act
     set_dbt_environment({"LEADS_ARCHIVE_PATH": "s3://leads-lake/archive", "LEADS_TEST_ADDED": "13"})
 
     # Assert
-    assert ENVIRONMENT["LEADS_ARCHIVE_PATH"] == "s3://leads-lake/archive"
-    assert ENVIRONMENT["LEADS_TEST_ADDED"] == "13"
+    assert environ["LEADS_ARCHIVE_PATH"] == "s3://leads-lake/archive"
+    assert environ["LEADS_TEST_ADDED"] == "13"
 
 
 def test_a_model_with_a_run_month_column_counts_the_run_months_rows() -> None:

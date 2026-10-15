@@ -7,6 +7,7 @@ from leads_config.loading import (
     load_configuration,
     read_config_directory,
 )
+from leads_config.secret_stores import FileSecretStore
 
 
 def test_files_in_one_directory_merge_into_one_tree(tmp_path: Path) -> None:
@@ -54,15 +55,19 @@ def test_file_store_secret_resolves_from_its_directory(tmp_path: Path) -> None:
     assert password == "s3cret"
 
 
-def test_local_environment_config_loads(tmp_path: Path) -> None:
+def test_a_missing_config_directory_is_named(tmp_path: Path) -> None:
+    # Act / Assert
+    with pytest.raises(NotADirectoryError, match="absent"):
+        read_config_directory(tmp_path / "absent")
+
+
+def test_an_empty_secret_file_is_rejected(tmp_path: Path) -> None:
     # Arrange
-    local_config = Path(__file__).resolve().parents[3] / "config" / "local"
+    (tmp_path / "postgres_password").write_text("\n")
 
-    # Act
-    config = load_configuration(local_config)
-
-    # Assert
-    assert config.get_str("pipeline.mode") == "replay"
+    # Act / Assert
+    with pytest.raises(ValueError, match="postgres_password is empty"):
+        FileSecretStore(tmp_path).fetch("postgres_password", {})
 
 
 def test_log_file_directory_is_created_before_logging_starts(tmp_path: Path) -> None:

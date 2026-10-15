@@ -4,20 +4,27 @@ import dagster as dg
 import pytest
 
 from leads_dagster_orchestration.assets.sodra import files_metadata, require_current_run_month
-from leads_ingest.ports.downloader import Download
+from leads_dagster_orchestration.partitions import run_month_partitions
+from leads_ingest.settings import load_pipeline_settings
+from leads_testing.config import build_config
+from leads_testing.ingest import build_download
 
 # Run month M starts on the 21st of M at 06:00 in Vilnius (UTC+3 in October).
-PARTITIONS = dg.MonthlyPartitionsDefinition(
-    start_date="2026-05",
-    fmt="%Y-%m",
-    day_offset=21,
-    hour_offset=6,
-    timezone="Europe/Vilnius",
-    end_offset=1,
+PARTITIONS = run_month_partitions(
+    load_pipeline_settings(
+        build_config(
+            {
+                "pipeline.first_month": "2026-05",
+                "pipeline.run_day": 21,
+                "pipeline.run_hour": 6,
+                "pipeline.timezone": "Europe/Vilnius",
+            }
+        )
+    )
 )
 
 
-def test_the_current_run_month_downloads() -> None:
+def test_the_current_run_month_may_download() -> None:
     # Act / Assert
     require_current_run_month(PARTITIONS, "2026-09", datetime(2026, 10, 15, tzinfo=UTC))
 
@@ -39,8 +46,12 @@ def test_a_run_month_passes_when_the_next_one_starts() -> None:
 
 def test_files_metadata_shows_each_files_fetch() -> None:
     # Arrange
-    fetched_at = datetime(2026, 10, 15, 19, 5, tzinfo=UTC)
-    download = Download("https://sodra.test/2026", b"PK", fetched_at, "Tue, 29 Sep 2026")
+    download = build_download(
+        b"PK",
+        url="https://sodra.test/2026",
+        fetched_at=datetime(2026, 10, 15, 19, 5, tzinfo=UTC),
+        last_modified="Tue, 29 Sep 2026",
+    )
 
     # Act
     metadata = files_metadata({"monthly-2026.csv.zip": download})

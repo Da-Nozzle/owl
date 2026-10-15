@@ -11,7 +11,14 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.14"]
+dev = [
+    "hypothesis>=6.170.0",
+    "leads-testing",
+    "psycopg2-binary>=2.9.13",
+    "pytest>=8",
+    "pytest-httpserver>=1.2.0",
+    "ruff>=0.14",
+]
 
 [tool.uv]
 package = false
@@ -25,6 +32,7 @@ leads-config = { workspace = true }
 leads-dagster-orchestration = { workspace = true }
 leads-ingest = { workspace = true }
 leads-lake = { workspace = true }
+leads-testing = { workspace = true }
 
 [[tool.uv.dependency-metadata]]
 name = "dagster-dbt"
@@ -84,5 +92,14 @@ ban-relative-imports = "all"
 ]
 
 [tool.pytest.ini_options]
-addopts = ["--import-mode=importlib"]
+addopts = ["--import-mode=importlib", "--strict-markers"]
 testpaths = ["services", "libs"]
+# Set by conftest.py from the directory a test is in.
+markers = [
+    "unit: in-process only (tests/unit/)",
+    "integration: uses the filesystem, a database, an HTTP server or Dagster's executor (tests/integration/)",
+]
+filterwarnings = [
+    # dagster-dbt depends on sqlglot[rs]; nothing here parses SQL with it.
+    "ignore:sqlglotrs is deprecated:DeprecationWarning",
+]

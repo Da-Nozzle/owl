@@ -17,7 +17,7 @@ Everything for local work lives in `.devcontainer/`; Compose is not used outside
 2. In the container terminal:
 
    ```sh
-   pytest                      # unit tests
+   pytest                      # all tests; -m unit for the in-process ones only (below)
    ruff check . && ruff format --check .
    leads-dbt debug             # dbt with the DuckLake profile, secrets resolved from config
    leads-dbt-dev build -s state:modified+  # your model changes, in a dev copy (below)
@@ -71,6 +71,18 @@ that one process. Under Dagster, dbt's variables are set by the definitions inst
 
 `leads-dagster-dev` runs `dagster dev` against the repo, so code changes appear after
 **Reload definitions** in the Dagster UI.
+
+### Tests
+
+Each package keeps its tests in `tests/unit/` (in-process only) or `tests/integration/` (a temporary
+directory, DuckDB, a local HTTP server, or a throwaway Dagster instance running real runs; none
+needs the compose services). `conftest.py` marks each test by its directory, so `pytest -m unit` or
+`pytest -m integration` runs one kind, and a test in neither directory fails collection.
+
+Tests build settings with `leads_testing` (`libs/testing`, a dev dependency only):
+`build_config({"pipeline.run_day": 29})` is a configuration like `config/local` with the dotted keys
+replaced, and `leads_testing.ingest` holds a `Download` builder and in-memory fakes of the ingest
+ports. dbt's own tests stay in `services/transform/tests/`, where dbt reads them.
 
 ### Iterating on models
 

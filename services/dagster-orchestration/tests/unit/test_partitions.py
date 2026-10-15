@@ -1,22 +1,23 @@
 from datetime import datetime
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from leads_dagster_orchestration.partitions import replay_month_partitions, run_month_partitions
 from leads_ingest.months import Month
-from leads_ingest.settings import PipelineMode, PipelineSettings
+from leads_ingest.settings import load_pipeline_settings
+from leads_testing.config import build_config
 
 VILNIUS = ZoneInfo("Europe/Vilnius")
-SETTINGS = PipelineSettings(
-    mode=PipelineMode.REPLAY,
-    first_month=Month(2026, 8),
-    run_day=21,
-    run_hour=6,
-    timezone="Europe/Vilnius",
-    user_agent="test",
-    replay_path=Path("/replay"),
+SETTINGS = load_pipeline_settings(
+    build_config(
+        {
+            "pipeline.first_month": "2026-08",
+            "pipeline.run_day": 21,
+            "pipeline.run_hour": 6,
+            "pipeline.timezone": "Europe/Vilnius",
+        }
+    )
 )
 
 
@@ -55,11 +56,11 @@ def test_replay_partitions_are_the_sample_months_whatever_the_date() -> None:
 
 
 def test_replay_partitions_ignore_first_month_and_run_day() -> None:
-    # Arrange
+    # Arrange: on 10 September live runs are still in 2026-08, which starts on 21 August.
     partitions = replay_month_partitions([Month(2026, 9)], SETTINGS)
 
     # Act
-    keys = partitions.get_partition_keys(current_time=datetime(2026, 10, 15, tzinfo=VILNIUS))
+    keys = partitions.get_partition_keys(current_time=datetime(2026, 9, 10, tzinfo=VILNIUS))
 
     # Assert
     assert keys == ["2026-09"]

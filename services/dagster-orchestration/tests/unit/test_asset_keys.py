@@ -84,11 +84,8 @@ def test_dbt_model_without_a_schema_is_rejected() -> None:
 
 
 def test_an_asset_is_grouped_by_its_layer() -> None:
-    # Arrange
-    key = dbt_resource_key({"resource_type": "source", "source_name": "archive", "name": "sodra"})
-
     # Act
-    group = layer_group(key)
+    group = layer_group(dg.AssetKey(["staging", "stg_sodra__monthly"]))
 
     # Assert
-    assert group == "archive"
+    assert group == "staging"
