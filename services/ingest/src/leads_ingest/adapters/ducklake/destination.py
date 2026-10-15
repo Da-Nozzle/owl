@@ -1,10 +1,10 @@
 import dlt
-from dlt.common.configuration.specs import AwsCredentials, ConnectionStringCredentials
+from dlt.common.configuration.specs import ConnectionStringCredentials
 from dlt.common.destination import Destination
-from dlt.common.storages.configuration import FilesystemConfiguration
 from dlt.destinations.impl.ducklake.configuration import DuckLakeCredentials
 
-from leads_lake.settings import LakeCatalog, LakeSettings, LakeStorage
+from leads_ingest.adapters.s3.configuration import filesystem_configuration
+from leads_lake.settings import LakeCatalog, LakeSettings
 
 LAKE_ATTACH_NAME = "lake"
 
@@ -15,7 +15,7 @@ def build_ducklake_destination(settings: LakeSettings) -> Destination:
             ducklake_name=LAKE_ATTACH_NAME,
             metadata_schema=settings.catalog.metadata_schema,
             catalog=catalog_credentials(settings.catalog),
-            storage=storage_configuration(settings.storage),
+            storage=filesystem_configuration(settings.storage.data_path, settings.storage),
         )
     )
 
@@ -44,22 +44,3 @@ def catalog_credentials(catalog: LakeCatalog) -> ConnectionStringCredentials:
             "password": catalog.password,
         }
     )
-
-
-def storage_configuration(storage: LakeStorage) -> FilesystemConfiguration:
-    return FilesystemConfiguration(
-        bucket_url=storage.data_path,
-        credentials=AwsCredentials(
-            aws_access_key_id=storage.key_id,
-            aws_secret_access_key=storage.secret,
-            region_name=storage.region,
-            endpoint_url=endpoint_url(storage),
-            s3_url_style=storage.url_style,
-        ),
-    )
-
-
-def endpoint_url(storage: LakeStorage) -> str:
-    """dlt reads whether to use TLS from the endpoint's scheme."""
-    scheme = "https" if storage.use_ssl else "http"
-    return f"{scheme}://{storage.endpoint}"

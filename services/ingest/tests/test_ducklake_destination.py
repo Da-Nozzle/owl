@@ -1,10 +1,12 @@
-from leads_ingest.adapters.ducklake.destination import endpoint_url, raw_schema_name
+from leads_ingest.adapters.ducklake.destination import raw_schema_name
+from leads_ingest.adapters.s3.configuration import endpoint_url
 from leads_lake.settings import LakeStorage
 
 
 def build_storage(*, use_ssl: bool) -> LakeStorage:
     return LakeStorage(
         data_path="s3://leads-lake/",
+        archive_path="s3://leads-lake/archive/",
         endpoint="s3mock:9090",
         region="eu-central-1",
         url_style="path",

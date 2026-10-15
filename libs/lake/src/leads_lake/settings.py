@@ -17,9 +17,10 @@ class LakeCatalog:
 
 @dataclass(frozen=True, slots=True)
 class LakeStorage:
-    """The S3-compatible bucket that holds the lake's Parquet files."""
+    """The S3-compatible bucket that holds the lake's Parquet files and the raw source archive."""
 
     data_path: str
+    archive_path: str
     endpoint: str
     region: str
     url_style: str
@@ -57,6 +58,7 @@ def load_lake_storage(config: Configuration) -> LakeStorage:
         raise TypeError(f"'lake.s3.use_ssl' is {type(use_ssl).__name__}, expected bool")
     return LakeStorage(
         data_path=config.get_str("lake.data_path"),
+        archive_path=config.get_str("lake.archive_path"),
         endpoint=config.get_str("lake.s3.endpoint"),
         region=config.get_str("lake.s3.region"),
         url_style=config.get_str("lake.s3.url_style"),

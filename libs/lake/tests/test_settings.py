@@ -16,6 +16,7 @@ def build_config(*, use_ssl: object) -> Configuration:
             },
             "lake": {
                 "data_path": "s3://leads-lake/",
+                "archive_path": "s3://leads-lake/archive/",
                 "metadata_schema": "ducklake",
                 "s3": {
                     "endpoint": "s3mock:9090",
