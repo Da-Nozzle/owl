@@ -1,0 +1,33 @@
+version: 2
+
+sources:
+  - name: archive
+    description: >
+      Raw source files as downloaded, at <archive>/<source>/<run month>/<file>, each with a
+      .meta.json sidecar (URL, fetch time, Last-Modified). Read with read_csv, not as tables;
+      declared so the graph shows which download each raw table is built from.
+    tables:
+      - name: sodra
+        description: >
+          Sodra's yearly employer files (atvira.sodra.lt), monthly-<year>.csv.zip, each a zip
+          holding one UTF-8 CSV with a BOM, `;`-separated, values quoted.
+
+models:
+  - name: sodra_monthly_files
+    description: >
+      The archived yearly files for this run, every column as published and as text, cut to
+      the run's months. Ephemeral, so the checks on it stop a bad file before raw is written.
+
+  - name: raw_sodra__monthly
+    description: >
+      Sodra's open employer data as each run downloaded it: one row per run month, employer and
+      declared month, with every column Sodra publishes under its published header, as text.
+      Each declared month appears once per run whose window covers it, so Sodra's revisions
+      can be compared. Average wage and contributions are
+      suppressed for employers with 3 or fewer insured. The "II" pair (avgWage2, numInsured2)
+      is undocumented by Sodra.
+    columns:
+      - name: _snapshot_month
+        description: The run month (YYYY-MM) whose download this row is from.
+      - name: _source_file
+        description: The archived file the row was read from.

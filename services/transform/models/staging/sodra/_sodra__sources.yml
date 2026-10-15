@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: stg_sodra__monthly
+    description: >
+      One row per employer and declared month, from the newest snapshot of that month: Sodra's
+      published headers mapped to names and types. Average wage and contributions are suppressed for employers with 3 or fewer insured.
+    data_tests:
+      - unique:
+          column_name: "insurer_code || '-' || declared_month"
+    columns:
+      - name: insurer_code
+        data_tests:
+          - not_null
+      - name: company_code
+        description: JAR code; empty for employers outside the register, such as embassies.
+      - name: declared_month
+        data_tests:
+          - not_null
+      - name: activity_code
+        description: >
+          Six-digit EVRK 2.1 code, or a coarser 2- or 4-digit level. Sodra publishes it as a
+          number, so a lost leading zero is restored.
+      - name: insured_count
+        data_tests:
+          - not_null
+      - name: snapshot_month
+        description: The run month (YYYY-MM) whose download this row's version is from.
+
+unit_tests:
+  - name: stg_sodra__monthly_takes_each_month_from_its_newest_snapshot
+    description: >
+      202607 is in both snapshots, so 2026-09's version wins, and employer 2, which Sodra
+      dropped from that month in the revision, is gone. 202506 is only in 2026-08's window, so it
+      stays as 2026-08 loaded it. Snapshots arrive out of order, as after a rerun of 2026-08.
+    model: stg_sodra__monthly
+    given:
+      - input: ref('raw_sodra__monthly')
+        rows:
+          - {"_snapshot_month": "2026-09", "Mėnuo (month)": "202607", "Draudėjo kodas (code)": "1", "Apdraustųjų skaičius (numInsured)": "6"}
+          - {"_snapshot_month": "2026-09", "Mėnuo (month)": "202608", "Draudėjo kodas (code)": "1", "Apdraustųjų skaičius (numInsured)": "7"}
+          - {"_snapshot_month": "2026-08", "Mėnuo (month)": "202506", "Draudėjo kodas (code)": "1", "Apdraustųjų skaičius (numInsured)": "3"}
+          - {"_snapshot_month": "2026-08", "Mėnuo (month)": "202607", "Draudėjo kodas (code)": "1", "Apdraustųjų skaičius (numInsured)": "5"}
+          - {"_snapshot_month": "2026-08", "Mėnuo (month)": "202607", "Draudėjo kodas (code)": "2", "Apdraustųjų skaičius (numInsured)": "4"}
+    expect:
+      rows:
+        - {insurer_code: 1, declared_month: "2025-06-01", insured_count: 3, snapshot_month: "2026-08"}
+        - {insurer_code: 1, declared_month: "2026-07-01", insured_count: 6, snapshot_month: "2026-09"}
+        - {insurer_code: 1, declared_month: "2026-08-01", insured_count: 7, snapshot_month: "2026-09"}

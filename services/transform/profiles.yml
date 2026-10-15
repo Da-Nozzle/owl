@@ -1,15 +1,21 @@
 leads:
   target: local
   outputs:
-    local:
+    local: &lake_target
       type: duckdb
-      path: ":memory:"
+      # In memory. Dagster's own process reads each built table's columns and row count through
+      # this profile, read-only, which DuckDB cannot do in memory, so it opens an empty file
+      # (LEADS_DBT_DUCKDB_PATH). dbt's runs, which dagster-dbt marks with DAGSTER_DBT_CLI, stay in
+      # memory: two runs cannot hold one DuckDB file, and they run side by side.
+      path: "{{ ':memory:' if env_var('DAGSTER_DBT_CLI', '') else env_var('LEADS_DBT_DUCKDB_PATH', ':memory:') }}"
       database: lake
       threads: 4
       extensions:
         - httpfs
         - postgres
         - ducklake
+        - name: zipfs # reads the archived zips in place
+          repo: community
       secrets:
         - type: s3
           key_id: "{{ env_var('LEADS_S3_KEY_ID') }}"
@@ -19,8 +25,18 @@ leads:
           url_style: "{{ env_var('LEADS_S3_URL_STYLE') }}"
           use_ssl: "{{ env_var('LEADS_S3_USE_SSL') }}"
       attach:
-        - path: "ducklake:postgres:{{ env_var('LEADS_DUCKLAKE_CATALOG') }}"
+        - &lake_attachment
+          path: "ducklake:postgres:{{ env_var('LEADS_DUCKLAKE_CATALOG') }}"
           alias: lake
           options:
             data_path: "{{ env_var('LEADS_LAKE_DATA_PATH') }}"
             metadata_schema: "{{ env_var('LEADS_DUCKLAKE_METADATA_SCHEMA') }}"
+    # leads-dbt-dev, for iterating on models: builds into a DuckDB file of its own, with the lake
+    # attached read-only. A model it does not build resolves to the lake's table (dbt's defer).
+    dev:
+      <<: *lake_target
+      path: "{{ env_var('LEADS_DBT_DEV_PATH') }}"
+      database: dev
+      attach:
+        - <<: *lake_attachment
+          read_only: true

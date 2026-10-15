@@ -12,6 +12,9 @@ clean-targets: ["target", "dbt_packages"]
 
 models:
   leads_transform:
+    raw:
+      sodra:
+        +schema: raw_sodra
     staging:
       +schema: staging
     intermediate:
