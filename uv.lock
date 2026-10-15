@@ -1088,6 +1088,7 @@ dependencies = [
     { name = "dagster-webserver" },
     { name = "dbt-core" },
     { name = "dbt-duckdb" },
+    { name = "duckdb" },
     { name = "leads-config" },
     { name = "leads-ingest" },
     { name = "leads-lake" },
@@ -1102,6 +1103,7 @@ requires-dist = [
     { name = "dagster-webserver", specifier = "==1.13.26" },
     { name = "dbt-core", specifier = ">=1.12,<1.13" },
     { name = "dbt-duckdb", specifier = ">=1.11,<1.12" },
+    { name = "duckdb", specifier = "==1.5.6" },
     { name = "leads-config", editable = "services/config" },
     { name = "leads-ingest", editable = "services/ingest" },
     { name = "leads-lake", editable = "libs/lake" },
@@ -1114,14 +1116,20 @@ source = { editable = "services/ingest" }
 dependencies = [
     { name = "dlt", extra = ["ducklake", "postgres", "s3"] },
     { name = "duckdb" },
+    { name = "fsspec" },
+    { name = "leads-config" },
     { name = "leads-lake" },
+    { name = "pyarrow" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "dlt", extras = ["ducklake", "postgres", "s3"], specifier = ">=1.31,<2" },
     { name = "duckdb", specifier = "==1.5.6" },
+    { name = "fsspec", specifier = ">=2026.9" },
+    { name = "leads-config", editable = "services/config" },
     { name = "leads-lake", editable = "libs/lake" },
+    { name = "pyarrow", specifier = ">=26" },
 ]
 
 [[package]]

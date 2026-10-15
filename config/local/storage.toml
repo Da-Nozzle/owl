@@ -16,6 +16,11 @@ app = "app"
 
 [lake]
 data_path = "s3://leads-lake/"
+# Raw source downloads, kept so any month can be reloaded without calling the sources again.
+# TODO move to its own bucket with versioning enabled (e.g. s3://leads-archive/), outside
+# data_path, where DuckLake's orphan-file cleanup could delete it. Locally s3mock needs the
+# bucket created and PutBucketVersioning called; in production it is infrastructure code.
+archive_path = "s3://leads-lake/archive/"
 # Postgres schema in ducklake_catalog that holds the lake's metadata.
 # dlt and dbt MUST use the same schema
 metadata_schema = "ducklake"

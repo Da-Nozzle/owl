@@ -12,6 +12,7 @@ dependencies = [
     "dagster-postgres==0.29.26",
     "dagster-dbt==0.29.26",
     "dagster-dlt==0.29.26",
+    "duckdb==1.5.6",
     "dbt-core>=1.12,<1.13",
     "dbt-duckdb>=1.11,<1.12",
 ]
@@ -19,6 +20,7 @@ dependencies = [
 [project.scripts]
 leads-dagster-dev = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dagster_dev"
 leads-dbt = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt"
+leads-dbt-dev = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt_dev"
 
 [tool.uv.sources]
 leads-config = { workspace = true }

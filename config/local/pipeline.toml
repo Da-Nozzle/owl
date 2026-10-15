@@ -1,7 +1,22 @@
 [pipeline]
-mode = "replay"
+mode = "live" # replay reads replay_path and calls no source; live calls them and archives
 # mode = "live" # production
+# First live run month (Dagster partition, YYYY-MM). Replay runs the months the sample holds.
+first_month = "2026-05"
+# Run month M starts on this day and hour of M, local time: Sodra publishes the previous month by
+# the 20th, so a month cannot run (nor its partition exist) before the 21st.
+run_day = 21 # TODO move specific source level sodra configs under sodra key
+run_hour = 6
+timezone = "Europe/Vilnius"
+user_agent = "vmi-leads-pipeline/0.1"
+replay_path = "/workspace/replay"
 
 [google]
 backend = "places_api"
 api_key = { secret_store = "local", secret_name = "google_places_api_key" }
+
+[sodra]
+download_url_template = "https://atvira.sodra.lt/imones/downloads/{year}/monthly-{year}.csv.zip"
+# Months loaded per run, ending with the month before the run month. Each run reloads all of
+# them, so Sodra's revisions land; 13 gives a year-on-year comparison.
+history_months = 13
