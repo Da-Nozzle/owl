@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import dagster as dg
-from dagster_dbt import DbtCliResource, DbtProject
+from dagster_dbt import DbtProject
 from dlt.common.storages.configuration import FilesystemConfiguration
 
 from leads_config.loading import load_configuration
@@ -9,8 +9,11 @@ from leads_dagster_orchestration.assets.sodra import build_sodra_archive_asset
 from leads_dagster_orchestration.assets.transform import (
     build_transform_assets,
     ensure_metadata_database,
+    prepare_on_initial_load,
     set_dbt_environment,
 )
+from leads_dagster_orchestration.dbt_resource import dbt_core_resource
+from leads_dagster_orchestration.executors import sequential_in_process_executor
 from leads_dagster_orchestration.lake_labels import lake_labels
 from leads_dagster_orchestration.partitions import replay_month_partitions, run_month_partitions
 from leads_dagster_orchestration.tool_environments import (
@@ -59,7 +62,7 @@ def pipeline_definitions() -> dg.Definitions:
     set_dbt_environment(dbt_variables)
     labels = lake_labels(pipeline_settings.mode, lake_settings)
     transform_project = DbtProject(project_dir=config.get_str("transform.project_dir"))
-    transform_project.prepare_if_dev()
+    prepare_on_initial_load(transform_project)
     ensure_metadata_database(Path(dbt_variables["LEADS_DBT_DUCKDB_PATH"]))
     return dg.Definitions(
         assets=[
@@ -71,7 +74,8 @@ def pipeline_definitions() -> dg.Definitions:
                 transform_project, partitions, Path(dbt_main_state_dir(config)), labels
             ),
         ],
-        resources={"dbt": DbtCliResource(project_dir=transform_project)},
+        resources={"dbt": dbt_core_resource(transform_project)},
+        executor=sequential_in_process_executor,
     )
 
 

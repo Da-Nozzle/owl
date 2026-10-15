@@ -1092,6 +1092,7 @@ dependencies = [
     { name = "leads-config" },
     { name = "leads-ingest" },
     { name = "leads-lake" },
+    { name = "packaging" },
 ]
 
 [package.metadata]
@@ -1107,6 +1108,7 @@ requires-dist = [
     { name = "leads-config", editable = "services/config" },
     { name = "leads-ingest", editable = "services/ingest" },
     { name = "leads-lake", editable = "libs/lake" },
+    { name = "packaging", specifier = ">=26.3" },
 ]
 
 [[package]]

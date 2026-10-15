@@ -9,6 +9,10 @@ from typing import Any
 
 import dagster as dg
 import duckdb
+from dagster._core.definitions.definitions_load_context import (
+    DefinitionsLoadContext,
+    DefinitionsLoadType,
+)
 from dagster_dbt import DbtCliInvocation, DbtCliResource, DbtProject, dbt_assets
 
 from leads_dagster_orchestration.lake_labels import label_run, with_labels
@@ -204,3 +208,14 @@ def ensure_metadata_database(path: Path) -> None:
     partial = path.with_name(f"{path.name}.{uuid.uuid4().hex}.partial")
     duckdb.connect(str(partial)).close()
     partial.replace(path)
+
+
+def prepare_on_initial_load(project: DbtProject) -> None:
+    """Parses the dbt project under `dagster dev` when the code server loads the definitions, at
+    startup and on every reload, but not when a run or one of its steps rebuilds them from that
+    load. Each of those is a new process, and the parse (`dbt --version`, an in-process adapter
+    and `dbt parse`) cost about 11 s in each, twice per run. A run now uses the manifest of the
+    load it was launched from, so its assets are the ones that load showed; dbt still runs the
+    project's current files."""
+    if DefinitionsLoadContext.get().load_type is DefinitionsLoadType.INITIALIZATION:
+        project.prepare_if_dev()

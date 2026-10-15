@@ -1,8 +1,14 @@
 import os
 from pathlib import Path
+from typing import cast
 
 import duckdb
 import pytest
+from dagster._core.definitions.definitions_load_context import (
+    DefinitionsLoadContext,
+    DefinitionsLoadType,
+)
+from dagster_dbt import DbtProject
 
 from leads_dagster_orchestration.assets.transform import (
     dbt_sources,
@@ -10,6 +16,7 @@ from leads_dagster_orchestration.assets.transform import (
     environment_variable,
     has_shared_models,
     keep_main_state,
+    prepare_on_initial_load,
     run_month_count_query,
     set_dbt_environment,
 )
@@ -151,3 +158,30 @@ def test_a_model_with_a_run_month_column_counts_the_run_months_rows() -> None:
 def test_a_model_without_a_run_month_column_keeps_the_tables_count() -> None:
     # Act / Assert
     assert run_month_count_query({"relation_name": "t", "meta": {}}, "2026-09") is None
+
+
+class PreparedProject:
+    """Counts the preparations a DbtProject would have made."""
+
+    def __init__(self) -> None:
+        self.preparations = 0
+
+    def prepare_if_dev(self) -> None:
+        self.preparations += 1
+
+
+def preparations_when_loaded_as(load_type: DefinitionsLoadType) -> int:
+    project = PreparedProject()
+    with DefinitionsLoadContext.scoped(DefinitionsLoadContext(load_type)):
+        prepare_on_initial_load(cast("DbtProject", project))
+    return project.preparations
+
+
+def test_the_code_servers_load_prepares_the_dbt_project() -> None:
+    # Act / Assert
+    assert preparations_when_loaded_as(DefinitionsLoadType.INITIALIZATION) == 1
+
+
+def test_a_run_rebuilding_the_definitions_does_not_prepare_the_dbt_project() -> None:
+    # Act / Assert
+    assert preparations_when_loaded_as(DefinitionsLoadType.RECONSTRUCTION) == 0
