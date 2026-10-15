@@ -15,9 +15,10 @@ dev = [
     "hypothesis>=6.170.0",
     "leads-testing",
     "psycopg2-binary>=2.9.13",
-    "pytest>=8",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
     "pytest-httpserver>=1.2.0",
-    "ruff>=0.14",
+    "ruff>=0.17.1",
 ]
 
 [tool.uv]

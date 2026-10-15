@@ -1,3 +1,8 @@
 {
-    "dbt.dbtMajorVersion": "v1"
+    "dbt.dbtMajorVersion": "v1",
+    "python.testing.pytestArgs": [
+        "."
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true
 }
