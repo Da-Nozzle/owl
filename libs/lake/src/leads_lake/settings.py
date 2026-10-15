@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from leads_config.configuration import Configuration
 
@@ -35,8 +35,19 @@ class LakeSettings:
     storage: LakeStorage
 
 
-def load_lake_settings(config: Configuration) -> LakeSettings:
-    return LakeSettings(catalog=load_lake_catalog(config), storage=load_lake_storage(config))
+def load_lake_settings(config: Configuration, *, replay: bool = False) -> LakeSettings:
+    """The live lake, or with `replay` the lake replay runs build into: a catalog schema and data
+    path of its own (`lake.replay`), on the same Postgres and bucket. Replay's sample is not what
+    the sources published, so its rows never share a table with live rows, where staging's newest
+    download could be the sample's."""
+    catalog = load_lake_catalog(config)
+    storage = load_lake_storage(config)
+    if not replay:
+        return LakeSettings(catalog=catalog, storage=storage)
+    return LakeSettings(
+        catalog=replace(catalog, metadata_schema=config.get_str("lake.replay.metadata_schema")),
+        storage=replace(storage, data_path=config.get_str("lake.replay.data_path")),
+    )
 
 
 def load_lake_catalog(

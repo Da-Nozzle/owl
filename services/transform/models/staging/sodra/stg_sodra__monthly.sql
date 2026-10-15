@@ -3,13 +3,13 @@
 -- yet are in raw_sodra.monthly. A table, so every value is cast when it is built.
 {{ config(materialized='table') }}
 
--- Raw keeps every run's snapshot; a declared month's current version is in the newest snapshot
--- that holds it. Whole months are picked, not rows, so an employer Sodra drops from a month in a
--- revision is dropped here too.
-with current_snapshot as (
+-- Raw keeps every run's download of each yearly file. Sodra rewrites a year's file in place, so
+-- the newest download of it is the current version of every month in it. Whole files are
+-- picked, not rows, so an employer Sodra drops from a month in a revision is dropped here too.
+with current_version as (
     select *
     from {{ ref('raw_sodra__monthly') }}
-    qualify _snapshot_month = max(_snapshot_month) over (partition by "Mėnuo (month)")
+    qualify _snapshot_month = max(_snapshot_month) over (partition by parse_filename(_source_file))
 ),
 
 published as (
@@ -25,8 +25,9 @@ published as (
         "Apdraustųjų skaičius (numInsured)"::integer as insured_count,
         "Vidutinis darbo užmokestis (avgWage)"::decimal(14, 2) as avg_wage,
         "Valstybinio socialinio draudimo įmoka (tax)"::decimal(14, 2) as contributions,
-        _snapshot_month as snapshot_month
-    from current_snapshot
+        _snapshot_month as snapshot_month,
+        strptime(_file_last_modified, '%a, %d %b %Y %H:%M:%S GMT') as file_published_at
+    from current_version
 )
 
 select * replace (

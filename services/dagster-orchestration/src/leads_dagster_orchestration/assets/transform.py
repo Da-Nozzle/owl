@@ -3,14 +3,15 @@ import os
 import shutil
 import uuid
 from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
+from contextlib import chdir, contextmanager
 from pathlib import Path
 from typing import Any
 
 import dagster as dg
 import duckdb
-from dagster_dbt import DbtCliResource, DbtProject, dbt_assets
+from dagster_dbt import DbtCliInvocation, DbtCliResource, DbtProject, dbt_assets
 
+from leads_dagster_orchestration.lake_labels import label_run, with_labels
 from leads_dagster_orchestration.translators import LakeDbtTranslator
 
 # A source's models are in models/<layer>/<source>/ for each of these layers.
@@ -18,10 +19,17 @@ SOURCE_LAYERS = ("raw", "staging")
 SHARED_STEP = "transform"
 # The run month a dbt step builds, which the project's run_month() macro reads.
 RUN_MONTH_VARIABLE = "LEADS_RUN_MONTH"
+# dbt meta naming the column of a model that keeps one slice per run month (raw tables).
+RUN_MONTH_COLUMN_META = "run_month_column"
+ROW_COUNT = "dagster/row_count"
+TABLE_ROW_COUNT = "table_row_count"
 
 
 def build_transform_assets(
-    project: DbtProject, partitions: dg.MonthlyPartitionsDefinition, main_state_dir: Path
+    project: DbtProject,
+    partitions: dg.MonthlyPartitionsDefinition,
+    main_state_dir: Path,
+    labels: Mapping[str, str],
 ) -> list[dg.AssetsDefinition]:
     """The dbt project as one step per source, plus one for the models that combine sources.
     A source's step, `transform_<source>`, builds its raw and staging models in a pool of the
@@ -35,6 +43,7 @@ def build_transform_assets(
             project,
             partitions,
             main_state_dir,
+            labels,
             name=f"{SHARED_STEP}_{source}",
             select=" ".join(f"path:models/{layer}/{source}" for layer in SOURCE_LAYERS),
         )
@@ -46,6 +55,7 @@ def build_transform_assets(
                 project,
                 partitions,
                 main_state_dir,
+                labels,
                 name=SHARED_STEP,
                 select="path:models path:seeds",
                 exclude=" ".join(f"path:models/{layer}" for layer in SOURCE_LAYERS),
@@ -58,6 +68,7 @@ def build_dbt_step(
     project: DbtProject,
     partitions: dg.MonthlyPartitionsDefinition,
     main_state_dir: Path,
+    labels: Mapping[str, str],
     *,
     name: str,
     select: str,
@@ -75,10 +86,13 @@ def build_dbt_step(
         dagster_dbt_translator=LakeDbtTranslator(),
     )
     def dbt_step(context: dg.AssetExecutionContext, dbt: DbtCliResource) -> Iterator[object]:
+        label_run(context, labels)
         with environment_variable(RUN_MONTH_VARIABLE, context.partition_key):
             build = dbt.cli(["build"], context=context)
+        events = build.stream().fetch_column_metadata(with_column_lineage=False).fetch_row_counts()
         yield from (
-            build.stream().fetch_column_metadata(with_column_lineage=False).fetch_row_counts()
+            with_labels(count_run_month_rows(event, build, context.partition_key), labels)
+            for event in events
         )
         keep_main_state(build.target_path / "manifest.json", main_state_dir)
 
@@ -102,6 +116,47 @@ def environment_variable(name: str, value: str) -> Iterator[None]:
             del environment[name]
         else:
             environment[name] = previous
+
+
+def count_run_month_rows[Event](event: Event, build: DbtCliInvocation, run_month: str) -> Event:
+    """dagster-dbt's row count is the whole table's. A model that keeps one slice per run month
+    (its dbt meta names the column) grows by a slice each run, so its partition's row count is
+    the run month's rows, and the table's is kept as table_row_count."""
+    if not isinstance(event, dg.Output | dg.AssetMaterialization):
+        return event
+    unique_id = event.metadata.get("unique_id")
+    node = build.manifest["nodes"].get(unique_id.value if unique_id else None)
+    query = run_month_count_query(node, run_month) if node else None
+    if query is None or build.adapter is None:
+        return event
+    with chdir(build.project_dir), build.adapter.connection_named(f"run_month_rows_{node['name']}"):
+        _, result = build.adapter.execute(query, fetch=True)
+    table_rows = event.metadata.get(ROW_COUNT)
+    return event.with_metadata(
+        {
+            **event.metadata,
+            ROW_COUNT: dg.MetadataValue.int(result[0][0]),
+            **({TABLE_ROW_COUNT: table_rows} if table_rows is not None else {}),
+        }
+    )
+
+
+def run_month_count_query(node: Mapping[str, Any], run_month: str) -> str | None:
+    """Counts a run month's rows of a model whose dbt meta names its run month column."""
+    column = node.get("meta", {}).get(RUN_MONTH_COLUMN_META)
+    if column is None:
+        return None
+    return f"select count(*) from {node['relation_name']} where \"{column}\" = '{run_month}'"
+
+
+def set_dbt_environment(variables: Mapping[str, str]) -> None:
+    """Sets the values the dbt project reads through env_var() in this process, which the parse
+    made when the definitions load and every dbt step pass on to dbt. Set where the definitions
+    read the configuration, so a reload moves both to a changed configuration together: dbt's
+    partial parse then re-parses once, at the reload, and never in a run, which it would whenever
+    a run's values differ from those the saved parse recorded."""
+    environment = os.environ  # noqa: TID251 - sets variables for dbt; reads no config
+    environment.update(variables)
 
 
 def dbt_sources(manifest: Mapping[str, Any]) -> list[str]:

@@ -18,6 +18,10 @@ def build_config(*, use_ssl: object) -> Configuration:
                 "data_path": "s3://leads-lake/",
                 "archive_path": "s3://leads-lake/archive/",
                 "metadata_schema": "ducklake",
+                "replay": {
+                    "metadata_schema": "ducklake_replay",
+                    "data_path": "s3://leads-lake/replay/",
+                },
                 "s3": {
                     "endpoint": "s3mock:9090",
                     "region": "eu-central-1",
@@ -50,3 +54,23 @@ def test_ssl_flag_written_as_text_is_rejected() -> None:
     # Act / Assert
     with pytest.raises(TypeError, match="use_ssl"):
         load_lake_settings(config)
+
+
+def test_replay_lake_has_its_own_catalog_schema_and_data_path() -> None:
+    # Arrange
+    config = build_config(use_ssl=False)
+
+    # Act
+    live = load_lake_settings(config)
+    replay = load_lake_settings(config, replay=True)
+
+    # Assert
+    assert (live.catalog.metadata_schema, live.storage.data_path) == (
+        "ducklake",
+        "s3://leads-lake/",
+    )
+    assert (replay.catalog.metadata_schema, replay.storage.data_path) == (
+        "ducklake_replay",
+        "s3://leads-lake/replay/",
+    )
+    assert replay.storage.archive_path == live.storage.archive_path

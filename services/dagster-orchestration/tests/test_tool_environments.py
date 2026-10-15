@@ -22,6 +22,10 @@ def build_local_like_config(password: str) -> Configuration:
                 "data_path": "s3://leads-lake/",
                 "archive_path": "s3://leads-lake/archive/",
                 "metadata_schema": "ducklake",
+                "replay": {
+                    "metadata_schema": "ducklake_replay",
+                    "data_path": "s3://leads-lake/replay/",
+                },
                 "s3": {
                     "endpoint": "s3mock:9090",
                     "region": "eu-central-1",
@@ -87,7 +91,7 @@ def test_dbt_reads_ssl_flag_as_lowercase_text() -> None:
     assert use_ssl == "false"
 
 
-def test_dbt_reads_the_replay_archive_in_replay_mode() -> None:
+def test_dbt_reads_the_replay_archive_into_the_replay_lake_in_replay_mode() -> None:
     # Arrange
     config = build_local_like_config(password="s3cret")
 
@@ -96,7 +100,8 @@ def test_dbt_reads_the_replay_archive_in_replay_mode() -> None:
 
     # Assert
     assert environment["LEADS_ARCHIVE_PATH"] == "/workspace/replay"
-    assert environment["LEADS_SODRA_HISTORY_MONTHS"] == "13"
+    assert environment["LEADS_DUCKLAKE_METADATA_SCHEMA"] == "ducklake_replay"
+    assert environment["LEADS_LAKE_DATA_PATH"] == "s3://leads-lake/replay/"
 
 
 def test_dagster_keeps_dbts_duckdb_in_the_target_directory() -> None:

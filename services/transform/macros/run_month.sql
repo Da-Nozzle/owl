@@ -28,8 +28,3 @@
 {% macro run_month_start() -%}
     date '{{ run_month() }}-01'
 {%- endmacro %}
-
-{# A path in the raw archive for this run: <archive>/<source>/<run month>/<name>. #}
-{% macro archived_file(source, name) -%}
-    {{ env_var('LEADS_ARCHIVE_PATH').rstrip('/') }}/{{ source }}/{{ run_month() }}/{{ name }}
-{%- endmacro %}

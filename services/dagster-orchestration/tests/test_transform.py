@@ -10,6 +10,8 @@ from leads_dagster_orchestration.assets.transform import (
     environment_variable,
     has_shared_models,
     keep_main_state,
+    run_month_count_query,
+    set_dbt_environment,
 )
 
 ENVIRONMENT = os.environ  # noqa: TID251 - checks what a step sets for dbt
@@ -115,3 +117,37 @@ def test_an_environment_variable_is_set_only_within_its_block(
     assert (kept_within, ENVIRONMENT["LEADS_TEST_KEPT"]) == ("2026-09", "before")
     assert added_within == "2026-09"
     assert "LEADS_TEST_ADDED" not in ENVIRONMENT
+
+
+def test_dbt_environment_is_set_in_this_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Arrange
+    monkeypatch.setenv("LEADS_ARCHIVE_PATH", "/workspace/replay")
+    monkeypatch.delenv("LEADS_TEST_ADDED", raising=False)
+
+    # Act
+    set_dbt_environment({"LEADS_ARCHIVE_PATH": "s3://leads-lake/archive", "LEADS_TEST_ADDED": "13"})
+
+    # Assert
+    assert ENVIRONMENT["LEADS_ARCHIVE_PATH"] == "s3://leads-lake/archive"
+    assert ENVIRONMENT["LEADS_TEST_ADDED"] == "13"
+
+
+def test_a_model_with_a_run_month_column_counts_the_run_months_rows() -> None:
+    # Arrange
+    node = {
+        "relation_name": '"lake"."raw_sodra"."monthly"',
+        "meta": {"run_month_column": "_snapshot_month"},
+    }
+
+    # Act
+    query = run_month_count_query(node, "2026-09")
+
+    # Assert
+    assert query == (
+        'select count(*) from "lake"."raw_sodra"."monthly" where "_snapshot_month" = \'2026-09\''
+    )
+
+
+def test_a_model_without_a_run_month_column_keeps_the_tables_count() -> None:
+    # Act / Assert
+    assert run_month_count_query({"relation_name": "t", "meta": {}}, "2026-09") is None

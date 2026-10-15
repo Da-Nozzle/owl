@@ -36,6 +36,8 @@ class FsspecRawArchive:
             "url": download.url,
             "fetched_at": download.fetched_at.isoformat(),
             "last_modified": download.last_modified,
+            "size": download.size,
+            "sha256": download.sha256,
         }
         self.filesystem.pipe_file(path + META_SUFFIX, json.dumps(meta, indent=2).encode())
 

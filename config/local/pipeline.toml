@@ -1,8 +1,8 @@
 [pipeline]
-mode = "live" # replay reads replay_path and calls no source; live calls them and archives
+mode = "replay" # replay reads replay_path and calls no source; live calls them and archives
 # mode = "live" # production
 # First live run month (Dagster partition, YYYY-MM). Replay runs the months the sample holds.
-first_month = "2026-05"
+first_month = "2026-08"
 # Run month M starts on this day and hour of M, local time: Sodra publishes the previous month by
 # the 20th, so a month cannot run (nor its partition exist) before the 21st.
 run_day = 21 # TODO move specific source level sodra configs under sodra key

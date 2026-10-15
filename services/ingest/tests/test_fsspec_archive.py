@@ -1,3 +1,5 @@
+import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -25,7 +27,8 @@ def test_a_saved_download_loads_back_with_its_metadata(tmp_path: Path) -> None:
 
     # Assert
     assert loaded == download
-    assert (tmp_path / "sodra" / "2026-09" / "file.zip.meta.json").exists()
+    meta = json.loads((tmp_path / "sodra" / "2026-09" / "file.zip.meta.json").read_text())
+    assert (meta["size"], meta["sha256"]) == (download.size, download.sha256)
 
 
 def test_exists_finds_only_saved_files(tmp_path: Path) -> None:
@@ -70,3 +73,12 @@ def test_a_source_with_nothing_archived_has_no_months(tmp_path: Path) -> None:
 
     # Act / Assert
     assert archive.months("sodra") == []
+
+
+def test_a_downloads_size_and_sha256_are_of_its_bytes() -> None:
+    # Arrange
+    download = Download("https://source.test/file.zip", b"PK raw", datetime.now(UTC), None)
+
+    # Act / Assert
+    assert download.size == len(b"PK raw")
+    assert download.sha256 == hashlib.sha256(b"PK raw").hexdigest()

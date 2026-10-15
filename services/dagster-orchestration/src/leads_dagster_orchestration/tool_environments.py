@@ -1,6 +1,5 @@
 from leads_config.configuration import Configuration
-from leads_ingest.settings import load_pipeline_settings, raw_archive_path
-from leads_ingest.sources.sodra.settings import load_sodra_settings
+from leads_ingest.settings import PipelineMode, load_pipeline_settings, raw_archive_path
 from leads_lake.settings import LakeCatalog, load_lake_settings
 
 
@@ -16,12 +15,12 @@ def dagster_storage_environment(config: Configuration) -> dict[str, str]:
 
 
 def dbt_environment(config: Configuration) -> dict[str, str]:
-    """Values that the dbt project's profiles.yml reads through env_var()."""
-    lake = load_lake_settings(config)
+    """Values that the dbt project reads through env_var(): the lake of the pipeline's mode and
+    the archive it reads."""
     pipeline = load_pipeline_settings(config)
+    lake = load_lake_settings(config, replay=pipeline.mode is PipelineMode.REPLAY)
     return {
         "LEADS_ARCHIVE_PATH": raw_archive_path(pipeline, lake.storage),
-        "LEADS_SODRA_HISTORY_MONTHS": str(load_sodra_settings(config).history_months),
         "DBT_PROJECT_DIR": config.get_str("transform.project_dir"),
         "DBT_PROFILES_DIR": config.get_str("transform.project_dir"),
         "LEADS_DUCKLAKE_CATALOG": ducklake_catalog_connection(lake.catalog),

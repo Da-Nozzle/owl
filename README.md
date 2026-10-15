@@ -20,8 +20,13 @@ Everything for local work lives in `.devcontainer/`; Compose is not used outside
    pytest                      # unit tests
    ruff check . && ruff format --check .
    leads-dbt debug             # dbt with the DuckLake profile, secrets resolved from config
+   leads-dbt-dev build -s state:modified+  # your model changes, in a dev copy (below)
    leads-dagster-dev           # Dagster webserver and daemon; UI on http://localhost:3000
    ```
+
+GitHub from the container: `git` over HTTPS uses your host's credentials, which VS Code forwards.
+`gh` keeps its own login, so run `gh auth login` once; the `gh-config` volume keeps it across
+rebuilds. The `dev` user has passwordless `sudo`.
 
 Without VS Code:
 
@@ -52,13 +57,38 @@ would differ.
 Local dev credentials (Postgres, s3mock) are plain values in the config. Real secrets are
 references that resolve when first read; locally they come from files in `config/local/secrets/`,
 which is git-ignored. Replay mode needs none. To run live against the Places API, put the key in
-`config/local/secrets/google_places_api_key` and set `[pipeline] mode = "live"`.
+`config/local/secrets/google_places_api_key` and set `[pipeline] mode = "live"`. Replay and live
+build into separate lakes (`[lake.replay]`), so switching modes never mixes the sample's rows with
+live ones. A live run downloads only for the current run month; rebuild a past one from the
+archive by materializing only the assets downstream of `archive/archive_sodra`.
 
 Logs go to stderr at INFO and to `logs/leads.log` at DEBUG, rotated at 10 MB across 10 files.
 
 Dagster and dbt only accept credentials through environment variables, so they are started through
 `leads-dagster-dev` and `leads-dbt`, which ask the configuration service and set those variables for
-that one process.
+that one process. Under Dagster, dbt's variables are set by the definitions instead, so
+**Reload definitions** applies a configuration change to dbt too.
 
 `leads-dagster-dev` runs `dagster dev` against the repo, so code changes appear after
 **Reload definitions** in the Dagster UI.
+
+### Iterating on models
+
+Load the sources once through Dagster, then work on the SQL with `leads-dbt-dev`. It runs dbt on the
+`dev` target: models build into `services/transform/target/dev/dev.duckdb`, and the lake is
+attached read-only, so nothing you do there touches the lake or waits for a Dagster run. A model
+you do not select is read from the lake (dbt's `--defer`), as Dagster's last build left it.
+
+```sh
+leads-dbt-dev build -s state:modified+                # what you changed since Dagster's last build
+leads-dbt-dev build -s stg_sodra__monthly+            # one model and everything after it
+leads-dbt-dev show -s stg_sodra__monthly --limit 20   # look at the result
+leads-dbt-dev build -s raw_sodra__monthly            # raw, read from the archive
+```
+
+Raw models read the archive folder of a run month. On `leads-dbt-dev` that is the newest run month
+in the archive unless `LEADS_RUN_MONTH=YYYY-MM` names another; `leads-dbt` always needs it, and
+Dagster sets it per partition.
+
+Once a model is built in dev, the models after it read the dev copy, not the lake's. To read the
+lake's again, add `--favor-state`, or start over by deleting `target/dev/`.

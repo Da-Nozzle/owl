@@ -8,7 +8,6 @@ from typing import NoReturn
 
 from leads_config.loading import configure_logging, load_configuration
 from leads_dagster_orchestration.tool_environments import (
-    dagster_dbt_environment,
     dagster_storage_environment,
     dbt_dev_environment,
     dbt_environment,
@@ -32,11 +31,8 @@ def run_dagster_dev() -> NoReturn:
             "--module-name",
             DEFINITIONS_MODULE,
         ],
-        extra_environment=(
-            dagster_storage_environment(config)
-            | dbt_environment(config)
-            | dagster_dbt_environment(config)
-        ),
+        # dbt's variables are set by the definitions, from the configuration they load.
+        extra_environment=dagster_storage_environment(config),
     )
 
 

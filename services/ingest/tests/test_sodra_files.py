@@ -69,10 +69,12 @@ def test_live_run_archives_each_year_of_its_window() -> None:
     archive = InMemoryArchive()
 
     # Act
-    names = archive_yearly_files(Month(2026, 2), archive, SETTINGS, downloader)
+    archived = archive_yearly_files(Month(2026, 2), archive, SETTINGS, downloader)
 
     # Assert
+    names = list(archived)
     assert names == ["monthly-2025.csv.zip", "monthly-2026.csv.zip"]
+    assert archived["monthly-2026.csv.zip"].url == URL_TEMPLATE.format(year=2026)
     assert downloader.requested == [URL_TEMPLATE.format(year=2025), URL_TEMPLATE.format(year=2026)]
     assert set(archive.downloads) == {("sodra", Month(2026, 2), name) for name in names}
 
@@ -98,3 +100,20 @@ def test_replay_downloads_nothing_and_needs_the_files_archived() -> None:
     # Act / Assert
     with pytest.raises(FileNotFoundError, match=r"sodra/2026-02/monthly-2026.csv.zip"):
         archive_yearly_files(Month(2026, 2), archive, SETTINGS, downloader=None)
+
+
+def test_replay_returns_the_archived_downloads() -> None:
+    # Arrange
+    archive = InMemoryArchive()
+    for year in (2025, 2026):
+        name = f"monthly-{year}.csv.zip"
+        archive.save("sodra", Month(2026, 2), name, Download(name, b"", FETCHED_AT, None))
+
+    # Act
+    archived = archive_yearly_files(Month(2026, 2), archive, SETTINGS, downloader=None)
+
+    # Assert
+    assert {name: download.url for name, download in archived.items()} == {
+        "monthly-2025.csv.zip": "monthly-2025.csv.zip",
+        "monthly-2026.csv.zip": "monthly-2026.csv.zip",
+    }
