@@ -24,7 +24,8 @@
                 "fill-labs.dependi",
                 "esbenp.prettier-vscode",
                 "tamasfe.even-better-toml",
-                "ms-azuretools.vscode-containers"
+                "ms-azuretools.vscode-containers",
+                "dbtlabsinc.dbt" // NOTE not OSS
             ],
             "settings": {
                 "python.defaultInterpreterPath": "/usr/local/bin/python"
