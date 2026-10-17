@@ -7,42 +7,35 @@ from leads_ingest.ports.raw_archive import RawArchive
 from leads_ingest.sources.sodra.settings import SodraSettings
 
 SOURCE_NAME = "sodra"
+# Sodra is fetched once a month, so a snapshot is keyed by its month, which its dbt models read
+# from the archive path (_snapshot_month).
+SNAPSHOT_KEY_FORMAT = "%Y-%m"
 
 
 def archive_yearly_files(
-    run_month: Month,
+    snapshot: str,
     archive: RawArchive,
     settings: SodraSettings,
-    downloader: Downloader | None = None,
+    downloader: Downloader,
 ) -> dict[str, Download]:
-    """Puts the yearly files that cover a run's months in the archive, where dbt reads them, all
-    of each file: the window only picks which years' files a run fetches.
-
-    With a downloader each file is fetched and archived; without one (replay) the archive must
-    already hold them. Returns each file's download by name.
+    """Fetches the yearly files that cover the snapshot's window into the archive, where dbt
+    reads them, all of each file: the window only picks which years' files are fetched. Returns
+    each file's download by name; completing the snapshot is the caller's.
     """
     archived = {}
-    for year in window_years(run_month, settings.history_months):
+    for year in window_years(Month.parse(snapshot), settings.history_months):
         name = file_name(year)
-        if downloader is None:
-            # TODO in replay the archive becomes an external asset (nothing fetches into it), so
-            # this branch goes away; live always downloads. Reusing archived files instead of
-            # fetching is done by materializing only the assets downstream of the archive.
-            if not archive.exists(SOURCE_NAME, run_month, name):
-                raise FileNotFoundError(f"{SOURCE_NAME}/{run_month.key}/{name} is not archived")
-            archived[name] = archive.load(SOURCE_NAME, run_month, name)
-            continue
         download = downloader.download(settings.download_url_template.format(year=year))
         require_single_csv(download.body)
-        archive.save(SOURCE_NAME, run_month, name, download)
+        archive.save(SOURCE_NAME, snapshot, name, download)
         archived[name] = download
     return archived
 
 
-def window_years(run_month: Month, history_months: int) -> list[int]:
-    """Years of the files a run fetches: those holding the `history_months` before the run
-    month."""
-    return list(range(run_month.minus(history_months).year, run_month.minus(1).year + 1))
+def window_years(snapshot: Month, history_months: int) -> list[int]:
+    """Years of the files a snapshot fetches: those holding the `history_months` before the
+    snapshot's month."""
+    return list(range(snapshot.minus(history_months).year, snapshot.minus(1).year + 1))
 
 
 def file_name(year: int) -> str:

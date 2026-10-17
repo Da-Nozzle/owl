@@ -26,8 +26,8 @@ archive_path = "s3://leads-lake/archive/"
 metadata_schema = "ducklake"
 # data_path = "s3://leads-lake-prod/" # production
 
-# Replay runs (pipeline.mode = "replay") build into a lake of their own, so the sample's rows
-# never share a table with live ones. Same Postgres database and bucket; a schema and prefix apart.
+# The replay code location builds into a lake of its own, so the sample's rows never share a
+# table with live ones. Same Postgres database and bucket; a schema and prefix apart.
 # TODO like the archive, the prefix sits inside the live data_path, where DuckLake's orphan-file
 # cleanup could delete it: give each its own bucket.
 [lake.replay]

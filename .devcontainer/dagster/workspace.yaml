@@ -1,0 +1,10 @@
+# The two lakes are two code locations, loaded side by side: the same code builds each, and the
+# mode is which module loads it, so no configuration switches between them. Each location runs in
+# a process of its own, which holds the dbt variables of its lake. Production deploys live only.
+load_from:
+  - python_module:
+      module_name: leads_dagster_orchestration.entrypoints.live
+      location_name: live
+  - python_module:
+      module_name: leads_dagster_orchestration.entrypoints.replay
+      location_name: replay

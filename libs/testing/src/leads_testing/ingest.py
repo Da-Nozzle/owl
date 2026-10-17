@@ -1,8 +1,9 @@
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from leads_ingest.months import Month
 from leads_ingest.ports.downloader import Download
+from leads_ingest.ports.raw_archive import SnapshotManifest, file_record
 
 FETCHED_AT = datetime(2026, 9, 29, 11, 23, tzinfo=UTC)
 
@@ -31,23 +32,36 @@ class FakeDownloader:
 
 @dataclass
 class InMemoryRawArchive:
-    """A RawArchive in a dict, keyed (source, run month, file name)."""
+    """A RawArchive in dicts: downloads keyed (source, snapshot, file name), and the manifests of
+    complete snapshots keyed (source, snapshot), each with how often it was completed as its
+    version."""
 
-    downloads: dict[tuple[str, Month, str], Download] = field(default_factory=dict)
+    downloads: dict[tuple[str, str, str], Download] = field(default_factory=dict)
+    manifests: dict[tuple[str, str], tuple[SnapshotManifest, int]] = field(default_factory=dict)
 
-    def save(self, source: str, month: Month, name: str, download: Download) -> None:
-        self.downloads[(source, month, name)] = download
+    def save(self, source: str, snapshot: str, name: str, download: Download) -> None:
+        self.downloads[(source, snapshot, name)] = download
 
-    def load(self, source: str, month: Month, name: str) -> Download:
-        if not self.exists(source, month, name):
-            raise FileNotFoundError(f"{source}/{month.key}/{name} is not in the raw archive")
-        return self.downloads[(source, month, name)]
+    def complete(
+        self,
+        source: str,
+        snapshot: str,
+        downloads: Mapping[str, Download],
+        completed_at: datetime,
+    ) -> None:
+        files = {name: file_record(download) for name, download in downloads.items()}
+        _, version = self.manifests.get((source, snapshot), (None, 0))
+        self.manifests[(source, snapshot)] = (SnapshotManifest(completed_at, files), version + 1)
 
-    def exists(self, source: str, month: Month, name: str) -> bool:
-        return (source, month, name) in self.downloads
+    def snapshots(self, source: str) -> dict[str, str]:
+        return {
+            snapshot: str(version)
+            for (saved, snapshot), (_, version) in self.manifests.items()
+            if saved == source
+        }
 
-    def months(self, source: str) -> list[Month]:
-        return sorted({month for saved, month, _ in self.downloads if saved == source})
+    def manifest(self, source: str, snapshot: str) -> SnapshotManifest:
+        return self.manifests[(source, snapshot)][0]
 
-    def version_id(self, source: str, month: Month, name: str) -> str | None:
+    def version_id(self, source: str, snapshot: str, name: str) -> str | None:
         return None

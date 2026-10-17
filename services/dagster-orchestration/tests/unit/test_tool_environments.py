@@ -11,6 +11,7 @@ from leads_dagster_orchestration.tool_environments import (
     dbt_environment,
     libpq_connection_string,
 )
+from leads_ingest.settings import PipelineMode
 from leads_testing.config import build_config, secret_reference
 
 
@@ -38,7 +39,7 @@ def test_ducklake_catalog_connection_quotes_awkward_passwords() -> None:
     config = config_with_password("it's a pass")
 
     # Act
-    catalog = dbt_environment(config)["LEADS_DUCKLAKE_CATALOG"]
+    catalog = dbt_environment(config, PipelineMode.LIVE)["LEADS_DUCKLAKE_CATALOG"]
 
     # Assert
     assert catalog == (
@@ -67,7 +68,7 @@ def test_dbt_reads_ssl_flag_as_lowercase_text(use_ssl: bool, text: str) -> None:
     config = build_config({"lake.s3.use_ssl": use_ssl})
 
     # Act
-    environment = dbt_environment(config)
+    environment = dbt_environment(config, PipelineMode.LIVE)
 
     # Assert
     assert environment["LEADS_S3_USE_SSL"] == text
@@ -77,7 +78,6 @@ def test_dbt_reads_the_replay_archive_into_the_replay_lake_in_replay_mode() -> N
     # Arrange
     config = build_config(
         {
-            "pipeline.mode": "replay",
             "pipeline.replay_path": "/workspace/replay",
             "lake.replay.metadata_schema": "ducklake_replay",
             "lake.replay.data_path": "s3://leads-lake/replay/",
@@ -85,7 +85,7 @@ def test_dbt_reads_the_replay_archive_into_the_replay_lake_in_replay_mode() -> N
     )
 
     # Act
-    environment = dbt_environment(config)
+    environment = dbt_environment(config, PipelineMode.REPLAY)
 
     # Assert
     assert environment["LEADS_ARCHIVE_PATH"] == "/workspace/replay"
@@ -97,7 +97,6 @@ def test_dbt_reads_the_lakes_archive_into_the_live_lake_in_live_mode() -> None:
     # Arrange
     config = build_config(
         {
-            "pipeline.mode": "live",
             "lake.archive_path": "s3://leads-lake/archive/",
             "lake.metadata_schema": "ducklake",
             "lake.data_path": "s3://leads-lake/",
@@ -105,7 +104,7 @@ def test_dbt_reads_the_lakes_archive_into_the_live_lake_in_live_mode() -> None:
     )
 
     # Act
-    environment = dbt_environment(config)
+    environment = dbt_environment(config, PipelineMode.LIVE)
 
     # Assert
     assert environment["LEADS_ARCHIVE_PATH"] == "s3://leads-lake/archive/"
@@ -114,29 +113,38 @@ def test_dbt_reads_the_lakes_archive_into_the_live_lake_in_live_mode() -> None:
 
 
 @pytest.mark.parametrize("project_dir", ["/project", "/project/"])
-def test_dagster_keeps_dbts_duckdb_in_the_target_directory(project_dir: str) -> None:
+@pytest.mark.parametrize("mode", list(PipelineMode))
+def test_each_code_location_keeps_dbts_artifacts_in_a_folder_of_its_own(
+    project_dir: str, mode: PipelineMode
+) -> None:
     # Arrange
     config = build_config({"transform.project_dir": project_dir})
 
     # Act
-    environment = dagster_dbt_environment(config)
+    environment = dagster_dbt_environment(config, mode)
 
     # Assert
-    assert environment == {"LEADS_DBT_DUCKDB_PATH": "/project/target/dagster.duckdb"}
+    assert environment == {
+        "DBT_TARGET_PATH": f"/project/target/{mode.value}",
+        "LEADS_DBT_DUCKDB_PATH": f"/project/target/{mode.value}/dagster.duckdb",
+    }
 
 
-def test_dbt_dev_builds_into_its_own_file_and_defers_to_mains_state() -> None:
+@pytest.mark.parametrize("mode", list(PipelineMode))
+def test_dbt_dev_builds_into_its_lakes_own_file_and_defers_to_its_lakes_state(
+    mode: PipelineMode,
+) -> None:
     # Arrange
     config = build_config({"transform.project_dir": "/project"})
 
     # Act
-    environment = dbt_dev_environment(config)
+    environment = dbt_dev_environment(config, mode)
 
     # Assert
     assert environment == {
         "DBT_TARGET": "dev",
-        "DBT_TARGET_PATH": "/project/target/dev",
-        "LEADS_DBT_DEV_PATH": "/project/target/dev/dev.duckdb",
+        "DBT_TARGET_PATH": f"/project/target/{mode.value}/dev",
+        "LEADS_DBT_DEV_PATH": f"/project/target/{mode.value}/dev/dev.duckdb",
         "DBT_DEFER": "true",
-        "DBT_STATE": "/project/target/main",
+        "DBT_STATE": f"/project/target/{mode.value}/main",
     }

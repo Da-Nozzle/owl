@@ -10,6 +10,7 @@ def test_sodra_settings_are_read_from_config() -> None:
         {
             "sodra.download_url_template": "https://sodra.test/{year}.zip",
             "sodra.history_months": 13,
+            "sodra.snapshot_schedule": "0 6 21 * *",
         }
     )
 
@@ -17,7 +18,9 @@ def test_sodra_settings_are_read_from_config() -> None:
     settings = load_sodra_settings(config)
 
     # Assert
-    assert settings == SodraSettings("https://sodra.test/{year}.zip", history_months=13)
+    assert settings == SodraSettings(
+        "https://sodra.test/{year}.zip", history_months=13, snapshot_schedule="0 6 21 * *"
+    )
 
 
 def test_a_window_without_history_is_rejected() -> None:

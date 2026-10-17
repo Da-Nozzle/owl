@@ -22,6 +22,7 @@ dependencies = [
 leads-dagster-dev = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dagster_dev"
 leads-dbt = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt"
 leads-dbt-dev = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt_dev"
+leads-dbt-diff = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt_diff"
 
 [tool.uv.sources]
 leads-config = { workspace = true }

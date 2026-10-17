@@ -7,6 +7,10 @@ models:
       holds it: Sodra's published headers mapped to names and types. Every month the downloads
       cover, with no window applied. Average wage and contributions are suppressed for employers
       with 3 or fewer insured.
+    config:
+      meta:
+        # What identifies a row: leads-dbt-diff matches rows on it.
+        key: [insurer_code, declared_month]
     data_tests:
       - unique:
           column_name: "insurer_code || '-' || declared_month"
@@ -27,7 +31,7 @@ models:
         data_tests:
           - not_null
       - name: snapshot_month
-        description: The run month (YYYY-MM) whose download this row's version is from.
+        description: The snapshot (YYYY-MM) whose download this row's version is from.
       - name: file_published_at
         description: >
           When Sodra wrote that version of the year's file (its Last-Modified, UTC): what the
@@ -38,7 +42,7 @@ unit_tests:
     description: >
       The 2026 file is in both runs' downloads, so 2026-09's version wins, and employer 2, which
       Sodra dropped from 202607 in that version, is gone. The 2025 file is only in 2026-08's
-      downloads (a later run's window no longer reaches 2025), so it stays as 2026-08 loaded it.
+      downloads (a later snapshot's window no longer reaches 2025), so it stays as 2026-08 loaded it.
       Downloads arrive out of order, as after a rerun of 2026-08.
     model: stg_sodra__monthly
     given:

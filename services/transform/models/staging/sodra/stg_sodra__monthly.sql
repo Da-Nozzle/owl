@@ -3,7 +3,7 @@
 -- yet are in raw_sodra.monthly. A table, so every value is cast when it is built.
 {{ config(materialized='table') }}
 
--- Raw keeps every run's download of each yearly file. Sodra rewrites a year's file in place, so
+-- Raw keeps every snapshot's download of each yearly file. Sodra rewrites a year's file in place, so
 -- the newest download of it is the current version of every month in it. Whole files are
 -- picked, not rows, so an employer Sodra drops from a month in a revision is dropped here too.
 with current_version as (

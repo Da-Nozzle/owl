@@ -1,12 +1,7 @@
+# Dagster loads two code locations side by side: live calls the sources and archives what they
+# return; replay reads replay_path and calls none. Each builds a lake of its own (lake.replay).
 [pipeline]
-mode = "replay" # replay reads replay_path and calls no source; live calls them and archives
-# mode = "live" # production
-# First live run month (Dagster partition, YYYY-MM). Replay runs the months the sample holds.
-first_month = "2026-08"
-# Run month M starts on this day and hour of M, local time: Sodra publishes the previous month by
-# the 20th, so a month cannot run (nor its partition exist) before the 21st.
-run_day = 21 # TODO move specific source level sodra configs under sodra key
-run_hour = 6
+# The timezone of every source's snapshot_schedule.
 timezone = "Europe/Vilnius"
 user_agent = "vmi-leads-pipeline/0.1"
 replay_path = "/workspace/replay"
@@ -17,6 +12,10 @@ api_key = { secret_store = "local", secret_name = "google_places_api_key" }
 
 [sodra]
 download_url_template = "https://atvira.sodra.lt/imones/downloads/{year}/monthly-{year}.csv.zip"
-# Months loaded per run, ending with the month before the run month. Each run reloads all of
-# them, so Sodra's revisions land; 13 gives a year-on-year comparison.
+# When live fetches a snapshot (cron, pipeline.timezone). Sodra publishes the previous month by
+# the 20th, so on the 21st at 06:00. A snapshot is keyed by the month of the tick it follows, so
+# a fetch by hand before the 21st replaces the previous month's snapshot.
+snapshot_schedule = "0 6 21 * *"
+# Months loaded per snapshot, ending with the month before the snapshot's. Each snapshot reloads
+# all of them, so Sodra's revisions land; 13 gives a year-on-year comparison.
 history_months = 13

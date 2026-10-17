@@ -1,16 +1,20 @@
--- Sodra's yearly files as the run downloaded them, whole and as published: every row, every
+-- Sodra's yearly files as a snapshot downloaded them, whole and as published: every row, every
 -- column, as text. Sodra rewrites each year's file in place, so a download is one version of it.
--- Reads this run's month of the archive, or every archived month when raw is built from nothing.
--- Ephemeral, so the checks on it run before raw_sodra.monthly is written.
+-- Reads this build's snapshot from the archive, or every complete snapshot when raw is built from
+-- nothing. Ephemeral, so the checks on it run before raw_sodra.monthly is written.
 -- depends_on: {{ source('archive', 'sodra') }}
 {{ config(materialized='ephemeral') }}
 
-{% set run_months = archived_run_months('raw_sodra__monthly') %}
+{% set snapshots = archived_snapshots('raw_sodra__monthly', 'sodra') %}
 
 with published as (
     select *
     from read_csv(
-        'zip://{{ archived_file("sodra", "monthly-*.csv.zip", run_months) }}/*.csv',
+        [
+            {%- for zipped in archived_files('sodra', 'monthly-*.csv.zip', snapshots) %}
+            'zip://{{ zipped }}/*.csv'{{ ',' if not loop.last }}
+            {%- endfor %}
+        ],
         delim = ';',
         quote = '"',
         header = true,
@@ -30,7 +34,7 @@ fetches as (
         last_modified,
         sha256
     from read_json(
-        '{{ archived_file("sodra", "monthly-*.csv.zip.meta.json", run_months) }}',
+        {{ archived_files('sodra', 'monthly-*.csv.zip.meta.json', snapshots) }},
         columns = {
             url: 'varchar',
             fetched_at: 'varchar',

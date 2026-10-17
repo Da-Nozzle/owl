@@ -3,7 +3,7 @@ version: 2
 sources:
   - name: archive
     description: >
-      Raw source files as downloaded, at <archive>/<source>/<run month>/<file>, each with a
+      Raw source files as downloaded, at <archive>/<source>/<snapshot>/<file>, each with a
       .meta.json sidecar (URL, fetch time, Last-Modified, size, SHA-256). Read with read_csv, not
       as tables; declared so the graph shows which download each raw table is built from.
     tables:
@@ -17,23 +17,24 @@ sources:
 models:
   - name: sodra_monthly_files
     description: >
-      The yearly files the run downloaded, whole, every column as published and as text, with
-      the fetch each came from. Ephemeral, so the checks on it stop a bad file before raw is
+      The yearly files the snapshot downloaded, whole, every column as published and as text,
+      with the fetch each came from. Ephemeral, so the checks on it stop a bad file before raw is
       written.
 
   - name: raw_sodra__monthly
     description: >
-      Sodra's open employer data as each run downloaded it: every row of every yearly file the
-      run fetched, under its published header, as text, with no window applied. One row per run
-      month, file, employer and declared month; a file Sodra did not change since the last run
-      is there again, as that run's download of it. Built from nothing, it reads every run month
-      in the archive. Average wage and contributions are suppressed for employers with 3 or
-      fewer insured. The "II" pair (avgWage2, numInsured2) is undocumented by Sodra.
+      Sodra's open employer data as each snapshot downloaded it: every row of every yearly file
+      the snapshot fetched, under its published header, as text, with no window applied. One row
+      per snapshot, file, employer and declared month; a file Sodra did not change since the last
+      snapshot is there again, as that snapshot's download of it. Built from nothing, it reads
+      every complete snapshot in the archive. Average wage and contributions are suppressed for
+      employers with 3 or fewer insured. The "II" pair (avgWage2, numInsured2) is undocumented by
+      Sodra.
     columns:
       - name: _source_file
         description: The archived file the row was read from, inside its zip.
       - name: _snapshot_month
-        description: The run month (YYYY-MM) whose download this row is from, from the archive path.
+        description: The snapshot (YYYY-MM) whose download this row is from, from the archive path.
       - name: _file_url
         description: Where the file was downloaded from.
       - name: _file_fetched_at

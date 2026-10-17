@@ -1,4 +1,8 @@
 # Read by leads-dagster-dev only. In production the webserver is deployed on its own.
+[dagster]
+# The code locations, live and replay, loaded side by side. Production deploys live only.
+workspace = "/workspace/.devcontainer/dagster/workspace.yaml"
+
 [dagster.webserver]
 host = "0.0.0.0"
 port = 3000

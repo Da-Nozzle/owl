@@ -9,13 +9,15 @@ from dagster._core.definitions.definitions_load_context import (
 from dagster_dbt import DbtProject
 
 from leads_dagster_orchestration.assets.transform import (
-    dbt_sources,
     environment_variable,
     has_shared_models,
+    pool_name,
     prepare_on_initial_load,
-    run_month_count_query,
     set_dbt_environment,
+    snapshot_query,
+    source_layers,
 )
+from leads_ingest.settings import PipelineMode
 
 
 def manifest_of(*nodes: tuple[str, list[str]]) -> dict[str, object]:
@@ -41,10 +43,31 @@ def test_each_source_folder_is_a_step_and_tests_are_not() -> None:
     )
 
     # Act
-    sources = dbt_sources(manifest)
+    sources = list(source_layers(manifest))
 
     # Assert
     assert sources == ["jar", "sodra"]
+
+
+def test_each_source_has_a_step_for_each_layer_holding_its_models() -> None:
+    # Arrange
+    manifest = manifest_of(
+        ("model", ["leads", "raw", "sodra", "raw_sodra__monthly"]),
+        ("model", ["leads", "staging", "sodra", "stg_sodra__monthly"]),
+        ("model", ["leads", "raw", "jar", "raw_jar__entities"]),
+    )
+
+    # Act
+    layers = source_layers(manifest)
+
+    # Assert
+    assert layers == {"jar": {"raw"}, "sodra": {"raw", "staging"}}
+
+
+def test_each_lakes_pools_are_its_own() -> None:
+    # Act / Assert
+    assert pool_name(PipelineMode.LIVE, "transform_sodra") == "live_transform_sodra"
+    assert pool_name(PipelineMode.REPLAY, "transform_sodra") == "replay_transform_sodra"
 
 
 def test_a_staging_model_outside_a_source_folder_is_rejected() -> None:
@@ -53,7 +76,7 @@ def test_a_staging_model_outside_a_source_folder_is_rejected() -> None:
 
     # Act / Assert
     with pytest.raises(ValueError, match="models/staging/<source>/"):
-        dbt_sources(manifest)
+        source_layers(manifest)
 
 
 def test_shared_step_exists_only_for_models_outside_the_source_layers() -> None:
@@ -103,25 +126,26 @@ def test_dbt_environment_is_set_in_this_process(environ: MutableMapping[str, str
     assert environ["LEADS_TEST_ADDED"] == "13"
 
 
-def test_a_model_with_a_run_month_column_counts_the_run_months_rows() -> None:
+def test_a_model_with_a_snapshot_column_counts_the_snapshots_rows() -> None:
     # Arrange
     node = {
         "relation_name": '"lake"."raw_sodra"."monthly"',
-        "meta": {"run_month_column": "_snapshot_month"},
+        "meta": {"snapshot_column": "_snapshot_month"},
     }
 
     # Act
-    query = run_month_count_query(node, "2026-09")
+    query = snapshot_query(node, "2026-09")
 
     # Assert
     assert query == (
-        'select count(*) from "lake"."raw_sodra"."monthly" where "_snapshot_month" = \'2026-09\''
+        'select count(*), null from "lake"."raw_sodra"."monthly" '
+        "where \"_snapshot_month\" = '2026-09'"
     )
 
 
-def test_a_model_without_a_run_month_column_keeps_the_tables_count() -> None:
+def test_a_model_without_a_snapshot_column_keeps_the_tables_count() -> None:
     # Act / Assert
-    assert run_month_count_query({"relation_name": "t", "meta": {}}, "2026-09") is None
+    assert snapshot_query({"relation_name": "t", "meta": {}}, "2026-09") is None
 
 
 class PreparedProject:

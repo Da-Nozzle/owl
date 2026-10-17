@@ -6,8 +6,10 @@ import pytest
 from dlt.common.storages.configuration import FilesystemConfiguration
 
 from leads_ingest.adapters.archive.fsspec_archive import FsspecRawArchive, open_fsspec_archive
-from leads_ingest.months import Month
+from leads_ingest.ports.raw_archive import SnapshotManifest, file_record
 from leads_testing.ingest import build_download
+
+COMPLETED_AT = datetime(2026, 10, 21, 3, 5, tzinfo=UTC)
 
 
 @pytest.fixture
@@ -15,7 +17,7 @@ def archive(tmp_path: Path) -> FsspecRawArchive:
     return open_fsspec_archive(FilesystemConfiguration(bucket_url=str(tmp_path)))
 
 
-def test_a_saved_download_loads_back_with_its_metadata(
+def test_a_saved_download_is_kept_byte_for_byte_with_its_fetch_beside_it(
     archive: FsspecRawArchive, tmp_path: Path
 ) -> None:
     # Arrange
@@ -26,58 +28,63 @@ def test_a_saved_download_loads_back_with_its_metadata(
     )
 
     # Act
-    archive.save("sodra", Month(2026, 9), "file.zip", download)
-    loaded = archive.load("sodra", Month(2026, 9), "file.zip")
+    archive.save("sodra", "2026-09", "monthly-2026.csv.zip", download)
 
     # Assert
-    assert loaded == download
-    meta = json.loads((tmp_path / "sodra" / "2026-09" / "file.zip.meta.json").read_text())
-    assert (meta["size"], meta["sha256"]) == (download.size, download.sha256)
+    path = tmp_path / "sodra" / "2026-09" / "monthly-2026.csv.zip"
+    assert path.read_bytes() == b"PK\x03\x04 raw bytes"
+    sidecar = json.loads(path.with_name("monthly-2026.csv.zip.meta.json").read_text())
+    assert sidecar == file_record(download)
+    assert sidecar["sha256"] == download.sha256
 
 
-def test_saving_again_replaces_the_file_and_its_metadata(archive: FsspecRawArchive) -> None:
-    # Arrange
-    archive.save("sodra", Month(2026, 9), "file.zip", build_download(b"first"))
-    rerun = build_download(b"second", last_modified="Wed, 30 Sep 2026 08:00:00 GMT")
-
-    # Act
-    archive.save("sodra", Month(2026, 9), "file.zip", rerun)
-
-    # Assert
-    assert archive.load("sodra", Month(2026, 9), "file.zip") == rerun
-
-
-def test_exists_finds_only_saved_files(archive: FsspecRawArchive) -> None:
-    # Arrange
-    archive.save("sodra", Month(2026, 9), "file.zip", build_download())
-
-    # Act / Assert
-    assert archive.exists("sodra", Month(2026, 9), "file.zip")
-    assert not archive.exists("sodra", Month(2026, 10), "file.zip")
-
-
-def test_a_missing_file_names_its_archive_path(archive: FsspecRawArchive) -> None:
-    # Act / Assert
-    with pytest.raises(FileNotFoundError, match=r"sodra/2026-09/missing.zip"):
-        archive.load("sodra", Month(2026, 9), "missing.zip")
-
-
-def test_months_lists_a_sources_run_months_oldest_first(
-    archive: FsspecRawArchive, tmp_path: Path
+def test_a_snapshot_is_complete_only_once_its_manifest_is_written(
+    archive: FsspecRawArchive,
 ) -> None:
     # Arrange
-    for month in [Month(2026, 10), Month(2025, 12), Month(2026, 1)]:
-        archive.save("sodra", month, "file.zip", build_download())
-    archive.save("google", Month(2026, 11), "file.json", build_download())
-    (tmp_path / "sodra" / "notes").mkdir()
+    download = build_download(b"first")
+    archive.save("sodra", "2026-09", "monthly-2026.csv.zip", download)
+    before = archive.snapshots("sodra")
 
     # Act
-    months = archive.months("sodra")
+    archive.complete("sodra", "2026-09", {"monthly-2026.csv.zip": download}, COMPLETED_AT)
 
     # Assert
-    assert months == [Month(2025, 12), Month(2026, 1), Month(2026, 10)]
+    assert before == {}
+    assert list(archive.snapshots("sodra")) == ["2026-09"]
+    assert archive.manifest("sodra", "2026-09") == SnapshotManifest(
+        completed_at=COMPLETED_AT, files={"monthly-2026.csv.zip": file_record(download)}
+    )
 
 
-def test_a_source_with_nothing_archived_has_no_months(archive: FsspecRawArchive) -> None:
+def test_completing_a_snapshot_again_changes_its_version(archive: FsspecRawArchive) -> None:
+    # Arrange
+    archive.complete("sodra", "2026-09", {"f.zip": build_download(b"first")}, COMPLETED_AT)
+    first = archive.snapshots("sodra")["2026-09"]
+
+    # Act
+    later = datetime(2026, 10, 25, tzinfo=UTC)
+    archive.complete("sodra", "2026-09", {"f.zip": build_download(b"second")}, later)
+
+    # Assert
+    assert archive.snapshots("sodra")["2026-09"] != first
+    assert archive.manifest("sodra", "2026-09").completed_at == later
+
+
+def test_snapshots_are_listed_per_source_with_any_key(archive: FsspecRawArchive) -> None:
+    # Arrange
+    for snapshot in ["2026-09", "2026-08"]:
+        archive.complete("sodra", snapshot, {}, COMPLETED_AT)
+    archive.complete("google", "2026-10-17", {}, COMPLETED_AT)
+
+    # Act
+    sodra, google = archive.snapshots("sodra"), archive.snapshots("google")
+
+    # Assert
+    assert sorted(sodra) == ["2026-08", "2026-09"]
+    assert list(google) == ["2026-10-17"]
+
+
+def test_a_source_never_completed_has_no_snapshots(archive: FsspecRawArchive) -> None:
     # Act / Assert
-    assert archive.months("sodra") == []
+    assert archive.snapshots("sodra") == {}

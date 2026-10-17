@@ -6,10 +6,12 @@ import pytest
 from leads_ingest.months import Month
 from leads_ingest.sources.sodra.files import archive_yearly_files, window_years
 from leads_ingest.sources.sodra.settings import SodraSettings
-from leads_testing.ingest import FakeDownloader, InMemoryRawArchive, build_download
+from leads_testing.ingest import FakeDownloader, InMemoryRawArchive
 
 URL_TEMPLATE = "https://sodra.test/{year}/monthly-{year}.csv.zip"
-SETTINGS = SodraSettings(download_url_template=URL_TEMPLATE, history_months=3)
+SETTINGS = SodraSettings(
+    download_url_template=URL_TEMPLATE, history_months=3, snapshot_schedule="0 6 21 * *"
+)
 
 
 def zipped(*members: str) -> bytes:
@@ -20,7 +22,7 @@ def zipped(*members: str) -> bytes:
     return buffer.getvalue()
 
 
-def test_a_window_spans_the_years_of_the_months_before_the_run_month() -> None:
+def test_a_window_spans_the_years_of_the_months_before_the_snapshots() -> None:
     # Act
     years = window_years(Month(2026, 2), history_months=3)
 
@@ -36,20 +38,21 @@ def test_a_january_run_needs_only_the_previous_year() -> None:
     assert years == [2025]
 
 
-def test_live_run_archives_each_year_of_its_window() -> None:
+def test_a_fetch_archives_each_year_of_its_window_and_leaves_completing_it() -> None:
     # Arrange
     downloader = FakeDownloader(zipped("monthly.csv"))
     archive = InMemoryRawArchive()
 
     # Act
-    archived = archive_yearly_files(Month(2026, 2), archive, SETTINGS, downloader)
+    archived = archive_yearly_files("2026-02", archive, SETTINGS, downloader)
 
     # Assert
     names = list(archived)
     assert names == ["monthly-2025.csv.zip", "monthly-2026.csv.zip"]
     assert archived["monthly-2026.csv.zip"].url == URL_TEMPLATE.format(year=2026)
     assert downloader.requested == [URL_TEMPLATE.format(year=2025), URL_TEMPLATE.format(year=2026)]
-    assert set(archive.downloads) == {("sodra", Month(2026, 2), name) for name in names}
+    assert set(archive.downloads) == {("sodra", "2026-02", name) for name in names}
+    assert archive.snapshots("sodra") == {}
 
 
 def test_a_zip_with_more_than_one_csv_is_not_archived() -> None:
@@ -59,32 +62,5 @@ def test_a_zip_with_more_than_one_csv_is_not_archived() -> None:
 
     # Act / Assert
     with pytest.raises(ValueError, match=r"extra\.csv"):
-        archive_yearly_files(Month(2026, 2), archive, SETTINGS, downloader)
+        archive_yearly_files("2026-02", archive, SETTINGS, downloader)
     assert archive.downloads == {}
-
-
-def test_replay_fails_on_a_year_missing_from_the_archive() -> None:
-    # Arrange
-    archive = InMemoryRawArchive()
-    archive.save("sodra", Month(2026, 2), "monthly-2025.csv.zip", build_download())
-
-    # Act / Assert
-    with pytest.raises(FileNotFoundError, match=r"sodra/2026-02/monthly-2026.csv.zip"):
-        archive_yearly_files(Month(2026, 2), archive, SETTINGS, downloader=None)
-
-
-def test_replay_returns_the_archived_downloads() -> None:
-    # Arrange
-    archive = InMemoryRawArchive()
-    saved = {
-        f"monthly-{year}.csv.zip": build_download(url=URL_TEMPLATE.format(year=year))
-        for year in (2025, 2026)
-    }
-    for name, download in saved.items():
-        archive.save("sodra", Month(2026, 2), name, download)
-
-    # Act
-    archived = archive_yearly_files(Month(2026, 2), archive, SETTINGS, downloader=None)
-
-    # Assert
-    assert archived == saved

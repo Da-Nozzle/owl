@@ -34,10 +34,6 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         },
     },
     "pipeline": {
-        "mode": "replay",
-        "first_month": "2026-08",
-        "run_day": 21,
-        "run_hour": 6,
         "timezone": "Europe/Vilnius",
         "user_agent": "leads-test",
         "replay_path": "/workspace/replay",
@@ -45,6 +41,7 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
     "sodra": {
         "download_url_template": "https://sodra.test/{year}/monthly-{year}.csv.zip",
         "history_months": 13,
+        "snapshot_schedule": "0 6 21 * *",
     },
     "transform": {"project_dir": "/workspace/services/transform"},
 }
@@ -66,7 +63,7 @@ def build_config(
     overrides: Mapping[str, object] | None = None, *, secrets: Mapping[str, str] | None = None
 ) -> Configuration:
     """A configuration like config/local with each dotted key of `overrides` replaced, e.g.
-    `{"pipeline.run_day": 29}`. A key that is not a setting fails, so a typo cannot pass
+    `{"sodra.history_months": 1}`. A key that is not a setting fails, so a typo cannot pass
     unnoticed. `secrets` are in the store that `secret_reference` names."""
     values: dict[str, Any] = deepcopy(dict(LOCAL_LIKE_VALUES))
     for key, value in (overrides or {}).items():

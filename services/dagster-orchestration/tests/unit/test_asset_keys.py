@@ -3,9 +3,19 @@ import dlt
 import pytest
 from dagster_dlt.translator import DltResourceTranslatorData
 
-from leads_dagster_orchestration.asset_keys import archive_key, dbt_resource_key, layer_group
+from leads_dagster_orchestration.asset_keys import (
+    archive_key,
+    dbt_resource_key,
+    fetch_key,
+    is_archive,
+    lake_group,
+)
 from leads_dagster_orchestration.translators import RawTableDltTranslator
+from leads_ingest.settings import PipelineMode
 from leads_ingest.sources.sodra.files import SOURCE_NAME
+
+LIVE = PipelineMode.LIVE
+REPLAY = PipelineMode.REPLAY
 
 
 def test_dbt_archive_source_gets_the_key_of_the_archive_asset() -> None:
@@ -13,10 +23,12 @@ def test_dbt_archive_source_gets_the_key_of_the_archive_asset() -> None:
     dbt_source_props = {"resource_type": "source", "source_name": "archive", "name": "sodra"}
 
     # Act
-    key = dbt_resource_key(dbt_source_props)
+    key = dbt_resource_key(dbt_source_props, LIVE)
 
     # Assert
-    assert key == archive_key(SOURCE_NAME) == dg.AssetKey(["archive", "archive_sodra"])
+    assert (
+        key == archive_key(SOURCE_NAME, LIVE) == dg.AssetKey(["live", "archive", "archive_sodra"])
+    )
 
 
 def test_dbt_model_in_a_raw_schema_is_in_the_raw_layer() -> None:
@@ -29,10 +41,10 @@ def test_dbt_model_in_a_raw_schema_is_in_the_raw_layer() -> None:
     }
 
     # Act
-    key = dbt_resource_key(model_props)
+    key = dbt_resource_key(model_props, LIVE)
 
     # Assert
-    assert key == dg.AssetKey(["raw", "raw_sodra__monthly"])
+    assert key == dg.AssetKey(["live", "raw", "raw_sodra__monthly"])
 
 
 def test_dbt_source_of_a_dlt_table_gets_the_key_of_that_table() -> None:
@@ -45,21 +57,20 @@ def test_dbt_source_of_a_dlt_table_gets_the_key_of_that_table() -> None:
     dbt_source_props = {"resource_type": "source", "source_name": "google", "name": "listings"}
 
     # Act
-    dlt_key = (
-        RawTableDltTranslator()
-        .get_asset_spec(DltResourceTranslatorData(resource=resource, pipeline=None))
-        .key
+    dlt_spec = RawTableDltTranslator(LIVE).get_asset_spec(
+        DltResourceTranslatorData(resource=resource, pipeline=None)
     )
 
     # Assert
     assert (
-        dlt_key
-        == dbt_resource_key(dbt_source_props)
-        == dg.AssetKey(["raw", "raw_google__listings"])
+        dlt_spec.key
+        == dbt_resource_key(dbt_source_props, LIVE)
+        == dg.AssetKey(["live", "raw", "raw_google__listings"])
     )
+    assert dlt_spec.group_name == "live"
 
 
-def test_dbt_model_is_keyed_by_its_lake_schema() -> None:
+def test_dbt_model_is_keyed_by_its_lake_and_lake_schema() -> None:
     # Arrange
     model_props = {
         "resource_type": "model",
@@ -68,10 +79,12 @@ def test_dbt_model_is_keyed_by_its_lake_schema() -> None:
     }
 
     # Act
-    key = dbt_resource_key(model_props)
+    live = dbt_resource_key(model_props, LIVE)
+    replay = dbt_resource_key(model_props, REPLAY)
 
     # Assert
-    assert key == dg.AssetKey(["staging", "stg_sodra__monthly"])
+    assert live == dg.AssetKey(["live", "staging", "stg_sodra__monthly"])
+    assert replay == dg.AssetKey(["replay", "staging", "stg_sodra__monthly"])
 
 
 def test_dbt_model_without_a_schema_is_rejected() -> None:
@@ -80,12 +93,22 @@ def test_dbt_model_without_a_schema_is_rejected() -> None:
 
     # Act / Assert
     with pytest.raises(ValueError, match="orphan"):
-        dbt_resource_key(model_props)
+        dbt_resource_key(model_props, LIVE)
 
 
-def test_an_asset_is_grouped_by_its_layer() -> None:
-    # Act
-    group = layer_group(dg.AssetKey(["staging", "stg_sodra__monthly"]))
+def test_each_lake_is_a_group_of_its_own() -> None:
+    # Act / Assert
+    assert (lake_group(LIVE), lake_group(REPLAY)) == ("live", "replay")
 
-    # Assert
-    assert group == "staging"
+
+def test_an_archive_is_known_by_its_layer_in_either_lake() -> None:
+    # Act / Assert
+    assert is_archive(archive_key(SOURCE_NAME, LIVE))
+    assert is_archive(archive_key(SOURCE_NAME, REPLAY))
+    assert not is_archive(dg.AssetKey(["live", "raw", "raw_sodra__monthly"]))
+    assert not is_archive(dg.AssetKey(["archive"]))
+
+
+def test_a_sources_fetch_is_in_the_fetch_layer() -> None:
+    # Act / Assert
+    assert fetch_key(SOURCE_NAME, LIVE) == dg.AssetKey(["live", "fetch", "fetch_sodra"])
