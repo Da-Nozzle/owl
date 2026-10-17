@@ -77,23 +77,31 @@ the same code into separate lakes, so the sample's rows never mix with live ones
 
 | Location | Reads | Builds into | Asset keys and group |
 |---|---|---|---|
-| `live` | the sources, fetched into the archive (`lake.archive_path`) | `lake.metadata_schema` | `live/<layer>/<name>`, group `live` |
-| `replay` | the committed sample (`pipeline.replay_path`); calls nothing | `lake.replay` | `replay/<layer>/<name>`, group `replay` |
+| `live` | the sources, fetched into the archive (`lake.archive_path`) | `lake.metadata_schema` | `live/<layer>/<name>`, group `live/<source>` |
+| `replay` | the committed sample (`pipeline.replay_path`); calls nothing | `lake.replay` | `replay/<layer>/<name>`, group `replay/<source>` |
 
 Production deploys `live` only. Nothing switches between them: each lake is one box in the
-lineage view (its group), fetch → archive → raw → staging left to right, and one folder in the
-asset catalog, with its own history and pools. Node names say the layer (`fetch_`, `archive_`,
-`raw_`, `stg_`); only live has a fetch, and the archive is drawn dashed, as nothing can
-materialize it.
+lineage view (its group), holding a box per source (a group nested in the lake's, as Dagster reads
+`/` in a group name), fetch → archive → raw → staging left to right inside; models that combine
+sources go in the lake's box itself. Each lake is also one folder in the asset catalog, with its
+own history and pools. Node names say the layer (`fetch_`, `archive_`, `raw_`, `stg_`); only live
+has a fetch, and the archive is drawn dashed, as nothing can materialize it.
 
 ### Snapshots
 
 Every source goes through the raw archive. What one fetch of a source captures is a snapshot,
 kept as fetched at `<archive>/<source>/<snapshot>/`, and complete once the fetch has written its
 manifest, `<archive>/<source>/_snapshots/<snapshot>.json`, last. A snapshot is keyed by the
-period it was fetched in, which each source sets with its schedule: Sodra is fetched on the 21st
-at 06:00 (`sodra.snapshot_schedule`) and keyed `YYYY-MM`; a source fetched daily would be keyed
-`YYYY-MM-DD`. A second fetch in the same period replaces that period's snapshot.
+period it was fetched in, which each source sets with its schedule, as often as the source
+publishes:
+
+| Source | Fetches | Schedule | Key |
+|---|---|---|---|
+| `sodra` | the yearly employer files covering the last 13 months | 21st at 06:00 (`sodra.snapshot_schedule`), as Sodra publishes the previous month by the 20th | `YYYY-MM` |
+| `jar` | the register's entities, legal forms and statuses, each whole | 21st at 06:00 (`jar.snapshot_schedule`): the register publishes monthly at most, on no fixed day | `YYYY-MM` |
+
+A source fetched daily would be keyed `YYYY-MM-DD`. A second fetch in the same period replaces that
+period's snapshot.
 
 A source's partitions are its complete snapshots, so every partition has something to build from,
 and a period that has passed cannot be fetched again: the fetch takes no partition, the clock
@@ -107,9 +115,10 @@ no reload.
 | `transform_automation` sensor | builds raw for each new snapshot, then staging and after; rebuilds staging and after when their SQL changes | Dagster |
 | `rebuild_<source>_from_archive` | rebuilds raw for the snapshots you choose, then staging and after once | you, from the job's page (a backfill for several) |
 
-So the monthly Sodra build is a chain of runs: the scheduled fetch, then (within a minute or two)
-raw for the new snapshot, then staging. Raw is partitioned by snapshot; staging and later models
-are one table each, rebuilt whole, so their latest materialization is the table's.
+So each source's monthly build is a chain of runs: the scheduled fetch, then (within a minute or
+two) raw for the new snapshot, then staging. Sources build side by side, each in its own pools.
+Raw is partitioned by snapshot; staging and later models are one table each, rebuilt whole, so
+their latest materialization is the table's.
 
 Every run and materialization is labelled `leads/trigger`: `schedule` or `fetch` (by hand) on a
 fetch, `automation` on what Dagster built by itself, `rebuild` on a rebuild by hand. Each raw
@@ -117,9 +126,11 @@ snapshot also shows `archive_fetched_at`, the download it was built from. Filter
 `leads/trigger` to see, say, every rebuild.
 
 A new source is one `ArchivedSource` in `archived_sources()` (`entrypoints/definitions.py`): its
-name, its schedule and key format, and its fetch, plus its dbt models in `models/raw/<source>/`
-and `models/staging/<source>/`. Its partitions, archive, fetch job and schedule, rebuild job and
-automation all follow from that.
+name, its schedule and key format, and its fetch (`leads_ingest/sources/<source>/`, with its
+settings in `config/<env>/pipeline.toml`), plus its dbt models in `models/raw/<source>/` (schema
+`raw_<source>` in `dbt_project.yml`) and `models/staging/<source>/`. Its partitions, archive,
+fetch job and schedule, rebuild job, automation and group all follow from that. `jar` is the
+smallest example: three CSV exports, read by the `archived_csv` macro.
 
 ### Tests
 

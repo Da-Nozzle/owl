@@ -32,6 +32,17 @@ STAGING = dg.AssetKey(["live", "staging", "stg_sodra__monthly"])
 REPLAY_ARCHIVE, REPLAY_RAW, REPLAY_STAGING = (
     dg.AssetKey(["replay", *key.path[1:]]) for key in (ARCHIVE, RAW, STAGING)
 )
+JAR_FETCH = dg.AssetKey(["live", "fetch", "fetch_jar"])
+JAR_ARCHIVE = dg.AssetKey(["live", "archive", "archive_jar"])
+JAR_RAW = {
+    dg.AssetKey(["live", "raw", f"raw_jar__{table}"])
+    for table in ("entities", "legal_forms", "statuses")
+}
+JAR_STAGING = dg.AssetKey(["live", "staging", "stg_jar__entities"])
+REPLAY_JAR_ARCHIVE, REPLAY_JAR_STAGING = (
+    dg.AssetKey(["replay", *key.path[1:]]) for key in (JAR_ARCHIVE, JAR_STAGING)
+)
+REPLAY_JAR_RAW = {dg.AssetKey(["replay", *key.path[1:]]) for key in JAR_RAW}
 
 
 @pytest.fixture(scope="module")
@@ -64,7 +75,7 @@ def job_assets(definitions: dg.Definitions, name: str) -> set[dg.AssetKey]:
     return set(job.selection.resolve(definitions.resolve_asset_graph()))
 
 
-def test_each_lake_is_a_group_of_its_own_assets(
+def test_each_sources_assets_are_a_group_within_their_lakes(
     locations: dict[PipelineMode, dg.Definitions],
 ) -> None:
     # Act
@@ -77,8 +88,24 @@ def test_each_lake_is_a_group_of_its_own_assets(
 
     # Assert
     assert groups == {
-        LIVE: {FETCH: "live", ARCHIVE: "live", RAW: "live", STAGING: "live"},
-        REPLAY: {REPLAY_ARCHIVE: "replay", REPLAY_RAW: "replay", REPLAY_STAGING: "replay"},
+        LIVE: {
+            FETCH: "live/sodra",
+            ARCHIVE: "live/sodra",
+            RAW: "live/sodra",
+            STAGING: "live/sodra",
+            JAR_FETCH: "live/jar",
+            JAR_ARCHIVE: "live/jar",
+            **dict.fromkeys(JAR_RAW, "live/jar"),
+            JAR_STAGING: "live/jar",
+        },
+        REPLAY: {
+            REPLAY_ARCHIVE: "replay/sodra",
+            REPLAY_RAW: "replay/sodra",
+            REPLAY_STAGING: "replay/sodra",
+            REPLAY_JAR_ARCHIVE: "replay/jar",
+            **dict.fromkeys(REPLAY_JAR_RAW, "replay/jar"),
+            REPLAY_JAR_STAGING: "replay/jar",
+        },
     }
 
 
@@ -90,27 +117,49 @@ def test_only_a_fetch_writes_the_archive_and_only_live_fetches(
     replay = locations[REPLAY].resolve_asset_graph()
 
     # Act / Assert
-    assert live.get(FETCH).is_executable
-    assert live.get(FETCH).partitions_def is None
-    assert not live.get(ARCHIVE).is_executable
-    assert live.get(ARCHIVE).parent_keys == {FETCH}
-    assert not replay.get(REPLAY_ARCHIVE).is_executable
+    for fetch, archive, replay_archive in [
+        (FETCH, ARCHIVE, REPLAY_ARCHIVE),
+        (JAR_FETCH, JAR_ARCHIVE, REPLAY_JAR_ARCHIVE),
+    ]:
+        assert live.get(fetch).is_executable
+        assert live.get(fetch).partitions_def is None
+        assert not live.get(archive).is_executable
+        assert live.get(archive).parent_keys == {fetch}
+        assert not replay.get(replay_archive).is_executable
+
+
+def partitions_name(definitions: dg.Definitions, key: dg.AssetKey) -> str | None:
+    """The name of the asset's dynamic partitions, or None if it is unpartitioned."""
+    partitions = definitions.resolve_asset_graph().get(key).partitions_def
+    if partitions is None:
+        return None
+    assert isinstance(partitions, dg.DynamicPartitionsDefinition)
+    return partitions.name
 
 
 def test_raw_is_partitioned_by_its_sources_snapshots_and_staging_is_whole(
     locations: dict[PipelineMode, dg.Definitions],
 ) -> None:
     # Arrange
-    names = {}
-    for mode, raw, staging in [(LIVE, RAW, STAGING), (REPLAY, REPLAY_RAW, REPLAY_STAGING)]:
-        graph = locations[mode].resolve_asset_graph()
-        partitions = graph.get(raw).partitions_def
-        assert isinstance(partitions, dg.DynamicPartitionsDefinition)
-        assert graph.get(staging).partitions_def is None
-        names[mode] = partitions.name
+    tables = {
+        LIVE: ({RAW, *JAR_RAW}, {STAGING, JAR_STAGING}),
+        REPLAY: ({REPLAY_RAW, *REPLAY_JAR_RAW}, {REPLAY_STAGING, REPLAY_JAR_STAGING}),
+    }
+
+    # Act
+    partitions = {
+        mode: (
+            {partitions_name(locations[mode], key) for key in raws},
+            {partitions_name(locations[mode], key) for key in stagings},
+        )
+        for mode, (raws, stagings) in tables.items()
+    }
 
     # Assert
-    assert names == {LIVE: "live_sodra_snapshots", REPLAY: "replay_sodra_snapshots"}
+    assert partitions == {
+        LIVE: ({"live_sodra_snapshots", "live_jar_snapshots"}, {None}),
+        REPLAY: ({"replay_sodra_snapshots", "replay_jar_snapshots"}, {None}),
+    }
 
 
 def test_new_snapshots_and_changed_models_build_themselves(
@@ -191,13 +240,21 @@ def test_live_fetches_on_its_schedule_and_rebuilds_without_fetching(
     definitions = locations[LIVE]
 
     # Act
-    schedule = definitions.resolve_schedule_def("fetch_sodra_schedule")
+    schedules = [
+        definitions.resolve_schedule_def(f"fetch_{source}_schedule") for source in ("sodra", "jar")
+    ]
 
     # Assert
     assert job_assets(definitions, "fetch_sodra") == {FETCH}
     assert job_assets(definitions, "rebuild_sodra_from_archive") == {RAW, STAGING}
-    assert (schedule.cron_schedule, schedule.execution_timezone) == ("0 6 21 * *", "Europe/Vilnius")
-    assert schedule.default_status is dg.DefaultScheduleStatus.RUNNING
+    assert job_assets(definitions, "fetch_jar") == {JAR_FETCH}
+    assert job_assets(definitions, "rebuild_jar_from_archive") == {*JAR_RAW, JAR_STAGING}
+    for schedule in schedules:
+        assert (schedule.cron_schedule, schedule.execution_timezone) == (
+            "0 6 21 * *",
+            "Europe/Vilnius",
+        )
+        assert schedule.default_status is dg.DefaultScheduleStatus.RUNNING
 
 
 def test_replay_only_rebuilds_from_its_sample(
@@ -210,8 +267,12 @@ def test_replay_only_rebuilds_from_its_sample(
     jobs = {job.name for job in definitions.jobs or []}
 
     # Assert
-    assert jobs == {"rebuild_sodra_from_archive"}
+    assert jobs == {"rebuild_sodra_from_archive", "rebuild_jar_from_archive"}
     assert job_assets(definitions, "rebuild_sodra_from_archive") == {REPLAY_RAW, REPLAY_STAGING}
+    assert job_assets(definitions, "rebuild_jar_from_archive") == {
+        *REPLAY_JAR_RAW,
+        REPLAY_JAR_STAGING,
+    }
     assert not definitions.schedules
 
 
@@ -222,13 +283,17 @@ def test_each_lakes_steps_run_in_its_own_pools(
     pools = {
         mode: {definitions.resolve_assets_def(key).op.pool for key in keys}
         for mode, definitions, keys in [
-            (LIVE, locations[LIVE], (FETCH, RAW, STAGING)),
-            (REPLAY, locations[REPLAY], (REPLAY_RAW, REPLAY_STAGING)),
+            (LIVE, locations[LIVE], (FETCH, RAW, STAGING, JAR_FETCH, *JAR_RAW, JAR_STAGING)),
+            (
+                REPLAY,
+                locations[REPLAY],
+                (REPLAY_RAW, REPLAY_STAGING, *REPLAY_JAR_RAW, REPLAY_JAR_STAGING),
+            ),
         ]
     }
 
     # Assert
     assert pools == {
-        LIVE: {"live_fetch_sodra", "live_transform_sodra"},
-        REPLAY: {"replay_transform_sodra"},
+        LIVE: {"live_fetch_sodra", "live_transform_sodra", "live_fetch_jar", "live_transform_jar"},
+        REPLAY: {"replay_transform_sodra", "replay_transform_jar"},
     }

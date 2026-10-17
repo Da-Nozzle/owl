@@ -51,7 +51,7 @@ def test_ducklake_catalog_connection_quotes_awkward_passwords() -> None:
 @given(
     st.dictionaries(
         keys=st.sampled_from(["host", "port", "dbname", "user", "password"]),
-        values=st.text(alphabet=st.characters(exclude_characters="\x00")),
+        values=st.text(alphabet=st.characters(codec="utf-8", exclude_characters="\x00")),
     )
 )
 def test_libpq_reads_back_every_value_as_written(parameters: dict[str, str]) -> None:

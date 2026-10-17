@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import dagster as dg
 
-from leads_dagster_orchestration.asset_keys import archive_key, fetch_key, lake_group
+from leads_dagster_orchestration.asset_keys import archive_key, fetch_key, source_group
 from leads_dagster_orchestration.lake_labels import label_run
 from leads_dagster_orchestration.snapshots import ArchivedSource
 from leads_ingest.ports.downloader import Download
@@ -20,7 +20,7 @@ def build_archive_spec(
     where = "the raw archive" if lake is PipelineMode.LIVE else "the committed replay sample"
     return dg.AssetSpec(
         key=archive_key(source.name, lake),
-        group_name=lake_group(lake),
+        group_name=source_group(source.name, lake),
         partitions_def=partitions,
         deps=[fetch_key(source.name, lake)] if source.fetch else [],
         description=(
@@ -44,7 +44,7 @@ def build_fetch_asset(
 
     @dg.asset(
         key=key,
-        group_name=lake_group(PipelineMode.LIVE),
+        group_name=source_group(source.name, PipelineMode.LIVE),
         pool=f"{PipelineMode.LIVE.value}_{key.path[-1]}",
     )
     def fetch_snapshot(context: dg.AssetExecutionContext) -> dg.MaterializeResult:

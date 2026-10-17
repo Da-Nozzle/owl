@@ -34,10 +34,17 @@ def transform_model_key(layer: str, model: str, lake: PipelineMode) -> dg.AssetK
 
 
 def lake_group(lake: PipelineMode) -> str:
-    """Each lake's assets are one Dagster group, which the lineage view draws as one box, its
-    layers flowing left to right inside. Dagster merges groups of the same name across code
-    locations, so grouped by layer, each layer's box held both lakes' nodes."""
+    """Each lake's assets are one Dagster group, which the lineage view draws as one box. Dagster
+    merges groups of the same name across code locations, so grouped by layer, each layer's box
+    held both lakes' nodes. Models that combine sources are in this group itself."""
     return lake.value
+
+
+def source_group(source: str, lake: PipelineMode) -> str:
+    """A source's assets, fetch to staging, are a group nested in its lake's: Dagster reads `/`
+    in a group name as nesting, and draws `live/sodra` as a box `sodra`, its layers flowing left
+    to right inside, within the box `live`."""
+    return f"{lake_group(lake)}/{source}"
 
 
 def is_archive(key: dg.AssetKey) -> bool:

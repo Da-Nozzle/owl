@@ -43,6 +43,10 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "history_months": 13,
         "snapshot_schedule": "0 6 21 * *",
     },
+    "jar": {
+        "download_url_template": "https://jar.test/{dataset}/:format/csv",
+        "snapshot_schedule": "0 6 21 * *",
+    },
     "transform": {"project_dir": "/workspace/services/transform"},
 }
 

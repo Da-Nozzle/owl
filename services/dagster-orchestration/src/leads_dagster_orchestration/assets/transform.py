@@ -15,6 +15,7 @@ from dagster._core.definitions.definitions_load_context import (
 )
 from dagster_dbt import DbtCliInvocation, DbtCliResource, DbtProject, dbt_assets
 
+from leads_dagster_orchestration.asset_keys import lake_group, source_group
 from leads_dagster_orchestration.automation import build_new_snapshots, rebuild_on_change
 from leads_dagster_orchestration.lake_labels import label_run, with_labels
 from leads_dagster_orchestration.translators import LakeDbtTranslator
@@ -49,9 +50,10 @@ def build_transform_assets(
     (`snapshot_partitions`, by source name), each source on its own cadence; its staging models
     are `transform_<source>_staging`, unpartitioned, as staging is one table rebuilt whole from
     every snapshot's raw. Both are in the pool `transform_<source>`: sources build side by side,
-    and nothing writes one source's tables twice at once. The shared step, `transform`
-    (intermediate, marts, seeds), exists once the project has such a model, and is rebuilt whole
-    too. Each step is one dbt invocation, so models within it still run on dbt's threads. Pools
+    and nothing writes one source's tables twice at once. Both are in the source's group, within
+    the lake's. The shared step, `transform` (intermediate, marts, seeds), exists once the project
+    has such a model, is rebuilt whole too, and is in the lake's group itself. Each step is one
+    dbt invocation, so models within it still run on dbt's threads. Pools
     are instance-wide, so each lake's are prefixed with it, `live_transform_sodra` and
     `replay_transform_sodra`: neither lake queues behind the other."""
     manifest = json.loads(project.manifest_path.read_text())
@@ -61,6 +63,7 @@ def build_transform_assets(
         select: str,
         *,
         pool: str,
+        group: str,
         exclude: str | None = None,
         partitions: dg.PartitionsDefinition | None = None,
     ) -> dg.AssetsDefinition:
@@ -73,6 +76,7 @@ def build_transform_assets(
             select=select,
             exclude=exclude,
             pool=pool_name(lake, pool),
+            group=group,
             partitions=partitions,
         )
 
@@ -89,6 +93,7 @@ def build_transform_assets(
                 f"{pool}_{layer}",
                 f"path:models/{layer}/{source}",
                 pool=pool,
+                group=source_group(source, lake),
                 partitions=snapshot_partitions[source] if layer == SNAPSHOT_LAYER else None,
             )
             for layer in SOURCE_LAYERS
@@ -100,6 +105,7 @@ def build_transform_assets(
                 SHARED_STEP,
                 "path:models path:seeds",
                 pool=SHARED_STEP,
+                group=lake_group(lake),
                 exclude=" ".join(f"path:models/{layer}" for layer in SOURCE_LAYERS),
             )
         )
@@ -119,6 +125,7 @@ def build_dbt_step(
     name: str,
     select: str,
     pool: str,
+    group: str,
     partitions: dg.PartitionsDefinition | None,
     exclude: str | None = None,
 ) -> dg.AssetsDefinition:
@@ -139,7 +146,9 @@ def build_dbt_step(
         ),
         pool=pool,
         dagster_dbt_translator=LakeDbtTranslator(
-            lake, automation_condition=build_new_snapshots() if partitions else rebuild_on_change()
+            lake,
+            group,
+            automation_condition=build_new_snapshots() if partitions else rebuild_on_change(),
         ),
     )
     def dbt_step(context: dg.AssetExecutionContext, dbt: DbtCliResource) -> Iterator[object]:

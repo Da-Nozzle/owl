@@ -1,0 +1,91 @@
+version: 2
+
+models:
+  - name: stg_jar__entities
+    description: >
+      One row per registered legal entity and snapshot: the register as each monthly snapshot
+      fetched it, with each entity's legal form and status resolved in that snapshot's
+      classifiers. Deregistered entities are kept, with their deregistration date. The names of
+      individual enterprises and of general and limited partnerships are anonymised by the
+      register: every entity of legal forms 810, 210 and 220, and of their branches 811, 211 and
+      221, is named after its form. No registered address yet: it is in the seat dataset and the
+      Address Register.
+    config:
+      meta:
+        # What identifies a row: leads-dbt-diff matches rows on it.
+        key: [company_code, snapshot_month]
+    data_tests:
+      - unique:
+          column_name: "company_code || '-' || snapshot_month"
+    columns:
+      - name: company_code
+        description: JAR code (ja_kodas); Sodra's jarCode.
+        data_tests:
+          - not_null
+      - name: company_name
+        description: The registered name, as published.
+        data_tests:
+          - not_null
+      - name: legal_form_code
+        description: The legal form's code in the register's classifier (310 is a private limited company, UAB).
+        data_tests:
+          # Also fails when the entity's form is not in its snapshot's classifier.
+          - not_null
+      - name: legal_form
+        description: The legal form's name, in Lithuanian.
+      - name: status_code
+        description: The legal status's code in the register's classifier (0 is no proceedings, 10 deregistered).
+        data_tests:
+          # Also fails when the entity's status is not in its snapshot's classifier.
+          - not_null
+      - name: status
+        description: The legal status's name, in Lithuanian.
+      - name: registered_on
+        data_tests:
+          - not_null
+      - name: deregistered_on
+        description: Empty while the entity is registered.
+        data_tests:
+          # Every deregistered entity (status 10) has the date, so a renamed column fails here.
+          - not_null:
+              config:
+                where: "status_code = 10"
+      - name: status_since
+        description: When the entity took its current legal status.
+        data_tests:
+          - not_null
+      - name: snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch this row is from.
+        data_tests:
+          - not_null
+      - name: file_published_at
+        description: >
+          When the register last changed the entities dataset before this snapshot fetched it (its
+          Last-Modified, UTC): what the row is as of.
+
+unit_tests:
+  - name: stg_jar__entities_resolves_references_in_the_entitys_own_snapshot
+    description: >
+      Both snapshots fetched the same classifiers, so a reference resolved in every snapshot's
+      classifiers would match each entity twice. The company is deregistered between the two
+      snapshots, so each snapshot keeps the status it had then.
+    model: stg_jar__entities
+    given:
+      - input: ref('raw_jar__entities')
+        rows:
+          - {"_snapshot_month": "2026-08", "_file_last_modified": "Fri, 21 Aug 2026 06:07:56 GMT", "ja_kodas": "110607882", "ja_pavadinimas": "UAB \"Kavos pupa\"", "reg_data": "1997-05-21", "isreg_data": null, "forma._id": "f310", "statusas._id": "s0", "stat_data": "1997-05-21"}
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Mon, 21 Sep 2026 06:00:00 GMT", "ja_kodas": "110607882", "ja_pavadinimas": "UAB \"Kavos pupa\"", "reg_data": "1997-05-21", "isreg_data": "2026-09-01", "forma._id": "f310", "statusas._id": "s10", "stat_data": "2026-09-01"}
+      - input: ref('raw_jar__legal_forms')
+        rows:
+          - {"_snapshot_month": "2026-08", "_id": "f310", "kodas": "310", "pavadinimas": "Uždaroji akcinė bendrovė"}
+          - {"_snapshot_month": "2026-09", "_id": "f310", "kodas": "310", "pavadinimas": "Uždaroji akcinė bendrovė"}
+      - input: ref('raw_jar__statuses')
+        rows:
+          - {"_snapshot_month": "2026-08", "_id": "s0", "kodas": "0", "pavadinimas": "Teisinis statusas neįregistruotas"}
+          - {"_snapshot_month": "2026-08", "_id": "s10", "kodas": "10", "pavadinimas": "Išregistruotas"}
+          - {"_snapshot_month": "2026-09", "_id": "s0", "kodas": "0", "pavadinimas": "Teisinis statusas neįregistruotas"}
+          - {"_snapshot_month": "2026-09", "_id": "s10", "kodas": "10", "pavadinimas": "Išregistruotas"}
+    expect:
+      rows:
+        - {company_code: 110607882, company_name: "UAB \"Kavos pupa\"", legal_form_code: 310, status_code: 0, deregistered_on: null, snapshot_month: "2026-08", file_published_at: "2026-08-21 06:07:56"}
+        - {company_code: 110607882, company_name: "UAB \"Kavos pupa\"", legal_form_code: 310, status_code: 10, deregistered_on: "2026-09-01", snapshot_month: "2026-09", file_published_at: "2026-09-21 06:00:00"}

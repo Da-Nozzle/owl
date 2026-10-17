@@ -6,12 +6,13 @@ from dagster_dbt import DagsterDbtTranslator, DbtProject
 from dagster_dlt import DagsterDltTranslator
 from dagster_dlt.translator import DltResourceTranslatorData
 
-from leads_dagster_orchestration.asset_keys import dbt_resource_key, lake_group, raw_table_key
+from leads_dagster_orchestration.asset_keys import dbt_resource_key, raw_table_key, source_group
 from leads_ingest.settings import PipelineMode
 
 
 class RawTableDltTranslator(DagsterDltTranslator):
-    """Keys each dlt resource as <lake>/raw/raw_<source>__<table>, with no upstream assets."""
+    """Keys each dlt resource as <lake>/raw/raw_<source>__<table>, in its source's group, with no
+    upstream assets."""
 
     def __init__(self, lake: PipelineMode) -> None:
         super().__init__()
@@ -21,25 +22,29 @@ class RawTableDltTranslator(DagsterDltTranslator):
         table = data.resource.table_name
         if not isinstance(table, str):
             raise TypeError(f"dlt resource {data.resource.name!r} has a dynamic table name")
-        key = raw_table_key(data.resource.source_name, table, self._lake)
+        source = data.resource.source_name
+        key = raw_table_key(source, table, self._lake)
         return (
             super()
             .get_asset_spec(data)
-            .replace_attributes(key=key, group_name=lake_group(self._lake), deps=[])
+            .replace_attributes(key=key, group_name=source_group(source, self._lake), deps=[])
         )
 
 
 class LakeDbtTranslator(DagsterDbtTranslator):
     """Keys dbt resources so that dbt, dlt and the archive form one graph, under the lake's key
-    prefix and in its group. A step's models get its automation condition, if any."""
+    prefix. A step's models get its group (its source's, within the lake's) and its automation
+    condition, if any."""
 
     def __init__(
         self,
         lake: PipelineMode,
+        group: str,
         automation_condition: dg.AutomationCondition | None = None,
     ) -> None:
         super().__init__()
         self._lake = lake
+        self._group = group
         self._automation_condition = automation_condition
 
     def get_asset_spec(
@@ -49,7 +54,7 @@ class LakeDbtTranslator(DagsterDbtTranslator):
         return (
             super()
             .get_asset_spec(manifest, unique_id, project)
-            .replace_attributes(key=key, group_name=lake_group(self._lake))
+            .replace_attributes(key=key, group_name=self._group)
         )
 
     def get_automation_condition(

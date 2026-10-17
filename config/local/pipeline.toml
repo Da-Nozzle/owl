@@ -19,3 +19,13 @@ snapshot_schedule = "0 6 21 * *"
 # Months loaded per snapshot, ending with the month before the snapshot's. Each snapshot reloads
 # all of them, so Sodra's revisions land; 13 gives a year-on-year comparison.
 history_months = 13
+
+[jar]
+# The register's datasets on get.data.gov.lt, each exported whole as one CSV; {dataset} is its
+# path below rc/jar/, such as iregistruoti/JuridinisAsmuo.
+download_url_template = "https://get.data.gov.lt/datasets/gov/rc/jar/{dataset}/:format/csv"
+# When live fetches a snapshot (cron, pipeline.timezone). The portal lists the register as
+# updated monthly, on no fixed day, and its changelog shows it less often: 2025-07-23,
+# 2025-09-03, 2026-03-09, 2026-08-20. Monthly is the finest grain worth fetching, and since the
+# day is free, it is the 21st at 06:00 with Sodra, so each month's leads see the newest register.
+snapshot_schedule = "0 6 21 * *"

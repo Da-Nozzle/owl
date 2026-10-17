@@ -8,6 +8,7 @@ from leads_dagster_orchestration.tool_environments import (
     dbt_environment,
 )
 from leads_ingest.settings import PipelineMode, load_pipeline_settings
+from leads_ingest.sources.jar.settings import load_jar_settings
 from leads_ingest.sources.sodra.settings import load_sodra_settings
 from leads_lake.settings import load_lake_settings
 
@@ -21,6 +22,7 @@ def test_the_local_config_loads_into_every_packages_settings(pytestconfig: pytes
     load_lake_settings(config)
     load_lake_settings(config, replay=True)
     load_sodra_settings(config)
+    load_jar_settings(config)
     dagster_storage_environment(config)
     config.get_str("dagster.workspace")
     for mode in PipelineMode:

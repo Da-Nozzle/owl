@@ -13,6 +13,54 @@
     {{- return(paths) -}}
 {%- endmacro %}
 
+{# The archived CSV `name` of the snapshots a build of `model_name` reads (archived_snapshots),
+   whole and as published: every row, every column as text under its published header, plus the
+   file it was read from, its snapshot (in `snapshot_column`, from the archive path) and the fetch
+   its .meta.json sidecar recorded. For a comma-separated, double-quoted file, as get.data.gov.lt
+   exports them. A column added in a later snapshot is null in earlier ones. #}
+{% macro archived_csv(source, name, model_name, snapshot_column) %}
+    {%- set snapshots = archived_snapshots(model_name, source) -%}
+with published as (
+    select *
+    from read_csv(
+        {{ archived_files(source, name, snapshots) }},
+        delim = ',',
+        quote = '"',
+        escape = '"',
+        header = true,
+        all_varchar = true,  -- types are given once, in staging
+        union_by_name = true,
+        filename = '_source_file'
+    )
+),
+
+fetches as (
+    select _meta_file, url, fetched_at, last_modified, sha256
+    from read_json(
+        {{ archived_files(source, name ~ '.meta.json', snapshots) }},
+        columns = {
+            url: 'varchar',
+            fetched_at: 'varchar',
+            last_modified: 'varchar',
+            size: 'varchar',
+            sha256: 'varchar'
+        },
+        filename = '_meta_file'
+    )
+)
+
+select
+    published.*,
+    regexp_extract(published._source_file, '/([^/]+)/[^/]+$', 1) as {{ snapshot_column }},
+    fetches.url as _file_url,
+    fetches.fetched_at as _file_fetched_at,
+    fetches.last_modified as _file_last_modified,
+    fetches.sha256 as _file_sha256
+from published
+left join fetches
+    on published._source_file || '.meta.json' = fetches._meta_file
+{% endmacro %}
+
 {# The snapshots a build of `model_name` reads, for a model that keeps one slice per snapshot of
    `source`: this build's, or every complete snapshot when the model's table is built from
    nothing, because it does not exist yet or the build is a --full-refresh. A rebuild then loses

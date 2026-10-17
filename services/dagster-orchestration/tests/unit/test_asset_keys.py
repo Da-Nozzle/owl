@@ -9,6 +9,7 @@ from leads_dagster_orchestration.asset_keys import (
     fetch_key,
     is_archive,
     lake_group,
+    source_group,
 )
 from leads_dagster_orchestration.translators import RawTableDltTranslator
 from leads_ingest.settings import PipelineMode
@@ -67,7 +68,7 @@ def test_dbt_source_of_a_dlt_table_gets_the_key_of_that_table() -> None:
         == dbt_resource_key(dbt_source_props, LIVE)
         == dg.AssetKey(["live", "raw", "raw_google__listings"])
     )
-    assert dlt_spec.group_name == "live"
+    assert dlt_spec.group_name == "live/google"
 
 
 def test_dbt_model_is_keyed_by_its_lake_and_lake_schema() -> None:
@@ -99,6 +100,12 @@ def test_dbt_model_without_a_schema_is_rejected() -> None:
 def test_each_lake_is_a_group_of_its_own() -> None:
     # Act / Assert
     assert (lake_group(LIVE), lake_group(REPLAY)) == ("live", "replay")
+
+
+def test_each_sources_group_is_nested_in_its_lakes() -> None:
+    # Act / Assert
+    assert source_group(SOURCE_NAME, LIVE) == "live/sodra"
+    assert source_group(SOURCE_NAME, REPLAY) == "replay/sodra"
 
 
 def test_an_archive_is_known_by_its_layer_in_either_lake() -> None:

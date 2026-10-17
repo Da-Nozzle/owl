@@ -1,0 +1,51 @@
+version: 2
+
+sources:
+  - name: archive
+    tables:
+      - name: jar
+        description: >
+          The Register of Legal Entities (JAR) on get.data.gov.lt, each dataset as the portal
+          exports it whole: JuridinisAsmuo.csv (registered entities), Forma.csv (legal forms) and
+          Statusas.csv (legal statuses). Comma-separated, double-quoted UTF-8 with no BOM; the
+          header names Spinta's own columns first (_type, _id, _revision, _page.next), and a
+          reference to another dataset as <property>._id. The portal lists the register as updated
+          monthly; its changelog shows updates every one to six months, on no fixed day.
+
+models:
+  - name: raw_jar__entities
+    description: >
+      The register's entities as each snapshot fetched them: every row of JuridinisAsmuo.csv, under
+      its published header, as text. One row per snapshot and entity; an export the register did
+      not change since the last snapshot is there again, as that snapshot's fetch of it. Built from
+      nothing, it reads every complete snapshot in the archive. The names of individual
+      enterprises and of general and limited partnerships are anonymised by the register.
+      pilnas_adresas and adresas._id are empty on every row: the registered address is in the
+      seat dataset (Buveine) and the Address Register, which are not fetched yet.
+    columns: &file_columns
+      - name: _source_file
+        description: The archived file the row was read from.
+      - name: _snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch this row is from, from the archive path.
+      - name: _file_url
+        description: Where the file was downloaded from.
+      - name: _file_fetched_at
+        description: When the file was downloaded (ISO 8601, UTC).
+      - name: _file_last_modified
+        description: >
+          The export's Last-Modified header as the portal sent it (HTTP date): when the register
+          last changed the dataset.
+      - name: _file_sha256
+        description: The downloaded file's SHA-256; equal for two fetches of the same version.
+
+  - name: raw_jar__legal_forms
+    description: >
+      The register's legal form classifier (Forma.csv) as each snapshot fetched it, as text. One
+      row per snapshot and legal form; entities refer to a form by its _id.
+    columns: *file_columns
+
+  - name: raw_jar__statuses
+    description: >
+      The register's legal status classifier (Statusas.csv) as each snapshot fetched it, as text.
+      One row per snapshot and status; entities refer to a status by its _id.
+    columns: *file_columns

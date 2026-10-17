@@ -41,6 +41,8 @@ from leads_ingest.settings import (
     load_pipeline_settings,
     raw_archive_path,
 )
+from leads_ingest.sources.jar import files as jar_files
+from leads_ingest.sources.jar.settings import load_jar_settings
 from leads_ingest.sources.sodra import files as sodra_files
 from leads_ingest.sources.sodra.settings import load_sodra_settings
 from leads_lake.settings import LakeStorage, load_lake_settings
@@ -102,10 +104,15 @@ def archived_sources(
     only with a downloader, in the live lake) and its dbt models in models/raw/<name>/ and
     models/staging/<name>/."""
     sodra = load_sodra_settings(config)
+    jar = load_jar_settings(config)
 
     def fetch_sodra(snapshot: str) -> dict[str, Download]:
         assert downloader is not None
         return sodra_files.archive_yearly_files(snapshot, archive, sodra, downloader)
+
+    def fetch_jar(snapshot: str) -> dict[str, Download]:
+        assert downloader is not None
+        return jar_files.archive_register_files(snapshot, archive, jar, downloader)
 
     return [
         ArchivedSource(
@@ -116,6 +123,15 @@ def archived_sources(
                 timezone=settings.timezone,
             ),
             fetch=fetch_sodra if downloader else None,
+        ),
+        ArchivedSource(
+            name=jar_files.SOURCE_NAME,
+            cadence=SnapshotCadence(
+                schedule=jar.snapshot_schedule,
+                key_format=jar_files.SNAPSHOT_KEY_FORMAT,
+                timezone=settings.timezone,
+            ),
+            fetch=fetch_jar if downloader else None,
         ),
     ]
 
