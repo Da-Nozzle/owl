@@ -36,8 +36,15 @@ STAGING = dg.AssetKey(["live", "staging", "stg_sodra__monthly"])
 MODELS = {
     "sodra": {"raw": {"raw_sodra__monthly"}, "staging": {"stg_sodra__monthly"}},
     "jar": {
-        "raw": {"raw_jar__entities", "raw_jar__legal_forms", "raw_jar__statuses"},
+        "raw": {"raw_jar__entities", "raw_jar__legal_forms", "raw_jar__statuses", "raw_jar__seats"},
         "staging": {"stg_jar__entities"},
+    },
+    "address_register": {
+        "raw": {
+            f"raw_address_register__{table}"
+            for table in ("buildings", "premises", "streets", "settlements", "municipalities")
+        },
+        "staging": {"stg_address_register__addresses"},
     },
     "vmi_daily_changes": {"raw": {"raw_vmi_daily_changes__changes"}, "staging": set()},
     "vmi_monthly_register": {
@@ -56,6 +63,7 @@ MONTHLY, DAILY = "0 6 21 * *", "0 6 * * *"
 SCHEDULES = {
     "sodra": MONTHLY,
     "jar": MONTHLY,
+    "address_register": MONTHLY,
     "vmi_daily_changes": DAILY,
     "vmi_monthly_register": MONTHLY,
 }

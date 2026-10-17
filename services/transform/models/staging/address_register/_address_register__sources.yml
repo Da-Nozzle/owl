@@ -1,0 +1,125 @@
+version: 2
+
+models:
+  - name: stg_address_register__addresses
+    description: >
+      One row per address and snapshot: the Address Register as each monthly snapshot fetched it,
+      every building's or land plot's address and every premises' address within its building,
+      with the street, settlement and municipality each is in, resolved in that snapshot's
+      datasets. A JAR seat (stg_jar__entities.registered_address_id) is an address_id here, of
+      either kind. Premises registered after 2024-05-28 are missing: the register's premises
+      dataset has not changed since. Coordinates are not published.
+    config:
+      meta:
+        # What identifies a row: leads-dbt-diff matches rows on it.
+        key: [address_id, snapshot_month]
+    data_tests:
+      - unique:
+          column_name: "address_id || '-' || snapshot_month"
+    columns:
+      - name: address_id
+        description: >
+          The address's id in the register (its Adresas _id, which the export names
+          aob_kodas._id), which JAR's seats refer to.
+        data_tests:
+          - not_null
+      - name: is_premises
+        description: >
+          Whether the address is a premises' (a flat, office or other unit within a building),
+          rather than a building's or land plot's.
+        data_tests:
+          - not_null
+      - name: building_address_id
+        description: >
+          The address of the building or land plot the address is at: its own, or the building
+          a premises is in. Two companies at one building_address_id share a building.
+        data_tests:
+          # Also fails when a premises' building is not in its snapshot's buildings.
+          - not_null
+      - name: municipality_code
+        description: The municipality's code in the register (13 is Vilnius city, 41 the Vilnius district).
+        data_tests:
+          # Also fails when the municipality is not in its snapshot's municipalities.
+          - not_null
+      - name: municipality
+        description: The municipality's name as published, in the genitive (Vilniaus miesto).
+      - name: settlement_code
+        data_tests:
+          # Also fails when the settlement is not in its snapshot's settlements.
+          - not_null
+      - name: settlement
+        description: The city, town or village, in the nominative (Vilnius).
+      - name: settlement_type
+        description: The settlement's kind, abbreviated as in an address (m. for a city, k. for a village).
+      - name: street_code
+        description: Empty for an address with no street, as in most villages.
+        data_tests:
+          # Every address in a city has a street, so this fails when a street is not in its
+          # snapshot's streets.
+          - not_null:
+              config:
+                where: "settlement_type = 'm.'"
+      - name: street
+        description: The street's name in the genitive, as an address writes it (Gedimino for Gedimino pr.).
+      - name: street_type
+        description: >
+          The street's kind, abbreviated as in an address (g. for a street, pr. for an avenue,
+          al. for an alley); empty for a name the register marks as non-standard.
+      - name: house_number
+        description: The number in the street or settlement, as text (23, 3C); empty for some land plots.
+      - name: building_block
+        description: The building's block (korpusas) where a number has several, as text.
+      - name: premises_number
+        description: The premises' number in its building, as text; empty for a building's address.
+        data_tests:
+          - not_null:
+              config:
+                where: "is_premises"
+      - name: postcode
+        description: The postcode with its LT- prefix (LT-09108), as published; Google's has none.
+      - name: registered_on
+        description: When the register registered the address; empty for some land plots.
+      - name: snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch this row is from.
+        data_tests:
+          - not_null
+      - name: file_published_at
+        description: >
+          When the register last changed the dataset the address is from (buildings' or
+          premises', its Last-Modified, UTC) before this snapshot fetched it: what the row is as
+          of.
+
+unit_tests:
+  - name: stg_address_register__addresses_resolves_premises_in_their_own_snapshot
+    description: >
+      Both snapshots fetched the same datasets, so a premises or a reference resolved in every
+      snapshot's would match each address twice. The building's postcode changes between the two
+      snapshots, so each snapshot's premises take the postcode their building had then.
+    model: stg_address_register__addresses
+    given:
+      - input: ref('raw_address_register__buildings')
+        rows:
+          - {"_snapshot_month": "2026-08", "_file_last_modified": "Thu, 20 Aug 2026 08:48:52 GMT", "_id": "b1", "aob_kodas._id": "a1", "savivaldybe._id": "m13", "gyvenamoji_vietove._id": "v1", "gatve._id": "s1", "nr": "23", "korpuso_nr": null, "pasto_kodas": "LT-09108", "aob_nuo": "2005-02-08"}
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Thu, 20 Aug 2026 08:48:52 GMT", "_id": "b1", "aob_kodas._id": "a1", "savivaldybe._id": "m13", "gyvenamoji_vietove._id": "v1", "gatve._id": "s1", "nr": "23", "korpuso_nr": null, "pasto_kodas": "LT-09109", "aob_nuo": "2005-02-08"}
+      - input: ref('raw_address_register__premises')
+        rows:
+          - {"_snapshot_month": "2026-08", "_file_last_modified": "Tue, 28 May 2024 09:20:48 GMT", "_id": "p1", "aob_kodas._id": "a2", "pastatas._id": "b1", "patalpos_nr": "5", "pat_nuo": "2009-05-08"}
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Tue, 28 May 2024 09:20:48 GMT", "_id": "p1", "aob_kodas._id": "a2", "pastatas._id": "b1", "patalpos_nr": "5", "pat_nuo": "2009-05-08"}
+      - input: ref('raw_address_register__streets')
+        rows:
+          - {"_snapshot_month": "2026-08", "_id": "s1", "gat_kodas": "1066347", "pavadinimas": "J. Kubiliaus", "tipo_santrumpa": "g."}
+          - {"_snapshot_month": "2026-09", "_id": "s1", "gat_kodas": "1066347", "pavadinimas": "J. Kubiliaus", "tipo_santrumpa": "g."}
+      - input: ref('raw_address_register__settlements')
+        rows:
+          - {"_snapshot_month": "2026-08", "_id": "v1", "gyv_kodas": "31003", "pavadinimas": "Vilnius", "tipo_santrumpa": "m."}
+          - {"_snapshot_month": "2026-09", "_id": "v1", "gyv_kodas": "31003", "pavadinimas": "Vilnius", "tipo_santrumpa": "m."}
+      - input: ref('raw_address_register__municipalities')
+        rows:
+          - {"_snapshot_month": "2026-08", "_id": "m13", "sav_kodas": "13", "pavadinimas": "Vilniaus miesto"}
+          - {"_snapshot_month": "2026-09", "_id": "m13", "sav_kodas": "13", "pavadinimas": "Vilniaus miesto"}
+    expect:
+      rows:
+        - {address_id: a1, is_premises: false, building_address_id: a1, municipality_code: 13, settlement: Vilnius, street: J. Kubiliaus, house_number: "23", premises_number: null, postcode: LT-09108, snapshot_month: "2026-08", file_published_at: "2026-08-20 08:48:52"}
+        - {address_id: a1, is_premises: false, building_address_id: a1, municipality_code: 13, settlement: Vilnius, street: J. Kubiliaus, house_number: "23", premises_number: null, postcode: LT-09109, snapshot_month: "2026-09", file_published_at: "2026-08-20 08:48:52"}
+        - {address_id: a2, is_premises: true, building_address_id: a1, municipality_code: 13, settlement: Vilnius, street: J. Kubiliaus, house_number: "23", premises_number: "5", postcode: LT-09108, snapshot_month: "2026-08", file_published_at: "2024-05-28 09:20:48"}
+        - {address_id: a2, is_premises: true, building_address_id: a1, municipality_code: 13, settlement: Vilnius, street: J. Kubiliaus, house_number: "23", premises_number: "5", postcode: LT-09109, snapshot_month: "2026-09", file_published_at: "2024-05-28 09:20:48"}

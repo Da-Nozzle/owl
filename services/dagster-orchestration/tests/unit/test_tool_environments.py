@@ -148,3 +148,17 @@ def test_dbt_dev_builds_into_its_lakes_own_file_and_defers_to_its_lakes_state(
         "DBT_DEFER": "true",
         "DBT_STATE": f"/project/target/{mode.value}/main",
     }
+
+
+def test_dbt_caps_duckdbs_memory_and_spills_under_the_projects_target() -> None:
+    # Arrange
+    config = build_config(
+        {"transform.project_dir": "/project", "transform.duckdb_memory_limit": "1GB"}
+    )
+
+    # Act
+    environment = dbt_environment(config, PipelineMode.LIVE)
+
+    # Assert
+    assert environment["LEADS_DUCKDB_MEMORY_LIMIT"] == "1GB"
+    assert environment["LEADS_DUCKDB_TEMP_DIRECTORY"] == "/project/target/duckdb_tmp"

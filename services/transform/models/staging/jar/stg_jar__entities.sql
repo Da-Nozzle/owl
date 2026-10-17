@@ -1,11 +1,12 @@
 -- The register's published columns mapped to names and types, one line per column, with the legal
--- form and status each entity refers to by _id. A value that does not parse fails here; the columns
--- not used yet are in raw_jar.entities. A table, so every value is cast when it is built.
+-- form and status each entity refers to by _id, and its seat. A value that does not parse fails
+-- here; the columns not used yet are in raw_jar.entities. A table, so every value is cast when it
+-- is built.
 {{ config(materialized='table') }}
 
 -- Every snapshot is the whole register as fetched then, so each is kept: the leads of a month read
--- the register as of that month. A reference is resolved in the classifiers of the entity's own
--- snapshot, so a classifier fetched by several snapshots matches each entity once.
+-- the register as of that month. A reference is resolved in the classifiers and seats of the
+-- entity's own snapshot, so a dataset fetched by several snapshots matches each entity once.
 with entities as (
     select * from {{ ref('raw_jar__entities') }}
 ),
@@ -16,6 +17,11 @@ legal_forms as (
 
 statuses as (
     select _snapshot_month, _id, kodas, pavadinimas from {{ ref('raw_jar__statuses') }}
+),
+
+seats as (
+    select _snapshot_month, "juridinis_asmuo._id", "adresas._id", adresas_nuo
+    from {{ ref('raw_jar__seats') }}
 )
 
 select
@@ -28,6 +34,8 @@ select
     entities.reg_data::date as registered_on,
     entities.isreg_data::date as deregistered_on,
     entities.stat_data::date as status_since,
+    seats."adresas._id" as registered_address_id,
+    seats.adresas_nuo::date as registered_address_since,
     entities._snapshot_month as snapshot_month,
     strptime(entities._file_last_modified, '%a, %d %b %Y %H:%M:%S GMT') as file_published_at
 from entities
@@ -37,3 +45,6 @@ left join legal_forms
 left join statuses
     on entities._snapshot_month = statuses._snapshot_month
     and entities."statusas._id" = statuses._id
+left join seats
+    on entities._snapshot_month = seats._snapshot_month
+    and entities._id = seats."juridinis_asmuo._id"

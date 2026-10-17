@@ -8,8 +8,9 @@ models:
       classifiers. Deregistered entities are kept, with their deregistration date. The names of
       individual enterprises and of general and limited partnerships are anonymised by the
       register: every entity of legal forms 810, 210 and 220, and of their branches 811, 211 and
-      221, is named after its form. No registered address yet: it is in the seat dataset and the
-      Address Register.
+      221, is named after its form. The registered address is the seat's, an address_id in
+      stg_address_register__addresses; the register's seats last changed on 2025-09-03, so
+      entities registered since have none.
     config:
       meta:
         # What identifies a row: leads-dbt-diff matches rows on it.
@@ -54,6 +55,14 @@ models:
         description: When the entity took its current legal status.
         data_tests:
           - not_null
+      - name: registered_address_id
+        description: >
+          The seat's (registered office's) address: an address_id in
+          stg_address_register__addresses, of a building, land plot or premises. Empty for an
+          entity with no seat in its snapshot (registered after 2025-09-03, when the register's
+          seats last changed) or a seat with no address.
+      - name: registered_address_since
+        description: When the entity registered its seat at that address.
       - name: snapshot_month
         description: The snapshot (YYYY-MM) whose fetch this row is from.
         data_tests:
@@ -66,15 +75,15 @@ models:
 unit_tests:
   - name: stg_jar__entities_resolves_references_in_the_entitys_own_snapshot
     description: >
-      Both snapshots fetched the same classifiers, so a reference resolved in every snapshot's
-      classifiers would match each entity twice. The company is deregistered between the two
-      snapshots, so each snapshot keeps the status it had then.
+      Both snapshots fetched the same classifiers and seats, so a reference resolved in every
+      snapshot's would match each entity twice. The company is deregistered and moves its seat
+      between the two snapshots, so each snapshot keeps the status and seat it had then.
     model: stg_jar__entities
     given:
       - input: ref('raw_jar__entities')
         rows:
-          - {"_snapshot_month": "2026-08", "_file_last_modified": "Fri, 21 Aug 2026 06:07:56 GMT", "ja_kodas": "110607882", "ja_pavadinimas": "UAB \"Kavos pupa\"", "reg_data": "1997-05-21", "isreg_data": null, "forma._id": "f310", "statusas._id": "s0", "stat_data": "1997-05-21"}
-          - {"_snapshot_month": "2026-09", "_file_last_modified": "Mon, 21 Sep 2026 06:00:00 GMT", "ja_kodas": "110607882", "ja_pavadinimas": "UAB \"Kavos pupa\"", "reg_data": "1997-05-21", "isreg_data": "2026-09-01", "forma._id": "f310", "statusas._id": "s10", "stat_data": "2026-09-01"}
+          - {"_snapshot_month": "2026-08", "_file_last_modified": "Fri, 21 Aug 2026 06:07:56 GMT", "_id": "e1", "ja_kodas": "110607882", "ja_pavadinimas": "UAB \"Kavos pupa\"", "reg_data": "1997-05-21", "isreg_data": null, "forma._id": "f310", "statusas._id": "s0", "stat_data": "1997-05-21"}
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Mon, 21 Sep 2026 06:00:00 GMT", "_id": "e1", "ja_kodas": "110607882", "ja_pavadinimas": "UAB \"Kavos pupa\"", "reg_data": "1997-05-21", "isreg_data": "2026-09-01", "forma._id": "f310", "statusas._id": "s10", "stat_data": "2026-09-01"}
       - input: ref('raw_jar__legal_forms')
         rows:
           - {"_snapshot_month": "2026-08", "_id": "f310", "kodas": "310", "pavadinimas": "Uždaroji akcinė bendrovė"}
@@ -85,7 +94,11 @@ unit_tests:
           - {"_snapshot_month": "2026-08", "_id": "s10", "kodas": "10", "pavadinimas": "Išregistruotas"}
           - {"_snapshot_month": "2026-09", "_id": "s0", "kodas": "0", "pavadinimas": "Teisinis statusas neįregistruotas"}
           - {"_snapshot_month": "2026-09", "_id": "s10", "kodas": "10", "pavadinimas": "Išregistruotas"}
+      - input: ref('raw_jar__seats')
+        rows:
+          - {"_snapshot_month": "2026-08", "juridinis_asmuo._id": "e1", "adresas._id": "a1", "adresas_nuo": "1997-05-21"}
+          - {"_snapshot_month": "2026-09", "juridinis_asmuo._id": "e1", "adresas._id": "a2", "adresas_nuo": "2026-08-03"}
     expect:
       rows:
-        - {company_code: 110607882, company_name: "UAB \"Kavos pupa\"", legal_form_code: 310, status_code: 0, deregistered_on: null, snapshot_month: "2026-08", file_published_at: "2026-08-21 06:07:56"}
-        - {company_code: 110607882, company_name: "UAB \"Kavos pupa\"", legal_form_code: 310, status_code: 10, deregistered_on: "2026-09-01", snapshot_month: "2026-09", file_published_at: "2026-09-21 06:00:00"}
+        - {company_code: 110607882, company_name: "UAB \"Kavos pupa\"", legal_form_code: 310, status_code: 0, deregistered_on: null, registered_address_id: a1, registered_address_since: "1997-05-21", snapshot_month: "2026-08", file_published_at: "2026-08-21 06:07:56"}
+        - {company_code: 110607882, company_name: "UAB \"Kavos pupa\"", legal_form_code: 310, status_code: 10, deregistered_on: "2026-09-01", registered_address_id: a2, registered_address_since: "2026-08-03", snapshot_month: "2026-09", file_published_at: "2026-09-21 06:00:00"}

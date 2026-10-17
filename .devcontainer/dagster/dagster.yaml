@@ -29,5 +29,16 @@ run_launcher:
   module: dagster.core.launcher
   class: DefaultRunLauncher
 
+# A run whose process dies with the code server that launched it (the container crashed) stays
+# STARTED and keeps its pool's slot, so every later step in that pool queues behind it. The
+# DefaultRunLauncher cannot tell whether a run's process is alive, so the monitoring daemon fails
+# any run still going after max_runtime_seconds (stopping it, if it is alive), and frees an ended
+# run's slots free_slots_after_run_end_seconds later. Runs take minutes; one that needs longer
+# sets the tag dagster/max_runtime (seconds).
+run_monitoring:
+  enabled: true
+  max_runtime_seconds: 3600
+  free_slots_after_run_end_seconds: 60
+
 telemetry:
   enabled: false # potnetially set to true if I get to OTeL implementation in time

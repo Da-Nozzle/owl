@@ -10,6 +10,11 @@ leads:
       path: "{{ ':memory:' if env_var('DAGSTER_DBT_CLI', '') else env_var('LEADS_DBT_DUCKDB_PATH', ':memory:') }}"
       database: lake
       threads: 4
+      # Capped (transform.duckdb_memory_limit): several dbt processes run at once. Each spills
+      # into a folder of its own, as DuckDB's spill files have the same names in every process.
+      settings:
+        memory_limit: "{{ env_var('LEADS_DUCKDB_MEMORY_LIMIT') }}"
+        temp_directory: "{{ env_var('LEADS_DUCKDB_TEMP_DIRECTORY') }}/{{ invocation_id }}"
       extensions:
         - httpfs
         - postgres

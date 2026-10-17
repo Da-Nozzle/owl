@@ -62,6 +62,10 @@ which is git-ignored. Replay needs none. To run live against the Places API, put
 
 Logs go to stderr at INFO and to `logs/leads.log` at DEBUG, rotated at 10 MB across 10 files.
 
+Each dbt process's DuckDB takes at most `transform.duckdb_memory_limit` (2 GB locally) and spills
+beyond it into `services/transform/target/duckdb_tmp/<dbt invocation id>/`. Several run at once, one
+per source and lake, and unset each could take 80% of the machine's memory.
+
 Dagster and dbt only accept credentials through environment variables, so they are started through
 `leads-dagster-dev` and `leads-dbt`, which ask the configuration service and set those variables for
 that one process. Under Dagster, dbt's variables are set by the definitions instead, so
@@ -98,7 +102,8 @@ publishes:
 | Source | Fetches | Schedule | Key |
 |---|---|---|---|
 | `sodra` | the yearly employer files covering the last 13 months | 21st at 06:00 (`sodra.snapshot_schedule`), as Sodra publishes the previous month by the 20th | `YYYY-MM` |
-| `jar` | the register's entities, legal forms and statuses, each whole | 21st at 06:00 (`jar.snapshot_schedule`): the register publishes monthly at most, on no fixed day | `YYYY-MM` |
+| `jar` | the register's entities, legal forms, statuses and seats (registered offices), each whole | 21st at 06:00 (`jar.snapshot_schedule`): the register publishes monthly at most, on no fixed day | `YYYY-MM` |
+| `address_register` | the Address Register's building and premises addresses, streets, settlements and municipalities, each whole (about 565 MB) | 21st at 06:00 (`address_register.snapshot_schedule`): loaded in the same batches as JAR, every one to six months | `YYYY-MM` |
 | `vmi_daily_changes` | the VMI taxpayer register's changelog: the changes made in the day before the snapshot's tick | daily at 06:00 (`vmi.daily_changes_schedule`): the register changes most days, mostly at about 03:00 | `YYYY-MM-DD` |
 | `vmi_monthly_register` | the whole VMI register, the EVRK 2 classifier, and the changelog's newest change at that moment | 21st at 06:00 (`vmi.monthly_register_schedule`), the baseline `vmi_daily_changes`' changes are applied to | `YYYY-MM` |
 

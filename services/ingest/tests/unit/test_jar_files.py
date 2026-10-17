@@ -19,11 +19,12 @@ def test_a_fetch_archives_each_dataset_by_name_and_leaves_completing_it() -> Non
 
     # Assert
     names = list(archived)
-    assert names == ["JuridinisAsmuo.csv", "Forma.csv", "Statusas.csv"]
+    assert names == ["JuridinisAsmuo.csv", "Forma.csv", "Statusas.csv", "Buveine.csv"]
     assert downloader.requested == [
         URL_TEMPLATE.format(dataset="iregistruoti/JuridinisAsmuo"),
         URL_TEMPLATE.format(dataset="formos_statusai/Forma"),
         URL_TEMPLATE.format(dataset="formos_statusai/Statusas"),
+        URL_TEMPLATE.format(dataset="buveines/Buveine"),
     ]
     assert set(archive.downloads) == {("jar", "2026-09", name) for name in names}
     assert archive.snapshots("jar") == {}

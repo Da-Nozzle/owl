@@ -30,6 +30,16 @@ download_url_template = "https://get.data.gov.lt/datasets/gov/rc/jar/{dataset}/:
 # day is free, it is the 21st at 06:00 with Sodra, so each month's leads see the newest register.
 snapshot_schedule = "0 6 21 * *"
 
+[address_register]
+# The Address Register's datasets on get.data.gov.lt, each exported whole as one CSV; {dataset}
+# is its path below rc/ar/, such as pastatas/Pastatas.
+download_url_template = "https://get.data.gov.lt/datasets/gov/rc/ar/{dataset}/:format/csv"
+# When live fetches a snapshot (cron, pipeline.timezone). The Registers Centre loads the register
+# in the same batches as JAR, on no fixed day: its streets changed on 2025-05-16, 2025-09-03,
+# 2026-03-09 and 2026-08-18. So, as JAR, monthly on the 21st at 06:00: each month's leads see the
+# newest addresses, and a seat in JAR's snapshot of a month resolves in this one of the same month.
+snapshot_schedule = "0 6 21 * *"
+
 [vmi]
 # The VMI taxpayer register on get.data.gov.lt (one row per company, branch, activity, taxpayer
 # type and group, each with its validity), and the EVRK 2 classifier its activities refer to.

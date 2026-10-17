@@ -1,0 +1,66 @@
+version: 2
+
+sources:
+  - name: archive
+    tables:
+      - name: address_register
+        description: >
+          The Address Register (Adresų registras) on get.data.gov.lt, each dataset as the portal
+          exports it whole: Pastatas.csv (the addresses of buildings and land plots, about 317 MB
+          and 1.1 M rows), Patalpa.csv (the addresses of premises, each in its building, 229 MB
+          and 1.2 M rows), Gatve.csv (streets), GyvenamojiVietove.csv (settlements) and
+          Savivaldybe.csv (municipalities). Comma-separated, double-quoted UTF-8 with no BOM; the
+          header names Spinta's own columns first (_type, _id, _revision, _page.next), and a
+          reference to another dataset as <property>._id. The Registers Centre loads it in the
+          same batches as JAR, every one to six months on no fixed day; premises last changed on
+          2024-05-28, so premises registered since are not in Patalpa.csv.
+
+models:
+  - name: raw_address_register__buildings
+    description: >
+      The register's building and land plot addresses (Pastatas.csv) as each snapshot fetched
+      them, as text. One row per snapshot and address; aob_kodas._id is the address's id, which
+      a JAR seat refers to, and the street, settlement and municipality are references by _id.
+      Built from nothing, it reads every complete snapshot in the archive.
+    columns: &file_columns
+      - name: _source_file
+        description: The archived file the row was read from.
+      - name: _snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch this row is from, from the archive path.
+      - name: _file_url
+        description: Where the file was downloaded from.
+      - name: _file_fetched_at
+        description: When the file was downloaded (ISO 8601, UTC).
+      - name: _file_last_modified
+        description: >
+          The export's Last-Modified header as the portal sent it (HTTP date): when the register
+          last changed the dataset.
+      - name: _file_sha256
+        description: The downloaded file's SHA-256; equal for two fetches of the same version.
+
+  - name: raw_address_register__premises
+    description: >
+      The register's premises addresses (Patalpa.csv) as each snapshot fetched them, as text. One
+      row per snapshot and premises; aob_kodas._id is the address's id, which a JAR seat refers
+      to, and pastatas._id the _id of the building it is in (raw_address_register.buildings).
+    columns: *file_columns
+
+  - name: raw_address_register__streets
+    description: >
+      The register's streets (Gatve.csv) as each snapshot fetched them, as text. One row per
+      snapshot and street, its name in the genitive as addresses write it (Gedimino for
+      Gedimino pr.).
+    columns: *file_columns
+
+  - name: raw_address_register__settlements
+    description: >
+      The register's settlements (GyvenamojiVietove.csv) as each snapshot fetched them, as text:
+      cities, towns, villages and other places. One row per snapshot and settlement.
+    columns: *file_columns
+
+  - name: raw_address_register__municipalities
+    description: >
+      The register's municipalities (Savivaldybe.csv) as each snapshot fetched them, as text. One
+      row per snapshot and municipality (60), sav_kodas its code (13 is Vilnius city, 41 the
+      Vilnius district).
+    columns: *file_columns

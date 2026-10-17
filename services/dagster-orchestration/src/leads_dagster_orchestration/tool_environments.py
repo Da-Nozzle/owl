@@ -16,13 +16,19 @@ def dagster_storage_environment(config: Configuration) -> dict[str, str]:
 
 def dbt_environment(config: Configuration, mode: PipelineMode) -> dict[str, str]:
     """Values that the dbt project reads through env_var(): the mode's lake and the archive it
-    reads."""
+    reads, and how much memory DuckDB may take in each dbt process. What it spills beyond that
+    goes to a folder of the process's own under the temp directory (the profile adds dbt's
+    invocation id): DuckDB names its spill files the same in every process, so processes that
+    shared a folder, as they do its default `.tmp` in the working directory, would write over
+    each other's."""
     pipeline = load_pipeline_settings(config)
     lake = load_lake_settings(config, replay=mode is PipelineMode.REPLAY)
     return {
         "LEADS_ARCHIVE_PATH": raw_archive_path(mode, pipeline, lake.storage),
         "DBT_PROJECT_DIR": config.get_str("transform.project_dir"),
         "DBT_PROFILES_DIR": config.get_str("transform.project_dir"),
+        "LEADS_DUCKDB_MEMORY_LIMIT": config.get_str("transform.duckdb_memory_limit"),
+        "LEADS_DUCKDB_TEMP_DIRECTORY": f"{dbt_target_dir(config)}/duckdb_tmp",
         "LEADS_DUCKLAKE_CATALOG": ducklake_catalog_connection(lake.catalog),
         "LEADS_DUCKLAKE_METADATA_SCHEMA": lake.catalog.metadata_schema,
         "LEADS_LAKE_DATA_PATH": lake.storage.data_path,

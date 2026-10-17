@@ -46,6 +46,8 @@ from leads_ingest.settings import (
     raw_archive_path,
 )
 from leads_ingest.sources import spinta
+from leads_ingest.sources.address_register import files as address_register_files
+from leads_ingest.sources.address_register.settings import load_address_register_settings
 from leads_ingest.sources.jar import files as jar_files
 from leads_ingest.sources.jar.settings import load_jar_settings
 from leads_ingest.sources.sodra import files as sodra_files
@@ -137,6 +139,7 @@ def archived_sources(
     small requests) and its dbt models in models/raw/<name>/ and models/staging/<name>/."""
     sodra = load_sodra_settings(config)
     jar = load_jar_settings(config)
+    address_register = load_address_register_settings(config)
     vmi = load_vmi_settings(config)
     vmi_daily_cadence = SnapshotCadence(
         schedule=vmi.daily_changes_schedule,
@@ -151,6 +154,12 @@ def archived_sources(
     def fetch_jar(snapshot: str) -> dict[str, Download]:
         assert downloader is not None
         return jar_files.archive_register_files(snapshot, archive, jar, downloader)
+
+    def fetch_address_register(snapshot: str) -> dict[str, Download]:
+        assert downloader is not None
+        return address_register_files.archive_register_files(
+            snapshot, archive, address_register, downloader
+        )
 
     # One per process, so that the days a run fetches, in order, are read in one pass.
     vmi_changelog = spinta.Changelog(vmi.register_url, api) if api else None
@@ -184,6 +193,15 @@ def archived_sources(
                 timezone=settings.timezone,
             ),
             fetch=fetch_jar if downloader else None,
+        ),
+        ArchivedSource(
+            name=address_register_files.SOURCE_NAME,
+            cadence=SnapshotCadence(
+                schedule=address_register.snapshot_schedule,
+                key_format=address_register_files.SNAPSHOT_KEY_FORMAT,
+                timezone=settings.timezone,
+            ),
+            fetch=fetch_address_register if downloader else None,
         ),
         ArchivedSource(
             name=vmi_daily_changes.SOURCE_NAME,

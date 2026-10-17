@@ -9,3 +9,8 @@ port = 3000
 
 [transform]
 project_dir = "/workspace/services/transform"
+# The most memory DuckDB takes in each dbt process (its memory_limit), beyond which it spills to
+# disk under the project's target/ or fails. Unset, DuckDB takes up to 80% of RAM per process,
+# and two sources building side by side (JAR and the Address Register, 2026-10-17) exhausted a
+# 14 GB machine with no swap. Several dbt processes can run at once, one per source and lake.
+duckdb_memory_limit = "2GB"

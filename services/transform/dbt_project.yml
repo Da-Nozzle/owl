@@ -17,6 +17,8 @@ models:
         +schema: raw_sodra
       jar:
         +schema: raw_jar
+      address_register:
+        +schema: raw_address_register
       vmi_daily_changes:
         +schema: raw_vmi_daily_changes
       vmi_monthly_register:

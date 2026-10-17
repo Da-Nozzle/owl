@@ -47,6 +47,10 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "download_url_template": "https://jar.test/{dataset}/:format/csv",
         "snapshot_schedule": "0 6 21 * *",
     },
+    "address_register": {
+        "download_url_template": "https://ar.test/{dataset}/:format/csv",
+        "snapshot_schedule": "0 6 21 * *",
+    },
     "vmi": {
         "register_url": "https://vmi.test/MokesciuMoketojas",
         "activities_url": "https://vmi.test/EkonominesVeiklosRusis",
@@ -54,7 +58,7 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "first_daily_changes": "2026-09-01",
         "monthly_register_schedule": "0 6 21 * *",
     },
-    "transform": {"project_dir": "/workspace/services/transform"},
+    "transform": {"project_dir": "/workspace/services/transform", "duckdb_memory_limit": "2GB"},
 }
 
 
