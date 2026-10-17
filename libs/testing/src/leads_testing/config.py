@@ -59,6 +59,7 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "monthly_register_schedule": "0 6 21 * *",
     },
     "transform": {"project_dir": "/workspace/services/transform", "duckdb_memory_limit": "2GB"},
+    "dagster": {"webserver": {"host": "0.0.0.0", "port": 3000}},
 }
 
 

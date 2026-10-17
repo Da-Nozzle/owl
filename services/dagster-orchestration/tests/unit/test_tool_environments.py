@@ -1,3 +1,4 @@
+import duckdb
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -7,8 +8,10 @@ from leads_config.configuration import Configuration
 from leads_dagster_orchestration.tool_environments import (
     dagster_dbt_environment,
     dagster_storage_environment,
+    dagster_webserver_url,
     dbt_dev_environment,
     dbt_environment,
+    lake_init_sql,
     libpq_connection_string,
 )
 from leads_ingest.settings import PipelineMode
@@ -162,3 +165,68 @@ def test_dbt_caps_duckdbs_memory_and_spills_under_the_projects_target() -> None:
     # Assert
     assert environment["LEADS_DUCKDB_MEMORY_LIMIT"] == "1GB"
     assert environment["LEADS_DUCKDB_TEMP_DIRECTORY"] == "/project/target/duckdb_tmp"
+
+
+def test_the_lake_mcp_server_attaches_both_lakes_under_their_names() -> None:
+    # Arrange
+    config = build_config(
+        {
+            "lake.metadata_schema": "ducklake",
+            "lake.data_path": "s3://leads-lake/",
+            "lake.replay.metadata_schema": "ducklake_replay",
+            "lake.replay.data_path": "s3://leads-lake/replay/",
+        }
+    )
+
+    # Act
+    sql = lake_init_sql(config)
+
+    # Assert
+    assert " AS live (DATA_PATH 's3://leads-lake/', METADATA_SCHEMA 'ducklake')" in sql
+    assert (
+        " AS replay (DATA_PATH 's3://leads-lake/replay/', METADATA_SCHEMA 'ducklake_replay')" in sql
+    )
+
+
+def test_the_lake_mcp_server_caps_duckdbs_memory_as_dbt_does() -> None:
+    # Arrange
+    config = build_config(
+        {"transform.project_dir": "/project", "transform.duckdb_memory_limit": "1GB"}
+    )
+
+    # Act
+    sql = lake_init_sql(config)
+
+    # Assert
+    assert "SET memory_limit = '1GB';" in sql
+    assert "SET temp_directory = '/project/target/duckdb_tmp/mcp';" in sql
+
+
+def test_the_lake_mcp_servers_startup_sql_parses_with_awkward_credentials() -> None:
+    # Arrange
+    config = build_config(
+        {"postgres.password": secret_reference("postgres_password"), "lake.s3.secret": "a'b"},
+        secrets={"postgres_password": "it's a pass"},
+    )
+
+    # Act
+    statements = duckdb.extract_statements(lake_init_sql(config))
+
+    # Assert
+    assert [statement.type.name for statement in statements][-3:] == ["CREATE", "ATTACH", "ATTACH"]
+
+
+@pytest.mark.parametrize(
+    ("host", "url"),
+    [
+        ("0.0.0.0", "http://localhost:3000"),
+        ("::", "http://localhost:3000"),
+        ("dagster-webserver", "http://dagster-webserver:3000"),
+    ],
+)
+def test_the_dagster_mcp_server_connects_to_the_webservers_address(host: str, url: str) -> None:
+    # Arrange
+    config = build_config({"dagster.webserver.host": host, "dagster.webserver.port": 3000})
+
+    # Act / Assert
+    assert dagster_webserver_url(config) == url

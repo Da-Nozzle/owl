@@ -11,14 +11,29 @@ from leads_config.configuration import Configuration
 from leads_config.loading import configure_logging, load_configuration
 from leads_dagster_orchestration.tool_environments import (
     dagster_storage_environment,
+    dagster_webserver_url,
     dbt_dev_environment,
     dbt_environment,
     dbt_main_state_dir,
+    dbt_target_dir,
+    lake_init_sql,
 )
 from leads_ingest.settings import PipelineMode
 
 LAKE_OPTION = "--lake"
 LAKES = ", ".join(mode.value for mode in PipelineMode)
+DEV_OPTION = "--dev"
+
+# The MCP servers agents use (.mcp.json), each run by uvx in an environment of its own.
+# mcp-server-motherduck pins its DuckDB, which must be the project's (duckdb in pyproject.toml):
+# another version may not read the lake's DuckLake catalog.
+# dbt-mcp before 2.7 imports a private function pydantic 2.14 removed, and leaves pydantic
+# unpinned, so it no longer starts.
+DBT_MCP = "dbt-mcp@2.7.0"
+LAKE_MCP = "mcp-server-motherduck@1.1.0"
+DAGSTER_MCP = "dagster-mcp@0.12.3"
+# How long one dbt command an agent starts may take; dbt-mcp's default is a minute.
+DBT_MCP_TIMEOUT_SECONDS = 3600
 
 
 def run_dagster_dev() -> NoReturn:
@@ -72,6 +87,66 @@ def run_dbt_diff() -> NoReturn:
     replace_process_with(
         ["dbt", "run-operation", "diff", "--args", arguments, "--no-write-json"],
         extra_environment=environment,
+    )
+
+
+def run_dbt_mcp() -> NoReturn:
+    """dbt Labs' MCP server, running dbt as leads-dbt does (--lake names the lake it writes to)
+    or, with --dev, as leads-dbt-dev does (replay unless --lake is given)."""
+    arguments = sys.argv[1:]
+    dev = DEV_OPTION in arguments
+    arguments = [argument for argument in arguments if argument != DEV_OPTION]
+    mode, rest = split_lake_option(arguments, default=PipelineMode.REPLAY if dev else None)
+    if rest:
+        sys.exit(f"leads-mcp-dbt takes only {LAKE_OPTION} and {DEV_OPTION}, not {rest}")
+    config = load_configuration()
+    environment = dev_environment(config, mode) if dev else dbt_environment(config, mode)
+    replace_process_with(
+        ["uvx", DBT_MCP],
+        extra_environment=environment | dbt_mcp_environment(),
+    )
+
+
+def dbt_mcp_environment() -> dict[str, str]:
+    """dbt-mcp's settings: the project's dbt (not the dbt Fusion the VS Code extension
+    installs), and none of the dbt platform's tools, which need an account."""
+    return {
+        "DBT_PATH": str(Path(sysconfig.get_path("scripts")) / "dbt"),
+        "DBT_CLI_TIMEOUT": str(DBT_MCP_TIMEOUT_SECONDS),
+        "DISABLE_SEMANTIC_LAYER": "true",
+        "DISABLE_DISCOVERY": "true",
+        "DISABLE_ADMIN_API": "true",
+        "DISABLE_REMOTE": "true",
+        "DISABLE_SQL": "true",
+        "DISABLE_LSP": "true",
+        "DO_NOT_TRACK": "1",
+    }
+
+
+def run_lake_mcp() -> NoReturn:
+    """MotherDuck's DuckDB MCP server on both lakes, `live` and `replay`, writable. Its startup
+    SQL holds the lake's credentials, so it is written where only this user reads it."""
+    config = load_configuration()
+    init_sql = Path(dbt_target_dir(config)) / "mcp" / "lake_init.sql"
+    init_sql.parent.mkdir(parents=True, exist_ok=True)
+    init_sql.touch(mode=0o600)
+    init_sql.write_text(lake_init_sql(config))
+    replace_process_with(
+        ["uvx", LAKE_MCP, "--db-path", ":memory:", "--init-sql", str(init_sql), "--read-write"],
+        extra_environment={},
+    )
+
+
+def run_dagster_mcp() -> NoReturn:
+    """The community Dagster MCP server, on the webserver leads-dagster-dev starts, with its
+    write tools (launch, terminate, reload, schedules and sensors) on."""
+    config = load_configuration()
+    replace_process_with(
+        ["uvx", DAGSTER_MCP],
+        extra_environment={
+            "DAGSTER_URL": dagster_webserver_url(config),
+            "DAGSTER_READ_ONLY": "false",
+        },
     )
 
 

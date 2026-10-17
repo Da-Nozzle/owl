@@ -75,6 +75,46 @@ def dbt_dev_environment(config: Configuration, mode: PipelineMode) -> dict[str, 
     }
 
 
+def lake_init_sql(config: Configuration) -> str:
+    """What the lake MCP server (leads-mcp-lake) runs on startup: DuckDB in memory, capped as
+    each dbt process is, with both lakes attached writable as `live` and `replay`, through the
+    same catalog, bucket and secret the dbt profile uses. DuckLake keeps its catalog in Postgres,
+    so this connection writes beside Dagster's and dbt's runs without locking them out."""
+    lakes = {mode: dbt_environment(config, mode) for mode in PipelineMode}
+    any_lake = lakes[PipelineMode.LIVE]
+    statements = [
+        f"SET memory_limit = {sql_literal(any_lake['LEADS_DUCKDB_MEMORY_LIMIT'])}",
+        f"SET temp_directory = {sql_literal(any_lake['LEADS_DUCKDB_TEMP_DIRECTORY'] + '/mcp')}",
+        *(f"INSTALL {name}; LOAD {name}" for name in ["httpfs", "postgres", "ducklake"]),
+        "INSTALL zipfs FROM community; LOAD zipfs",  # reads the archived zips in place
+        "CREATE SECRET lake_s3 ("
+        "TYPE s3, "
+        f"KEY_ID {sql_literal(any_lake['LEADS_S3_KEY_ID'])}, "
+        f"SECRET {sql_literal(any_lake['LEADS_S3_SECRET'])}, "
+        f"REGION {sql_literal(any_lake['LEADS_S3_REGION'])}, "
+        f"ENDPOINT {sql_literal(any_lake['LEADS_S3_ENDPOINT'])}, "
+        f"URL_STYLE {sql_literal(any_lake['LEADS_S3_URL_STYLE'])}, "
+        f"USE_SSL {any_lake['LEADS_S3_USE_SSL']})",
+        *(
+            f"ATTACH {sql_literal('ducklake:postgres:' + lake['LEADS_DUCKLAKE_CATALOG'])} "
+            f"AS {mode.value} ("
+            f"DATA_PATH {sql_literal(lake['LEADS_LAKE_DATA_PATH'])}, "
+            f"METADATA_SCHEMA {sql_literal(lake['LEADS_DUCKLAKE_METADATA_SCHEMA'])})"
+            for mode, lake in lakes.items()
+        ),
+    ]
+    return "".join(f"{statement};\n" for statement in statements)
+
+
+def dagster_webserver_url(config: Configuration) -> str:
+    """The webserver leads-dagster-dev starts, as a client on the same machine reaches it: a
+    wildcard bind address is not one to connect to."""
+    host = config.get_str("dagster.webserver.host")
+    if host in {"0.0.0.0", "::"}:
+        host = "localhost"
+    return f"http://{host}:{config.get_int('dagster.webserver.port')}"
+
+
 def dbt_main_state_dir(config: Configuration, mode: PipelineMode) -> str:
     """Where a code location keeps the manifest of its last dbt build: the state the dev target
     defers to."""
@@ -107,4 +147,9 @@ def libpq_connection_string(parameters: dict[str, str]) -> str:
 
 def quote_libpq_value(value: str) -> str:
     escaped = value.replace("\\", "\\\\").replace("'", "\\'")
+    return f"'{escaped}'"
+
+
+def sql_literal(value: str) -> str:
+    escaped = value.replace("'", "''")
     return f"'{escaped}'"

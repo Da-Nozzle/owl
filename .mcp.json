@@ -1,0 +1,18 @@
+{
+    "mcpServers": {
+        "dagster": {
+            "command": "leads-mcp-dagster"
+        },
+        "lake": {
+            "command": "leads-mcp-lake"
+        },
+        "dbt": {
+            "command": "leads-mcp-dbt",
+            "args": ["--lake", "replay"]
+        },
+        "dbt-dev": {
+            "command": "leads-mcp-dbt",
+            "args": ["--dev", "--lake", "replay"]
+        }
+    }
+}

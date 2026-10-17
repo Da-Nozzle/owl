@@ -23,6 +23,9 @@ leads-dagster-dev = "leads_dagster_orchestration.entrypoints.tool_launchers:run_
 leads-dbt = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt"
 leads-dbt-dev = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt_dev"
 leads-dbt-diff = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt_diff"
+leads-mcp-dbt = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt_mcp"
+leads-mcp-lake = "leads_dagster_orchestration.entrypoints.tool_launchers:run_lake_mcp"
+leads-mcp-dagster = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dagster_mcp"
 
 [tool.uv.sources]
 leads-config = { workspace = true }
