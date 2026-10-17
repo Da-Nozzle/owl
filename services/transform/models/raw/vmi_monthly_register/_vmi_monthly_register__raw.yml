@@ -1,0 +1,51 @@
+version: 2
+
+sources:
+  - name: archive
+    tables:
+      - name: vmi_monthly_register
+        description: >
+          The whole VMI taxpayer register, fetched monthly as the baseline its daily changes
+          (archive vmi_daily_changes) are applied to: MokesciuMoketojas.csv, the register as get.data.gov.lt
+          exports it (comma-separated, double-quoted UTF-8; about 350 MB and 930,000 rows, one per
+          company, branch, activity, taxpayer type and group); EkonominesVeiklosRusis.csv, the EVRK
+          2 classifier its activities refer to by _id; and last-change.json, the changelog's newest
+          change when the export was taken. The export's ETag is the revision of the last change
+          it holds, and the fetch keeps only an export whose ETag is last-change.json's revision.
+
+models:
+  - name: raw_vmi_monthly_register__register
+    description: >
+      The register as each monthly snapshot exported it: every row, under its published header,
+      as text. Built from nothing, it reads every complete snapshot in the archive.
+    columns: &file_columns
+      - name: _source_file
+        description: The archived file the row was read from.
+      - name: _snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch this row is from, from the archive path.
+      - name: _file_url
+        description: Where the file was downloaded from.
+      - name: _file_fetched_at
+        description: When the file was downloaded (ISO 8601, UTC).
+      - name: _file_last_modified
+        description: The file's Last-Modified header as the portal sent it (HTTP date).
+      - name: _file_sha256
+        description: The downloaded file's SHA-256; equal for two fetches of the same version.
+
+  - name: raw_vmi_monthly_register__activities
+    description: >
+      The EVRK 2 classifier as each monthly snapshot exported it, as text: one row per activity
+      at any level (kodas has 2 to 6 digits), which register rows refer to by _id.
+    columns: *file_columns
+
+  - name: raw_vmi_monthly_register__last_change
+    description: >
+      Each snapshot's place in the changelog: the newest change when its export was taken, which
+      the export holds, and no later one. One row per snapshot.
+    columns:
+      - name: _cid
+        description: The change's id; the changes after it are applied to the export.
+      - name: _created
+        description: When the change was made (UTC).
+      - name: _revision
+        description: The change's revision, equal to the export's ETag.

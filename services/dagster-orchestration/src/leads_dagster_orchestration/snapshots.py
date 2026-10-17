@@ -25,14 +25,29 @@ class SnapshotCadence:
     timezone: str
 
     def snapshot_at(self, moment: datetime) -> str:
-        calendar = dg.TimeWindowPartitionsDefinition(
+        return self.periods(CALENDAR_START).get_partition_key_for_timestamp(moment.timestamp())
+
+    def window_before(self, snapshot: str) -> tuple[datetime, datetime]:
+        """The period before the snapshot's, from its tick up to the snapshot's own: what a
+        source published in it is what was new when the snapshot's period began. A changelog's
+        snapshot holds the changes made in it, so a fetch at the snapshot's tick gets all of
+        them."""
+        periods = self.periods(CALENDAR_START)
+        end = periods.time_window_for_partition_key(snapshot).start
+        start = periods.time_window_for_partition_key(
+            periods.get_partition_key_for_timestamp(end.timestamp() - 1)
+        ).start
+        return start, end
+
+    def periods(self, start: datetime | str) -> dg.TimeWindowPartitionsDefinition:
+        """The periods from `start` up to the current one, each keyed as its snapshot."""
+        return dg.TimeWindowPartitionsDefinition(
             cron_schedule=self.schedule,
             fmt=self.key_format,
-            start=CALENDAR_START,
+            start=start,
             timezone=self.timezone,
             end_offset=1,
         )
-        return calendar.get_partition_key_for_timestamp(moment.timestamp())
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +61,24 @@ class ArchivedSource:
     name: str
     cadence: SnapshotCadence
     fetch: Callable[[str], Mapping[str, Download]] | None = None
+    # The first snapshot of a source that keeps its history, as a changelog does: any period
+    # from there on can be fetched, whenever. None for a source that can only be captured as it
+    # is now, whose fetch is the current period's.
+    history_start: str | None = None
+    # Where in its lake's group the source's assets are drawn: its name, unless it is one of
+    # several sources of one dataset, drawn together in a group of the dataset's (vmi/...).
+    group: str | None = None
+
+    @property
+    def group_path(self) -> str:
+        return self.group or self.name
+
+    def fetch_periods(self) -> dg.TimeWindowPartitionsDefinition | None:
+        """The periods a source with history can be fetched for, up to the current one."""
+        if self.history_start is None:
+            return None
+        start = datetime.strptime(self.history_start, self.cadence.key_format)
+        return self.cadence.periods(start)
 
 
 def snapshot_partitions(source: str, lake: PipelineMode) -> dg.DynamicPartitionsDefinition:

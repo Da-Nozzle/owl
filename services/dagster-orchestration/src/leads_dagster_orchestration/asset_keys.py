@@ -40,11 +40,12 @@ def lake_group(lake: PipelineMode) -> str:
     return lake.value
 
 
-def source_group(source: str, lake: PipelineMode) -> str:
+def source_group(group: str, lake: PipelineMode) -> str:
     """A source's assets, fetch to staging, are a group nested in its lake's: Dagster reads `/`
     in a group name as nesting, and draws `live/sodra` as a box `sodra`, its layers flowing left
-    to right inside, within the box `live`."""
-    return f"{lake_group(lake)}/{source}"
+    to right inside, within the box `live`. `group` is the source's name, or a path for sources
+    drawn together (`vmi/daily_changes`, in the box `vmi`)."""
+    return f"{lake_group(lake)}/{group}"
 
 
 def is_archive(key: dg.AssetKey) -> bool:

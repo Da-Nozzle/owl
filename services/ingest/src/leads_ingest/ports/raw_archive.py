@@ -51,6 +51,7 @@ def file_record(download: Download) -> dict[str, object]:
         "url": download.url,
         "fetched_at": download.fetched_at.isoformat(),
         "last_modified": download.last_modified,
+        "etag": download.etag,
         "size": download.size,
         "sha256": download.sha256,
     }

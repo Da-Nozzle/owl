@@ -44,6 +44,7 @@ def build_transform_assets(
     main_state_dir: Path,
     labels: Mapping[str, str],
     lake: PipelineMode,
+    groups: Mapping[str, str] | None = None,
 ) -> list[dg.AssetsDefinition]:
     """The dbt project as two steps per source, plus one for the models that combine sources.
     A source's raw models are `transform_<source>_raw`, partitioned by the source's snapshots
@@ -51,7 +52,8 @@ def build_transform_assets(
     are `transform_<source>_staging`, unpartitioned, as staging is one table rebuilt whole from
     every snapshot's raw. Both are in the pool `transform_<source>`: sources build side by side,
     and nothing writes one source's tables twice at once. Both are in the source's group, within
-    the lake's. The shared step, `transform` (intermediate, marts, seeds), exists once the project
+    the lake's: `groups` maps a source folder to its group's path, the folder's name by default.
+    The shared step, `transform` (intermediate, marts, seeds), exists once the project
     has such a model, is rebuilt whole too, and is in the lake's group itself. Each step is one
     dbt invocation, so models within it still run on dbt's threads. Pools
     are instance-wide, so each lake's are prefixed with it, `live_transform_sodra` and
@@ -93,7 +95,7 @@ def build_transform_assets(
                 f"{pool}_{layer}",
                 f"path:models/{layer}/{source}",
                 pool=pool,
-                group=source_group(source, lake),
+                group=source_group((groups or {}).get(source, source), lake),
                 partitions=snapshot_partitions[source] if layer == SNAPSHOT_LAYER else None,
             )
             for layer in SOURCE_LAYERS

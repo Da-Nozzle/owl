@@ -1,6 +1,9 @@
 import dagster as dg
 
-# What define_asset_job returns; dagster does not export it.
+# What define_asset_job and build_schedule_from_partitioned_job return; dagster exports neither.
+from dagster._core.definitions.partitions.partitioned_schedule import (
+    UnresolvedPartitionedAssetScheduleDefinition,
+)
 from dagster._core.definitions.unresolved_asset_job_definition import (
     UnresolvedAssetJobDefinition,
 )
@@ -24,23 +27,34 @@ def rebuild_job_name(source: str) -> str:
 
 
 def fetch_job(source: ArchivedSource) -> UnresolvedAssetJobDefinition:
+    what = (
+        "the chosen periods (the current one on its schedule)"
+        if source.history_start
+        else "as it is now, as the current period's snapshot"
+    )
     return dg.define_asset_job(
         fetch_job_name(source.name),
         selection=dg.AssetSelection.assets(fetch_key(source.name, PipelineMode.LIVE)),
         description=(
-            f"Fetches {source.name} as it is now into the archive, as the current period's "
-            f"snapshot. Raw and staging then build from it on their own."
+            f"Fetches {source.name} into the archive: {what}. Raw and staging then build from "
+            f"it on their own."
         ),
     )
 
 
 def fetch_schedule(
     source: ArchivedSource, job: UnresolvedAssetJobDefinition
-) -> dg.ScheduleDefinition:
+) -> dg.ScheduleDefinition | UnresolvedPartitionedAssetScheduleDefinition:
     """Fetches the source on its own cadence. Running unless turned off, as it is the live
-    pipeline."""
+    pipeline. A source with history fetches the period that begins at the tick, the one the
+    clock would pick, as its partition."""
+    name = f"{fetch_job_name(source.name)}_schedule"
+    if source.history_start:
+        return dg.build_schedule_from_partitioned_job(
+            job, name=name, default_status=dg.DefaultScheduleStatus.RUNNING
+        )
     return dg.ScheduleDefinition(
-        name=f"{fetch_job_name(source.name)}_schedule",
+        name=name,
         job=job,
         cron_schedule=source.cadence.schedule,
         execution_timezone=source.cadence.timezone,

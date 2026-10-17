@@ -12,6 +12,9 @@ class Download:
     body: bytes
     fetched_at: datetime
     last_modified: str | None
+    # The server's version of what it sent (its ETag header), as sent. get.data.gov.lt sets it
+    # to the revision of the dataset's last change, which places an export in its changelog.
+    etag: str | None = None
 
     @property
     def size(self) -> int:

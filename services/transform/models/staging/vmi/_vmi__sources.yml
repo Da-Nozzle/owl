@@ -1,0 +1,142 @@
+version: 2
+
+models:
+  - name: stg_vmi__changes
+    description: >
+      One row per change made to the taxpayer register in the days fetched, from the changelog:
+      when (UTC), how, to which register row, the fields it set and the company the row belongs
+      to. Changes made before the newest export are history; those after it are applied to it in
+      stg_vmi__current_register.
+    config:
+      meta:
+        # What identifies a row: leads-dbt-diff matches rows on it.
+        key: [change_id]
+    columns:
+      - name: change_id
+        description: The change's id in the changelog; ids grow with time, with gaps.
+        data_tests:
+          - unique
+          - not_null
+      - name: changed_at
+        description: When the change was made, in UTC.
+        data_tests:
+          - not_null
+      - name: operation
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [insert, patch, delete]
+      - name: register_row_id
+        description: The register row changed (stg_vmi__current_register.register_row_id).
+        data_tests:
+          - not_null
+      - name: company_code
+        description: >
+          The company of the row changed: from the change itself, the newest export holding the
+          row, or the row's insert among the changes. Empty for a row deleted before every
+          export whose insert was made before the first day fetched.
+      - name: changed_fields
+        description: The register's columns the change set, as published (empty for a delete).
+      - name: change
+        description: The change as the portal sent it (JSON), which stg_vmi__current_register applies.
+      - name: snapshot_day
+        description: The snapshot (YYYY-MM-DD) whose fetch the change is from.
+        data_tests:
+          - not_null
+
+  - name: stg_vmi__current_register
+    description: >
+      The taxpayer register as it stands after the newest change fetched: one row per register
+      row, as the register publishes them, one per company, branch, activity, taxpayer type and
+      group, each part with its validity dates. The newest monthly export, with every change made
+      after it applied in changelog order: a patch sets the fields it names (null included), an
+      insert adds a row, a delete removes it. Activities are resolved in the EVRK 2 classifier,
+      not the EVRK 2.1 Sodra uses.
+    config:
+      meta:
+        key: [register_row_id]
+    columns:
+      - name: register_row_id
+        description: The register row's id (the export's _id), which changes refer to.
+        data_tests:
+          - unique
+          - not_null
+      - name: company_code
+        description: JAR code (ja_kodas); Sodra's jarCode.
+        data_tests:
+          - not_null
+      - name: activity_code
+        description: >
+          The activity's EVRK 2 code (2 to 6 digits), from the classifier exported with the
+          register.
+        data_tests:
+          # Also fails when an activity is not in the classifier.
+          - not_null:
+              config:
+                where: "activity_id is not null"
+      - name: is_main_activity
+        description: Whether the activity is the company's main one (pagrindine = 1).
+      - name: activity_municipality_code
+        description: The municipality where the activity is carried out (vv_savivaldybe).
+      - name: changed_at
+        description: When the newest change after the export applied to the row was made (UTC); empty if none.
+      - name: export_month
+        description: The export snapshot (YYYY-MM) the row is from, before any change.
+
+unit_tests:
+  - name: stg_vmi__changes_finds_each_rows_company
+    description: >
+      A patch or a delete names only its register row: its company comes from the newest export
+      holding the row, or from the row's insert among the changes, and a row in neither has none.
+    model: stg_vmi__changes
+    given:
+      - input: ref('raw_vmi_daily_changes__changes')
+        rows:
+          - {"_cid": "11", "_created": "2026-09-17T23:57:18.385386", "_op": "patch", "_id": "exported", "change": '{"_cid": 11, "pvm_kodas": null}', "_snapshot_day": "2026-09-18"}
+          - {"_cid": "12", "_created": "2026-09-17T23:57:19", "_op": "insert", "_id": "inserted", "change": '{"_cid": 12, "ja_kodas": 300000002, "pavadinimas": "MB Kirpykla"}', "_snapshot_day": "2026-09-18"}
+          - {"_cid": "13", "_created": "2026-09-18T23:57:00", "_op": "patch", "_id": "inserted", "change": '{"_cid": 13, "padalinio_pvd": "Filialas"}', "_snapshot_day": "2026-09-19"}
+          - {"_cid": "14", "_created": "2026-09-18T23:57:00", "_op": "delete", "_id": "unknown", "change": '{"_cid": 14}', "_snapshot_day": "2026-09-19"}
+      - input: ref('raw_vmi_monthly_register__register')
+        rows:
+          - {"_snapshot_month": "2026-08", "_id": "exported", "ja_kodas": "300000099"}
+          - {"_snapshot_month": "2026-09", "_id": "exported", "ja_kodas": "300000001"}
+    expect:
+      rows:
+        - {change_id: 11, changed_at: "2026-09-17 23:57:18.385386", operation: patch, company_code: 300000001, changed_fields: "[pvm_kodas]"}
+        - {change_id: 12, changed_at: "2026-09-17 23:57:19", operation: insert, company_code: 300000002, changed_fields: "[ja_kodas, pavadinimas]"}
+        - {change_id: 13, changed_at: "2026-09-18 23:57:00", operation: patch, company_code: 300000002, changed_fields: "[padalinio_pvd]"}
+        - {change_id: 14, changed_at: "2026-09-18 23:57:00", operation: delete, company_code: null, changed_fields: "[]"}
+
+  - name: stg_vmi__current_register_applies_the_changes_after_the_newest_export
+    description: >
+      The 2026-09 export stands at change 100. Change 99 is in it already, so it is not applied
+      again. After it: a patch empties a field and another sets one, a delete removes row r2, and
+      row r4 is inserted, then patched. Row r9, only in the older export, is gone.
+    model: stg_vmi__current_register
+    given:
+      - input: ref('raw_vmi_monthly_register__register')
+        rows:
+          - {"_snapshot_month": "2026-08", "_id": "r9", "ja_kodas": "300000009", "pavadinimas": "UAB Sena"}
+          - {"_snapshot_month": "2026-09", "_id": "r1", "ja_kodas": "300000001", "pavadinimas": "UAB Kava", "tipo_kodas": "103", "pvm_kodas": "100000001", "ekonomine_veikla._id": "e561", "pagrindine": "1"}
+          - {"_snapshot_month": "2026-09", "_id": "r2", "ja_kodas": "300000001", "pavadinimas": "UAB Kava", "tipo_kodas": "103"}
+          - {"_snapshot_month": "2026-09", "_id": "r3", "ja_kodas": "300000003", "pavadinimas": "MB Kirpykla", "tipo_kodas": "103"}
+      - input: ref('raw_vmi_monthly_register__last_change')
+        rows:
+          - {"_snapshot_month": "2026-08", "_cid": "50"}
+          - {"_snapshot_month": "2026-09", "_cid": "100"}
+      - input: ref('raw_vmi_monthly_register__activities')
+        rows:
+          - {"_snapshot_month": "2026-09", "_id": "e561", "kodas": "561000", "pavadinimas_lt": "Restoranų ir pagaminto valgio teikimo veikla"}
+      - input: ref('stg_vmi__changes')
+        rows:
+          - {change_id: 99, changed_at: "2026-09-17 23:57:00", operation: patch, register_row_id: r1, change: '{"pavadinimas": "UAB Senoji kava"}'}
+          - {change_id: 101, changed_at: "2026-10-17 00:00:01", operation: patch, register_row_id: r1, change: '{"pvm_kodas": null}'}
+          - {change_id: 102, changed_at: "2026-10-17 00:00:02", operation: patch, register_row_id: r1, change: '{"tipo_kodas": 105}'}
+          - {change_id: 103, changed_at: "2026-10-17 00:00:03", operation: delete, register_row_id: r2, change: '{}'}
+          - {change_id: 104, changed_at: "2026-10-17 00:00:04", operation: insert, register_row_id: r4, change: '{"ja_kodas": 300000004, "pavadinimas": "UAB Autoservisas", "tipo_kodas": 103, "pvm_kodas": null, "padalinio_pvd": null, "ekonomine_veikla": {"_id": "e561"}, "pagrindine": 0}'}
+          - {change_id: 105, changed_at: "2026-10-18 00:00:05", operation: patch, register_row_id: r4, change: '{"padalinio_pvd": "Filialas"}'}
+    expect:
+      rows:
+        - {register_row_id: r1, company_code: 300000001, taxpayer_name: "UAB Kava", taxpayer_type_code: 105, vat_code: null, branch_name: null, activity_code: "561000", is_main_activity: true, changed_at: "2026-10-17 00:00:02", export_month: "2026-09"}
+        - {register_row_id: r3, company_code: 300000003, taxpayer_name: "MB Kirpykla", taxpayer_type_code: 103, vat_code: null, branch_name: null, activity_code: null, is_main_activity: null, changed_at: null, export_month: "2026-09"}
+        - {register_row_id: r4, company_code: 300000004, taxpayer_name: "UAB Autoservisas", taxpayer_type_code: 103, vat_code: null, branch_name: "Filialas", activity_code: "561000", is_main_activity: false, changed_at: "2026-10-18 00:00:05", export_month: null}

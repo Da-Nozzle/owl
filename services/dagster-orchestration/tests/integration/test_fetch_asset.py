@@ -17,7 +17,7 @@ FILES = {
 
 
 def saving(
-    archive: InMemoryRawArchive, *, fail_after: int | None = None
+    archive: InMemoryRawArchive, source: str = "sodra", *, fail_after: int | None = None
 ) -> Callable[[str], Mapping[str, Download]]:
     """A source's fetch: saves FILES into the archive as the snapshot asked for, or fails after
     saving `fail_after` of them."""
@@ -26,7 +26,7 @@ def saving(
         for index, (name, download) in enumerate(FILES.items()):
             if index == fail_after:
                 raise ConnectionError("the source went away")
-            archive.save("sodra", snapshot, name, download)
+            archive.save(source, snapshot, name, download)
         return FILES
 
     return fetch
@@ -84,3 +84,35 @@ def test_a_fetch_that_fails_midway_leaves_no_complete_snapshot() -> None:
     assert not result.success
     assert len(archive.downloads) == 1
     assert archive.snapshots("sodra") == {}
+
+
+def test_a_source_with_history_fetches_the_periods_asked_for_in_order_in_one_run() -> None:
+    # Arrange
+    archive = InMemoryRawArchive()
+    fetched: list[str] = []
+    save = saving(archive, "vmi")
+
+    def fetch(snapshot: str) -> Mapping[str, Download]:
+        fetched.append(snapshot)
+        return save(snapshot)
+
+    daily = SnapshotCadence(schedule="0 6 * * *", key_format="%Y-%m-%d", timezone="Europe/Vilnius")
+    source = ArchivedSource(name="vmi", cadence=daily, fetch=fetch, history_start="2026-09-01")
+    asset = build_fetch_asset(source, archive, LABELS)
+
+    # Act
+    result = dg.materialize(
+        [asset],
+        instance=dg.DagsterInstance.ephemeral(),
+        tags={
+            "dagster/asset_partition_range_start": "2026-09-14",
+            "dagster/asset_partition_range_end": "2026-09-16",
+        },
+    )
+
+    # Assert
+    assert result.success
+    assert fetched == ["2026-09-14", "2026-09-15", "2026-09-16"]
+    assert sorted(archive.snapshots("vmi")) == fetched
+    event = result.asset_materializations_for_node("live__fetch__fetch_vmi")[0]
+    assert event.metadata["snapshot"] == dg.MetadataValue.text("2026-09-14 to 2026-09-16")

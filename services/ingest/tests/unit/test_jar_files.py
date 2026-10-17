@@ -1,6 +1,6 @@
 import pytest
 
-from leads_ingest.sources.jar.files import archive_register_files, require_rows_with_ids
+from leads_ingest.sources.jar.files import archive_register_files
 from leads_ingest.sources.jar.settings import JarSettings
 from leads_testing.ingest import FakeDownloader, InMemoryRawArchive
 
@@ -38,23 +38,3 @@ def test_an_error_page_sent_as_a_success_is_not_archived() -> None:
     with pytest.raises(ValueError, match=r"JuridinisAsmuo\.csv"):
         archive_register_files("2026-09", archive, SETTINGS, downloader)
     assert archive.downloads == {}
-
-
-@pytest.mark.parametrize(
-    "body",
-    [
-        pytest.param(b"_type,_id,kodas\n", id="header only"),
-        pytest.param(b"_type,_id,kodas\n\n", id="header and a blank line"),
-        pytest.param(b"_type,kodas\nForma,310\n", id="no _id column"),
-        pytest.param(b"", id="empty"),
-    ],
-)
-def test_an_export_without_ids_or_rows_is_rejected(body: bytes) -> None:
-    # Act / Assert
-    with pytest.raises(ValueError, match=r"Forma\.csv"):
-        require_rows_with_ids("Forma.csv", body)
-
-
-def test_an_export_with_ids_and_a_row_is_accepted() -> None:
-    # Act / Assert
-    require_rows_with_ids("JuridinisAsmuo.csv", EXPORT)

@@ -17,6 +17,10 @@ models:
         +schema: raw_sodra
       jar:
         +schema: raw_jar
+      vmi_daily_changes:
+        +schema: raw_vmi_daily_changes
+      vmi_monthly_register:
+        +schema: raw_vmi_monthly_register
     staging:
       +schema: staging
     intermediate:

@@ -29,3 +29,19 @@ download_url_template = "https://get.data.gov.lt/datasets/gov/rc/jar/{dataset}/:
 # 2025-09-03, 2026-03-09, 2026-08-20. Monthly is the finest grain worth fetching, and since the
 # day is free, it is the 21st at 06:00 with Sodra, so each month's leads see the newest register.
 snapshot_schedule = "0 6 21 * *"
+
+[vmi]
+# The VMI taxpayer register on get.data.gov.lt (one row per company, branch, activity, taxpayer
+# type and group, each with its validity), and the EVRK 2 classifier its activities refer to.
+register_url = "https://get.data.gov.lt/datasets/gov/vmi/mm_registras/MokesciuMoketojas"
+activities_url = "https://get.data.gov.lt/datasets/gov/lsd/cl/evrk/EkonominesVeiklosRusis"
+# vmi_daily_changes: the register changes most days (15 days in September 2026), mostly in a
+# burst at about 00:00 UTC. Its changelog keeps every change, so the changes are fetched daily, at
+# 06:00, each snapshot holding those made in the day before its tick.
+daily_changes_schedule = "0 6 * * *"
+# The changelog reaches back to 2024-02-07; days from here on can be fetched, again or late.
+first_daily_changes = "2026-09-01"
+# vmi_monthly_register: the whole register (350 MB), fetched monthly as the baseline the daily
+# changes made after it are applied to: often enough to keep that short, rarely enough to keep
+# the archive small.
+monthly_register_schedule = "0 6 21 * *"

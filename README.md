@@ -99,24 +99,28 @@ publishes:
 |---|---|---|---|
 | `sodra` | the yearly employer files covering the last 13 months | 21st at 06:00 (`sodra.snapshot_schedule`), as Sodra publishes the previous month by the 20th | `YYYY-MM` |
 | `jar` | the register's entities, legal forms and statuses, each whole | 21st at 06:00 (`jar.snapshot_schedule`): the register publishes monthly at most, on no fixed day | `YYYY-MM` |
+| `vmi_daily_changes` | the VMI taxpayer register's changelog: the changes made in the day before the snapshot's tick | daily at 06:00 (`vmi.daily_changes_schedule`): the register changes most days, mostly at about 03:00 | `YYYY-MM-DD` |
+| `vmi_monthly_register` | the whole VMI register, the EVRK 2 classifier, and the changelog's newest change at that moment | 21st at 06:00 (`vmi.monthly_register_schedule`), the baseline `vmi_daily_changes`' changes are applied to | `YYYY-MM` |
 
-A source fetched daily would be keyed `YYYY-MM-DD`. A second fetch in the same period replaces that
-period's snapshot.
+A second fetch in the same period replaces that period's snapshot.
 
-A source's partitions are its complete snapshots, so every partition has something to build from,
-and a period that has passed cannot be fetched again: the fetch takes no partition, the clock
-picks its snapshot. Adding a month to the replay sample, with its manifest, adds a partition with
+A source's partitions are its complete snapshots, so every partition has something to build from.
+A source captured as it is now cannot be fetched for a period that has passed: its fetch takes no
+partition, the clock picks its snapshot. A source that keeps its history, as the VMI register's
+changelog does, can: its fetch is partitioned by its periods from a first one (`vmi.first_daily_changes`)
+to the current one, the schedule fetches the current one, and a backfill fetches past ones, such as
+a month of days, in one run. Adding a snapshot to the replay sample, with its manifest, adds a partition with
 no reload.
 
 | What | Does | Started by |
 |---|---|---|
-| `fetch_<source>` (live) | fetches the source now into the archive, as the current period's snapshot | its schedule, or you |
+| `fetch_<source>` (live) | fetches the source now into the archive, as the current period's snapshot (for `vmi_daily_changes`, the period chosen) | its schedule, or you (a backfill for several of `vmi_daily_changes`' days) |
 | `archive_index` sensor | adds a partition for each complete snapshot, and reports it as the archive's | Dagster, every minute |
 | `transform_automation` sensor | builds raw for each new snapshot, then staging and after; rebuilds staging and after when their SQL changes | Dagster |
 | `rebuild_<source>_from_archive` | rebuilds raw for the snapshots you choose, then staging and after once | you, from the job's page (a backfill for several) |
 
-So each source's monthly build is a chain of runs: the scheduled fetch, then (within a minute or
-two) raw for the new snapshot, then staging. Sources build side by side, each in its own pools.
+So each source's build is a chain of runs: the scheduled fetch, then (within a minute or two)
+raw for the new snapshot, then staging. Sources build side by side, each in its own pools.
 Raw is partitioned by snapshot; staging and later models are one table each, rebuilt whole, so
 their latest materialization is the table's.
 
@@ -130,7 +134,11 @@ name, its schedule and key format, and its fetch (`leads_ingest/sources/<source>
 settings in `config/<env>/pipeline.toml`), plus its dbt models in `models/raw/<source>/` (schema
 `raw_<source>` in `dbt_project.yml`) and `models/staging/<source>/`. Its partitions, archive,
 fetch job and schedule, rebuild job, automation and group all follow from that. `jar` is the
-smallest example: three CSV exports, read by the `archived_csv` macro.
+smallest example: three CSV exports, read by the `archived_csv` macro. The VMI register is the
+example of one dataset fetched as two sources, drawn together in one box (`ArchivedSource.group`):
+`vmi_daily_changes`, a source with history (`history_start`) whose changelog pages are read by the
+`archived_json_entries` macro, and `vmi_monthly_register`, the baseline the changes are applied to
+by the staging models in `models/staging/vmi/`.
 
 ### Tests
 
