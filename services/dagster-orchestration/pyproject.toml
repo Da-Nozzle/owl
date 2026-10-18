@@ -11,7 +11,6 @@ dependencies = [
     "dagster-webserver==1.13.26",
     "dagster-postgres==0.29.26",
     "dagster-dbt==0.29.26",
-    "dagster-dlt==0.29.26",
     "duckdb==1.5.6",
     "dbt-core>=1.12,<1.13",
     "dbt-duckdb>=1.11,<1.12",

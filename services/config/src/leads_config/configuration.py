@@ -44,6 +44,13 @@ class Configuration:
             raise TypeError(f"{key!r} is {type(value).__name__}, expected int")
         return value
 
+    def get_float(self, key: str) -> float:
+        """A number, which TOML writes as an int or a float."""
+        value = self.get(key)
+        if not isinstance(value, int | float) or isinstance(value, bool):
+            raise TypeError(f"{key!r} is {type(value).__name__}, expected a number")
+        return float(value)
+
     def get_table(self, key: str) -> Mapping[str, object]:
         value = self._lookup(key)
         if not isinstance(value, Mapping) or is_secret_reference(value):

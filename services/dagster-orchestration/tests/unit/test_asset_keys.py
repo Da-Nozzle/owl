@@ -1,7 +1,5 @@
 import dagster as dg
-import dlt
 import pytest
-from dagster_dlt.translator import DltResourceTranslatorData
 
 from leads_dagster_orchestration.asset_keys import (
     archive_key,
@@ -11,7 +9,6 @@ from leads_dagster_orchestration.asset_keys import (
     lake_group,
     source_group,
 )
-from leads_dagster_orchestration.translators import RawTableDltTranslator
 from leads_ingest.settings import PipelineMode
 from leads_ingest.sources.sodra.files import SOURCE_NAME
 
@@ -48,27 +45,13 @@ def test_dbt_model_in_a_raw_schema_is_in_the_raw_layer() -> None:
     assert key == dg.AssetKey(["live", "raw", "raw_sodra__monthly"])
 
 
-def test_dbt_source_of_a_dlt_table_gets_the_key_of_that_table() -> None:
+def test_dbt_source_other_than_the_archive_is_rejected() -> None:
     # Arrange
-    @dlt.source(name="google")
-    def google() -> object:
-        return dlt.resource([{"id": 1}], name="listings")
-
-    resource = google().resources["listings"]
     dbt_source_props = {"resource_type": "source", "source_name": "google", "name": "listings"}
 
-    # Act
-    dlt_spec = RawTableDltTranslator(LIVE).get_asset_spec(
-        DltResourceTranslatorData(resource=resource, pipeline=None)
-    )
-
-    # Assert
-    assert (
-        dlt_spec.key
-        == dbt_resource_key(dbt_source_props, LIVE)
-        == dg.AssetKey(["live", "raw", "raw_google__listings"])
-    )
-    assert dlt_spec.group_name == "live/google"
+    # Act / Assert
+    with pytest.raises(ValueError, match=r"google\.listings is not the archive"):
+        dbt_resource_key(dbt_source_props, LIVE)
 
 
 def test_dbt_model_is_keyed_by_its_lake_and_lake_schema() -> None:

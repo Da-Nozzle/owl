@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-from dlt.common.storages.configuration import FilesystemConfiguration
 
 from leads_ingest.adapters.archive.fsspec_archive import FsspecRawArchive, open_fsspec_archive
 from leads_ingest.ports.raw_archive import SnapshotManifest, file_record
@@ -14,7 +13,7 @@ COMPLETED_AT = datetime(2026, 10, 21, 3, 5, tzinfo=UTC)
 
 @pytest.fixture
 def archive(tmp_path: Path) -> FsspecRawArchive:
-    return open_fsspec_archive(FilesystemConfiguration(bucket_url=str(tmp_path)))
+    return open_fsspec_archive(str(tmp_path))
 
 
 def test_a_saved_download_is_kept_byte_for_byte_with_its_fetch_beside_it(

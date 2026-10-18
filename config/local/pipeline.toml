@@ -1,5 +1,12 @@
 # Dagster loads two code locations side by side: live calls the sources and archives what they
 # return; replay reads replay_path and calls none. Each builds a lake of its own (lake.replay).
+# Each source's requests go through an HTTP client configured by its own table, <source>.http
+# (leads_ingest/adapters/http/settings.py). An attempt is given up once the server has sent
+# nothing for timeout_seconds (to connect, or between two reads). A timeout, a dropped connection,
+# a 5xx or a 429 is sent again after backoff_seconds, doubled at each retry, or after the wait the
+# server's Retry-After asks for, at most max_wait_seconds either way, up to attempts times in all.
+# min_interval_seconds is the least time between the starts of two requests, retries included (0
+# for none). Rate limits are per server, but each source's client spaces only its own requests.
 [pipeline]
 # The timezone of every source's snapshot_schedule.
 timezone = "Europe/Vilnius"
@@ -56,6 +63,19 @@ max_paid_requests = 1500
 # sent again, so more workers than the quota allows only means more waiting, not failure.
 workers = 16
 
+[google_places.http]
+# A sweep sends its searches without counting the per-minute quota (workers), so a request over
+# it is the usual case, not the exception: each is sent again after 2, 4, 8, 16 and 32 seconds,
+# then every minute, ten times in all, about five minutes, or after the wait Google's Retry-After
+# asks for. Five attempts in 15 seconds, as for the files, would fail a sweep inside one minute of
+# quota. Google's pricing does not say whether it bills a request it answers with an error; at
+# worst a retry costs one request more.
+timeout_seconds = 30
+attempts = 10
+backoff_seconds = 2
+max_wait_seconds = 60
+min_interval_seconds = 0
+
 [sodra]
 download_url_template = "https://atvira.sodra.lt/imones/downloads/{year}/monthly-{year}.csv.zip"
 # When live fetches a snapshot (cron, pipeline.timezone). Sodra publishes the previous month by
@@ -65,6 +85,16 @@ snapshot_schedule = "0 6 21 * *"
 # Months loaded per snapshot, ending with the month before the snapshot's. Each snapshot reloads
 # all of them, so Sodra's revisions land; 13 gives a year-on-year comparison.
 history_months = 13
+
+[sodra.http]
+# Whole files: they get long, and a server may take a while to produce one. A failed request is
+# sent again after 1, 2, 4 and 8 seconds, five times in about 15 seconds: long enough to ride out
+# a proxy's hiccup, short enough that a server that is down fails the run.
+timeout_seconds = 300
+attempts = 5
+backoff_seconds = 1
+max_wait_seconds = 300
+min_interval_seconds = 0
 
 [jar]
 # The register's datasets on get.data.gov.lt, each exported whole as one CSV; {dataset} is its
@@ -76,6 +106,14 @@ download_url_template = "https://get.data.gov.lt/datasets/gov/rc/jar/{dataset}/:
 # day is free, it is the 21st at 06:00 with Sodra, so each month's leads see the newest register.
 snapshot_schedule = "0 6 21 * *"
 
+[jar.http]
+# Whole exports, as sodra.http.
+timeout_seconds = 300
+attempts = 5
+backoff_seconds = 1
+max_wait_seconds = 300
+min_interval_seconds = 0
+
 [address_register]
 # The Address Register's datasets on get.data.gov.lt, each exported whole as one CSV; {dataset}
 # is its path below rc/ar/, such as pastatas/Pastatas.
@@ -85,6 +123,14 @@ download_url_template = "https://get.data.gov.lt/datasets/gov/rc/ar/{dataset}/:f
 # 2026-03-09 and 2026-08-18. So, as JAR, monthly on the 21st at 06:00: each month's leads see the
 # newest addresses, and a seat in JAR's snapshot of a month resolves in this one of the same month.
 snapshot_schedule = "0 6 21 * *"
+
+[address_register.http]
+# Whole exports, as sodra.http.
+timeout_seconds = 300
+attempts = 5
+backoff_seconds = 1
+max_wait_seconds = 300
+min_interval_seconds = 0
 
 [vmi]
 # The VMI taxpayer register on get.data.gov.lt (one row per company, branch, activity, taxpayer
@@ -101,3 +147,24 @@ first_daily_changes = "2026-09-01"
 # changes made after it are applied to: often enough to keep that short, rarely enough to keep
 # the archive small.
 monthly_register_schedule = "0 6 21 * *"
+
+[vmi.daily_changes_http]
+# vmi_daily_changes reads the changelog in many small requests. The portal answers one in under a
+# second, so one that has sent nothing for 30 s has hung, as the changelog did for a few of every
+# 50 requests on 2026-10-17, and is better retried at once. It publishes no rate limit, but stops
+# answering changelog reads for a while after a burst: after about 2,000 in an hour, at up to 10 a
+# second, on 2026-10-17. So one is started at most every second, and a backfill reads its days in
+# one pass (spinta.Changelog).
+timeout_seconds = 30
+attempts = 5
+backoff_seconds = 1
+max_wait_seconds = 300
+min_interval_seconds = 1
+
+[vmi.monthly_register_http]
+# vmi_monthly_register: the whole register and the classifier, exported whole, as sodra.http.
+timeout_seconds = 300
+attempts = 5
+backoff_seconds = 1
+max_wait_seconds = 300
+min_interval_seconds = 0

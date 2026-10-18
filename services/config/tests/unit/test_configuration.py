@@ -110,3 +110,25 @@ def test_a_secret_reference_is_not_a_table() -> None:
     # Act / Assert
     with pytest.raises(TypeError, match="expected a table"):
         config.get_table("google.api_key")
+
+
+@pytest.mark.parametrize(("value", "number"), [(30, 30.0), (0.5, 0.5)])
+def test_a_number_is_an_int_or_a_float(value: float, number: float) -> None:
+    # Arrange
+    config = Configuration(values={"sodra": {"http": {"timeout_seconds": value}}}, secret_stores={})
+
+    # Act
+    found = config.get_float("sodra.http.timeout_seconds")
+
+    # Assert
+    assert (found, type(found)) == (number, float)
+
+
+@pytest.mark.parametrize("value", [True, "30"])
+def test_a_bool_or_a_string_is_not_a_number(value: object) -> None:
+    # Arrange
+    config = Configuration(values={"sodra": {"http": {"timeout_seconds": value}}}, secret_stores={})
+
+    # Act / Assert
+    with pytest.raises(TypeError, match="expected a number"):
+        config.get_float("sodra.http.timeout_seconds")

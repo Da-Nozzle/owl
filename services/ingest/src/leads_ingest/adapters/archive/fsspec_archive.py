@@ -4,9 +4,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 
-from dlt.common.storages.configuration import FilesystemConfiguration
-from dlt.common.storages.fsspec_filesystem import fsspec_from_config
 from fsspec import AbstractFileSystem
+from fsspec.core import url_to_fs
 
 from leads_ingest.ports.downloader import Download
 from leads_ingest.ports.raw_archive import SnapshotManifest, file_record, sidecar_record
@@ -99,6 +98,8 @@ class FsspecRawArchive:
         self.filesystem.pipe_file(path, json.dumps(values, indent=2).encode())
 
 
-def open_fsspec_archive(location: FilesystemConfiguration) -> FsspecRawArchive:
-    filesystem, root = fsspec_from_config(location)
+def open_fsspec_archive(url: str, options: Mapping[str, object] | None = None) -> FsspecRawArchive:
+    """The archive at `url` (`s3://...`, or a local path), its filesystem opened with `options`
+    (`s3fs_options` for the lake bucket)."""
+    filesystem, root = url_to_fs(url, **(options or {}))
     return FsspecRawArchive(filesystem=filesystem, root=root)

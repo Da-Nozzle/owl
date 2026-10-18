@@ -1,10 +1,13 @@
 import json
 
+import httpx
 import pytest
-from dlt.sources.helpers.requests import HTTPError
 from pytest_httpserver import HTTPServer
 
+from leads_ingest.adapters.http.client import build_http_client
 from leads_ingest.adapters.http.places_api import HttpPlacesApi
+from leads_ingest.adapters.http.settings import load_http_client_settings
+from leads_testing.config import build_config
 
 # Answers are matched on path only (see test_http_downloader.py); what was sent is checked from
 # the server's log.
@@ -12,10 +15,14 @@ REQUEST = {"textQuery": "kavinė", "pageSize": 20, "pageToken": "next"}
 PAGE = {"places": [{"id": "ChIJVWXHjL6W3UYRs4Ob0shgvkY"}]}
 
 
-def search(httpserver: HTTPServer) -> HttpPlacesApi:
+def search(httpserver: HTTPServer, waits: list[float] | None = None) -> HttpPlacesApi:
+    """The API at `httpserver`, recording its retries' waits in `waits` instead of waiting."""
+    recorded = [] if waits is None else waits
+    settings = load_http_client_settings(build_config(), "google_places.http")
+    client = build_http_client("leads-test/1.0", settings, sleep=recorded.append)
     return HttpPlacesApi(
+        client=client,
         api_key="key-123",
-        user_agent="leads-test/1.0",
         search_text_url=httpserver.url_for("/v1/places:searchText"),
     )
 
@@ -61,7 +68,7 @@ def test_a_refused_search_fails_with_googles_reason(httpserver: HTTPServer) -> N
     httpserver.expect_oneshot_request("/v1/places:searchText").respond_with_json(error, status=400)
 
     # Act / Assert
-    with pytest.raises(HTTPError, match=r"(?s)400 .*Invalid field: places\.foo"):
+    with pytest.raises(httpx.HTTPStatusError, match=r"(?s)400 .*Invalid field: places\.foo"):
         search(httpserver).search_text(REQUEST, "places.foo")
 
 
@@ -75,10 +82,12 @@ def test_a_search_over_the_quota_is_sent_again_after_the_wait_google_asks_for(
         headers={"Retry-After": "1"},
     )
     httpserver.expect_ordered_request("/v1/places:searchText").respond_with_json(PAGE)
+    waits: list[float] = []
 
     # Act
-    download = search(httpserver).search_text(REQUEST, "places.id,nextPageToken")
+    download = search(httpserver, waits).search_text(REQUEST, "places.id,nextPageToken")
 
     # Assert
     assert json.loads(download.body) == PAGE
     assert len(httpserver.log) == 2
+    assert waits == [1]

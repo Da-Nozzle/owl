@@ -1,6 +1,6 @@
 import pytest
 
-from leads_ingest.adapters.s3.configuration import endpoint_url, filesystem_configuration
+from leads_ingest.adapters.s3.configuration import endpoint_url, s3fs_options
 from leads_lake.settings import load_lake_settings
 from leads_testing.config import build_config
 
@@ -19,7 +19,7 @@ def test_endpoint_scheme_follows_the_ssl_flag(use_ssl: bool, scheme: str) -> Non
     assert url == f"{scheme}://s3mock:9090"
 
 
-def test_a_lake_location_carries_the_buckets_credentials() -> None:
+def test_the_bucket_is_reached_with_its_credentials_region_and_url_style() -> None:
     # Arrange
     storage = load_lake_settings(
         build_config(
@@ -27,21 +27,32 @@ def test_a_lake_location_carries_the_buckets_credentials() -> None:
                 "lake.s3.key_id": "key",
                 "lake.s3.secret": "secret",
                 "lake.s3.region": "eu-central-1",
-                "lake.s3.url_style": "path",
+                "lake.s3.url_style": "vhost",
             }
         )
     ).storage
 
     # Act
-    location = filesystem_configuration("s3://leads-lake/archive/", storage)
+    options = s3fs_options(storage)
 
     # Assert
-    credentials = location.credentials
-    assert location.bucket_url == "s3://leads-lake/archive/"
-    assert (
-        credentials.aws_access_key_id,
-        credentials.aws_secret_access_key,
-        credentials.region_name,
-        credentials.s3_url_style,
-        credentials.endpoint_url,
-    ) == ("key", "secret", "eu-central-1", "path", endpoint_url(storage))
+    assert (options["key"], options["secret"], options["endpoint_url"]) == (
+        "key",
+        "secret",
+        endpoint_url(storage),
+    )
+    assert options["client_kwargs"] == {"region_name": "eu-central-1"}
+    assert options["config_kwargs"] == {
+        "s3": {"addressing_style": "virtual"},
+        "request_checksum_calculation": "when_required",
+        "response_checksum_validation": "when_required",
+    }
+
+
+def test_an_unknown_url_style_is_rejected() -> None:
+    # Arrange
+    storage = load_lake_settings(build_config({"lake.s3.url_style": "dns"})).storage
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="url_style"):
+        s3fs_options(storage)

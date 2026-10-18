@@ -20,7 +20,7 @@ run_coordinator:
 
 # Each lake writer runs in a pool named after what it writes: one at a time per pool, so two
 # runs never write the same tables, while different sources still load in parallel.
-# if only DuckDB 2.0 was out and dlt (and dbt) supported it... oh well
+# if only DuckDB 2.0 was out and dbt supported it... oh well
 concurrency:
   pools:
     default_limit: 1

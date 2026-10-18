@@ -7,6 +7,25 @@ from leads_config.configuration import SECRET_NAME_KEY, SECRET_STORE_KEY, Config
 
 MEMORY_STORE = "memory"
 
+
+def http_table(
+    timeout: float = 300,
+    attempts: int = 5,
+    backoff: float = 1,
+    max_wait: float = 300,
+    interval: float = 0,
+) -> dict[str, float]:
+    """A source's `<source>.http` table; a new one each time, so that overriding one source's
+    leaves the others' as they were."""
+    return {
+        "timeout_seconds": timeout,
+        "attempts": attempts,
+        "backoff_seconds": backoff,
+        "max_wait_seconds": max_wait,
+        "min_interval_seconds": interval,
+    }
+
+
 # Every setting the packages load, valued like config/local.
 LOCAL_LIKE_VALUES: Mapping[str, Any] = {
     "postgres": {
@@ -42,14 +61,17 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "download_url_template": "https://sodra.test/{year}/monthly-{year}.csv.zip",
         "history_months": 13,
         "snapshot_schedule": "0 6 21 * *",
+        "http": http_table(),
     },
     "jar": {
         "download_url_template": "https://jar.test/{dataset}/:format/csv",
         "snapshot_schedule": "0 6 21 * *",
+        "http": http_table(),
     },
     "address_register": {
         "download_url_template": "https://ar.test/{dataset}/:format/csv",
         "snapshot_schedule": "0 6 21 * *",
+        "http": http_table(),
     },
     "vmi": {
         "register_url": "https://vmi.test/MokesciuMoketojas",
@@ -57,6 +79,8 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "daily_changes_schedule": "0 6 * * *",
         "first_daily_changes": "2026-09-01",
         "monthly_register_schedule": "0 6 21 * *",
+        "daily_changes_http": http_table(timeout=30, interval=1),
+        "monthly_register_http": http_table(),
     },
     "google_places": {
         "api_key": {SECRET_STORE_KEY: MEMORY_STORE, SECRET_NAME_KEY: "google_places_api_key"},
@@ -69,6 +93,7 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "min_tile_meters": 100,
         "max_paid_requests": 1500,
         "workers": 4,
+        "http": http_table(timeout=30, attempts=10, backoff=2, max_wait=60),
     },
     "transform": {"project_dir": "/workspace/services/transform", "duckdb_memory_limit": "2GB"},
     "dagster": {"webserver": {"host": "0.0.0.0", "port": 3000}},

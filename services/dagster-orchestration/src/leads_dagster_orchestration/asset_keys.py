@@ -28,10 +28,6 @@ def plan_key(source: str, lake: PipelineMode) -> dg.AssetKey:
     return dg.AssetKey([lake.value, PLAN_LAYER, f"{PLAN_LAYER}_{source}"])
 
 
-def raw_table_key(source: str, table: str, lake: PipelineMode) -> dg.AssetKey:
-    return dg.AssetKey([lake.value, RAW_LAYER, f"{RAW_LAYER}_{source}__{table}"])
-
-
 def archive_key(source: str, lake: PipelineMode) -> dg.AssetKey:
     return dg.AssetKey([lake.value, ARCHIVE_LAYER, f"{ARCHIVE_LAYER}_{source}"])
 
@@ -67,15 +63,19 @@ def is_archive(key: dg.AssetKey) -> bool:
 
 
 def dbt_resource_key(dbt_resource_props: Mapping[str, object], lake: PipelineMode) -> dg.AssetKey:
-    """The `archive` source is keyed as the archive asset that fills it, other sources as the
-    raw tables dlt loads. A model is keyed <lake>/<layer>/<model name>, its layer being the lake
-    schema it builds into, with every raw_<source> schema in the raw layer."""
+    """The `archive` source is keyed as the archive asset that fills it. A model is keyed
+    <lake>/<layer>/<model name>, its layer being the lake schema it builds into, with every
+    raw_<source> schema in the raw layer. Nothing but dbt writes to the lake, so a dbt source
+    other than the archive would be a table no asset fills, and is rejected."""
     name = str(dbt_resource_props["name"])
     if dbt_resource_props["resource_type"] == "source":
         source_name = str(dbt_resource_props["source_name"])
-        if source_name == ARCHIVE_LAYER:
-            return archive_key(name, lake)
-        return raw_table_key(source_name, name, lake)
+        if source_name != ARCHIVE_LAYER:
+            raise ValueError(
+                f"dbt source {source_name}.{name} is not the archive: every source is read from "
+                f"the archive ({ARCHIVE_LAYER}.<source>)"
+            )
+        return archive_key(name, lake)
     config = dbt_resource_props.get("config")
     schema = config.get("schema") if isinstance(config, Mapping) else None
     if not isinstance(schema, str):

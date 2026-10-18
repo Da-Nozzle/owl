@@ -42,7 +42,7 @@ class GooglePlacesSettings:
     max_paid_requests: int
     # How many searches a sweep has in flight at once, its plan's and its payment's. Nothing
     # here counts Google's per-minute quota: a request over it is answered 429, and waited for
-    # and sent again (HttpPlacesApi).
+    # and sent again (the client's profile, adapters/http/profiles.py).
     workers: int
 
 

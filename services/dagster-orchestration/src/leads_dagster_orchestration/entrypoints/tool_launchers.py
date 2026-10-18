@@ -36,6 +36,7 @@ DAGSTER_MCP = "dagster-mcp@0.12.3"
 DBT_MCP_TIMEOUT_SECONDS = 3600
 
 
+# TODO split dev helper stuff from system entrypoints for more clarity
 def run_dagster_dev() -> NoReturn:
     config = load_configuration()
     configure_logging(config)

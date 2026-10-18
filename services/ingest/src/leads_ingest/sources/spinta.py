@@ -17,10 +17,6 @@ ID_COLUMN = "_id"
 HEAD_BYTES = 1 << 16
 # Changes per changelog page: about 3 MB of JSON, well within what DuckDB reads as one object.
 CHANGES_PER_PAGE = 10_000
-# The portal publishes no rate limit, but stops answering changelog reads for a while after a
-# burst: after about 2,000 in an hour, at up to 10 a second, on 2026-10-17. So one is started at
-# most every second, and a backfill reads its days in one pass (Changelog).
-REQUEST_INTERVAL_SECONDS = 1.0
 
 
 @dataclass(frozen=True, slots=True)

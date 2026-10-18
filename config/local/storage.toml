@@ -22,7 +22,8 @@ data_path = "s3://leads-lake/"
 # bucket created and PutBucketVersioning called; in production it is infrastructure code.
 archive_path = "s3://leads-lake/archive/"
 # Postgres schema in ducklake_catalog that holds the lake's metadata.
-# dlt and dbt MUST use the same schema
+# dbt and everything that attaches through leads_lake.connection (the lake reader, the lake MCP
+# server) MUST use the same schema
 metadata_schema = "ducklake"
 # data_path = "s3://leads-lake-prod/" # production
 
