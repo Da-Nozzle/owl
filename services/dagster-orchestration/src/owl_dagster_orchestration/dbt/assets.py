@@ -20,6 +20,9 @@ from owl_ingest.settings import PipelineMode
 SOURCE_LAYERS = ("raw", "staging")
 # The only layer partitioned by snapshot, one slice each; later layers are rebuilt whole.
 SNAPSHOT_LAYER = "raw"
+# Layers whose models read archived files (read_json, read_csv), not tables: sqlglot cannot
+# resolve their columns, and they have no parent columns to trace.
+FILE_LAYERS = ("raw",)
 SHARED_STEP = "transform"
 
 
@@ -43,6 +46,7 @@ def build_transform_assets(
         group: str,
         exclude: str | None = None,
         partitions: dg.PartitionsDefinition | None = None,
+        column_lineage: bool = True,
     ) -> dg.AssetsDefinition:
         return build_dbt_step(
             project,
@@ -55,6 +59,7 @@ def build_transform_assets(
             pool=pool_name(lake, pool),
             group=group,
             partitions=partitions,
+            column_lineage=column_lineage,
         )
 
     steps = []
@@ -72,6 +77,7 @@ def build_transform_assets(
                 pool=pool,
                 group=source_group((groups or {}).get(source, source), lake),
                 partitions=snapshot_partitions[source] if layer == SNAPSHOT_LAYER else None,
+                column_lineage=layer not in FILE_LAYERS,
             )
             for layer in SOURCE_LAYERS
             if layer in layers
@@ -106,6 +112,7 @@ def build_dbt_step(
     group: str,
     partitions: dg.PartitionsDefinition | None,
     exclude: str | None = None,
+    column_lineage: bool = True,
 ) -> dg.AssetsDefinition:
     @dbt_assets(
         manifest=project.manifest_path,
@@ -130,7 +137,11 @@ def build_dbt_step(
         snapshot = context.partition_key if partitions else None
         with environment_variable(SNAPSHOT_VARIABLE, snapshot) if snapshot else nullcontext():
             build = dbt.cli(["build"], context=context)
-        events = build.stream().fetch_column_metadata(with_column_lineage=True).fetch_row_counts()
+        events = (
+            build.stream()
+            .fetch_column_metadata(with_column_lineage=column_lineage)
+            .fetch_row_counts()
+        )
         for event in events:
             counted = snapshot_metadata(event, build, snapshot) if snapshot else event
             yield with_labels(with_compiled_sql(counted, build), run_labels)
