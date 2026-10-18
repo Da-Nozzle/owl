@@ -47,6 +47,7 @@ def build_transform_assets(
         exclude: str | None = None,
         partitions: dg.PartitionsDefinition | None = None,
         column_lineage: bool = True,
+        group_by_folder: bool = False,
     ) -> dg.AssetsDefinition:
         return build_dbt_step(
             project,
@@ -60,6 +61,7 @@ def build_transform_assets(
             group=group,
             partitions=partitions,
             column_lineage=column_lineage,
+            group_by_folder=group_by_folder,
         )
 
     steps = []
@@ -90,6 +92,7 @@ def build_transform_assets(
                 pool=SHARED_STEP,
                 group=lake_group(lake),
                 exclude=" ".join(f"path:models/{layer}" for layer in SOURCE_LAYERS),
+                group_by_folder=True,
             )
         )
     return steps
@@ -113,6 +116,7 @@ def build_dbt_step(
     partitions: dg.PartitionsDefinition | None,
     exclude: str | None = None,
     column_lineage: bool = True,
+    group_by_folder: bool = False,
 ) -> dg.AssetsDefinition:
     @dbt_assets(
         manifest=project.manifest_path,
@@ -129,6 +133,7 @@ def build_dbt_step(
             lake,
             group,
             automation_condition=build_new_snapshots() if partitions else rebuild_on_change(),
+            group_by_folder=group_by_folder,
         ),
     )
     def dbt_step(context: dg.AssetExecutionContext, dbt: DbtCliResource) -> Iterator[object]:

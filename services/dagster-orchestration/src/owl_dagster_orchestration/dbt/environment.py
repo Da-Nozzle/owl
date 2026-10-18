@@ -1,6 +1,7 @@
 import os
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from pathlib import Path
 
 from owl_config.configuration import Configuration
 from owl_ingest.settings import PipelineMode, load_pipeline_settings, raw_archive_path
@@ -33,6 +34,12 @@ def dbt_environment(config: Configuration, mode: PipelineMode) -> dict[str, str]
         "OWL_S3_KEY_ID": lake.storage.key_id,
         "OWL_S3_SECRET": lake.storage.secret,
     }
+
+
+def ensure_temp_directory(environment: Mapping[str, str]) -> None:
+    """DuckDB creates its spill folder when it first spills, but not that folder's parent: on a
+    fresh checkout, the first build too big for memory failed."""
+    Path(environment["OWL_DUCKDB_TEMP_DIRECTORY"]).mkdir(parents=True, exist_ok=True)
 
 
 def dbt_threads(config: Configuration) -> int:

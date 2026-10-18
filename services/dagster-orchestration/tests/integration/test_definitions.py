@@ -17,6 +17,7 @@ from owl_dagster_orchestration.archive.assets import WITHIN_BUDGET
 from owl_dagster_orchestration.archive.index import ARCHIVE_INDEX
 from owl_dagster_orchestration.automation import (
     BUILD_NEW_SNAPSHOTS,
+    BUILD_STATIC_DATA,
     PLAN_ON_CHANGE,
     REBUILD_ON_CHANGE,
     TRANSFORM_AUTOMATION,
@@ -169,7 +170,8 @@ def test_each_sources_assets_are_a_group_within_their_lakes(
                 for folder in COMBINED
                 for key in combined(lake, folder)
             },
-            **dict.fromkeys(shared(lake, "intermediate"), lake.value),
+            # In models/intermediate/google/: drawn beside Google's source, whose plan reads it.
+            **dict.fromkeys(shared(lake, "intermediate"), f"{lake.value}/google"),
             **dict.fromkeys(shared(lake, "seeds"), f"{lake.value}/static_data"),
             **(
                 {plan_of(source): f"live/{GROUPS.get(source, source)}" for source in PAID}
@@ -280,38 +282,56 @@ def test_new_snapshots_and_changed_models_build_themselves(
     assert raw.get_label() == BUILD_NEW_SNAPSHOTS
     assert staging is not None
     assert staging.get_label() == REBUILD_ON_CHANGE
+    for seed in shared(LIVE, "seeds"):
+        condition = graph.get(seed).automation_condition
+        assert condition is not None
+        assert condition.get_label() == BUILD_STATIC_DATA
     assert graph.get(FETCH).automation_condition is None
     for name in (ARCHIVE_INDEX, TRANSFORM_AUTOMATION, LINEAGE):
         assert definitions.resolve_sensor_def(name).default_status is dg.DefaultSensorStatus.RUNNING
 
 
+def register_snapshot(
+    instance: dg.DagsterInstance, source: str, snapshot: str, *, raw_built: bool = False
+) -> None:
+    """As the archive index registers and reports a complete snapshot; with `raw_built`, as if
+    raw had then built it."""
+    instance.add_dynamic_partitions(f"live_{source}_snapshots", [snapshot])
+    built = models(LIVE, source, "raw") if raw_built else set()
+    for key in {archive_of(LIVE, source), *built}:
+        instance.report_runless_asset_event(dg.AssetMaterialization(key, partition=snapshot))
+
+
+def requested_in(
+    result: dg.EvaluateAutomationConditionsResult, instance: dg.DagsterInstance
+) -> dict[dg.AssetKey, set[str | None]]:
+    with partition_loading_context(dynamic_partitions_store=instance):
+        return {
+            evaluation.key: evaluation.true_subset.expensively_compute_partition_keys()
+            if evaluation.true_subset.is_partitioned
+            else {None}
+            for evaluation in result.results
+            if evaluation.true_subset.size
+        }
+
+
 def requested_after(
     definitions: dg.Definitions, *, snapshot_before_first_evaluation: bool
-) -> tuple[int, dict[dg.AssetKey, set[str]]]:
-    """What the automation requests once the index has registered and reported snapshot 2026-09,
-    either before the automation's first evaluation or between its first and second."""
-
-    def register(instance: dg.DagsterInstance) -> None:
-        instance.report_runless_asset_event(dg.AssetMaterialization(ARCHIVE, partition="2026-09"))
-        instance.add_dynamic_partitions("live_sodra_snapshots", ["2026-09"])
-
+) -> tuple[dict[dg.AssetKey, set[str | None]], dict[dg.AssetKey, set[str | None]]]:
+    """What the automation requests at its first evaluation and once the index has registered
+    and reported snapshot 2026-09, either before the first evaluation or between it and the
+    second."""
     with dg.instance_for_test() as instance:
         if snapshot_before_first_evaluation:
-            register(instance)
+            register_snapshot(instance, "sodra", "2026-09")
         first = dg.evaluate_automation_conditions(defs=definitions, instance=instance)
         result = first
         if not snapshot_before_first_evaluation:
-            register(instance)
+            register_snapshot(instance, "sodra", "2026-09")
             result = dg.evaluate_automation_conditions(
                 defs=definitions, instance=instance, cursor=first.cursor
             )
-        with partition_loading_context(dynamic_partitions_store=instance):
-            requested = {
-                evaluation.key: evaluation.true_subset.expensively_compute_partition_keys()
-                for evaluation in result.results
-                if evaluation.true_subset.size
-            }
-    return first.total_requested if result is not first else 0, requested
+        return requested_in(first, instance), requested_in(result, instance)
 
 
 def test_a_snapshot_the_index_reports_is_built_and_nothing_else(
@@ -321,7 +341,7 @@ def test_a_snapshot_the_index_reports_is_built_and_nothing_else(
     first, requested = requested_after(locations[LIVE], snapshot_before_first_evaluation=False)
 
     # Assert
-    assert first == 0
+    assert first == {key: {None} for key in shared(LIVE, "seeds")}
     assert requested == {RAW: {"2026-09"}}
 
 
@@ -332,7 +352,35 @@ def test_a_snapshot_registered_before_the_automation_started_is_built_too(
     _, requested = requested_after(locations[LIVE], snapshot_before_first_evaluation=True)
 
     # Assert
-    assert requested == {RAW: {"2026-09"}}
+    assert requested == {RAW: {"2026-09"}, **{key: {None} for key in shared(LIVE, "seeds")}}
+
+
+def test_a_model_of_two_snapshot_sources_waits_until_both_have_one(
+    locations: dict[PipelineMode, dg.Definitions],
+) -> None:
+    """VMI's staging reads both VMI sources' raw. Before the guard, the register's first
+    snapshot started it while the daily changes had none, and it failed on their missing
+    table: `any_deps_missing()` sees no partition missing where none exists."""
+    # Arrange
+    definitions = locations[LIVE]
+    staging = combined(LIVE, "vmi")
+
+    # Act
+    with dg.instance_for_test() as instance:
+        first = dg.evaluate_automation_conditions(defs=definitions, instance=instance)
+        register_snapshot(instance, "vmi_monthly_register", "2026-09", raw_built=True)
+        one = dg.evaluate_automation_conditions(
+            defs=definitions, instance=instance, cursor=first.cursor
+        )
+        register_snapshot(instance, "vmi_daily_changes", "2026-09-01", raw_built=True)
+        both = dg.evaluate_automation_conditions(
+            defs=definitions, instance=instance, cursor=one.cursor
+        )
+        with_one, with_both = requested_in(one, instance), requested_in(both, instance)
+
+    # Assert
+    assert not staging & with_one.keys()
+    assert staging <= with_both.keys()
 
 
 def rebuilt(lake: PipelineMode, source: str) -> set[dg.AssetKey]:

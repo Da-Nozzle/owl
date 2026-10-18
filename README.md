@@ -205,7 +205,8 @@ again, for about five minutes (`HttpPlacesApi`).
 
 Google is searched in the municipalities listed in `services/transform/seeds/google_search_scope.csv`,
 each `price` or `fetch`; only Vilnius (13) is listed, as `fetch`. Seeds, data kept by hand, are
-drawn in each lake's `static_data` box. `int_google_search_areas` lists
+drawn in each lake's `static_data` box, and build themselves on a fresh lake. `int_google_search_areas`
+(`models/intermediate/google/`, drawn in the lake's `google` box beside Google's source) lists
 all 60 municipalities with their bounding boxes and how many employers Sodra counts there in the
 leads' categories, ranked, so the next one worth searching is the top row without a mode. To see
 what Kaunas would cost, add `19,price` to the seed and **Reload definitions** (live): the seed, the

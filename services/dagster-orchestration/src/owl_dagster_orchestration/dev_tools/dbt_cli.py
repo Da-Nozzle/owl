@@ -10,6 +10,7 @@ from owl_dagster_orchestration.dbt.environment import (
     dbt_environment,
     dbt_location_dir,
     dbt_main_state_dir,
+    ensure_temp_directory,
 )
 from owl_dagster_orchestration.dev_tools.launch import (
     LAKE_OPTION,
@@ -26,7 +27,9 @@ def run_dbt() -> NoReturn:
     """--lake names the lake dbt writes to."""
     mode, arguments = split_lake_option(sys.argv[1:], default=None)
     config = load_configuration()
-    replace_process_with(["dbt", *arguments], extra_environment=dbt_environment(config, mode))
+    environment = dbt_environment(config, mode)
+    ensure_temp_directory(environment)
+    replace_process_with(["dbt", *arguments], extra_environment=environment)
 
 
 def run_dbt_dev() -> NoReturn:
@@ -104,6 +107,7 @@ def with_setting(settings_text: str, name: str, value: object) -> str:
 def dev_environment(config: Configuration, mode: PipelineMode) -> dict[str, str]:
     """Parses the lake's project into the state the dev target defers to, if no build has."""
     environment = dbt_environment(config, mode)
+    ensure_temp_directory(environment)
     main_state = Path(dbt_main_state_dir(config, mode))
     if not (main_state / "manifest.json").exists():
         subprocess.run(

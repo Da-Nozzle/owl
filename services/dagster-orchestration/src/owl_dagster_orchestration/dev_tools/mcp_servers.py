@@ -5,7 +5,11 @@ from typing import NoReturn
 
 from owl_config.configuration import Configuration
 from owl_config.loading import load_configuration
-from owl_dagster_orchestration.dbt.environment import dbt_environment, dbt_target_dir
+from owl_dagster_orchestration.dbt.environment import (
+    dbt_environment,
+    dbt_target_dir,
+    ensure_temp_directory,
+)
 from owl_dagster_orchestration.dbt.resource import dbt_core_executable
 from owl_dagster_orchestration.dev_tools.dagster_dev import dagster_webserver_url
 from owl_dagster_orchestration.dev_tools.dbt_cli import dev_environment
@@ -88,6 +92,7 @@ def run_lake_mcp() -> NoReturn:
     init_sql.parent.mkdir(parents=True, exist_ok=True)
     init_sql.touch(mode=0o600)
     init_sql.write_text(lake_init_sql(config))
+    ensure_temp_directory(dbt_environment(config, PipelineMode.LIVE))
     replace_process_with(
         [
             "uvx",

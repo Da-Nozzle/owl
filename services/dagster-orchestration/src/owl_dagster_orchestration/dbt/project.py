@@ -13,6 +13,7 @@ from owl_config.configuration import Configuration
 from owl_dagster_orchestration.dbt.environment import (
     dagster_dbt_environment,
     dbt_environment,
+    ensure_temp_directory,
     set_dbt_environment,
 )
 from owl_ingest.settings import PipelineMode
@@ -28,6 +29,7 @@ def load_transform_project(config: Configuration, mode: PipelineMode) -> DbtProj
     )
     prepare_on_initial_load(project)
     ensure_metadata_database(Path(variables["OWL_DBT_DUCKDB_PATH"]))
+    ensure_temp_directory(variables)
     return project
 
 
