@@ -4,13 +4,13 @@ from unittest import mock
 
 import dagster as dg
 
-from leads_dagster_orchestration.assets import archive as archive_module
-from leads_dagster_orchestration.assets.archive import (
+from leads_dagster_orchestration.archive import assets as archive_assets
+from leads_dagster_orchestration.archive.assets import (
     WITHIN_BUDGET,
     build_fetch_asset,
     build_planned_fetch_asset,
-    files_metadata,
 )
+from leads_dagster_orchestration.archive.metadata import files_metadata
 from leads_dagster_orchestration.snapshots import ArchivedSource, FetchPlan, SnapshotCadence
 from leads_ingest.ports.downloader import Download
 from leads_testing.ingest import InMemoryRawArchive, build_download
@@ -228,7 +228,7 @@ def test_a_fetch_pays_for_the_plan_made_in_its_own_step() -> None:
     source, plans, paid = planned(archive, paid_requests=1_200)
 
     # Act
-    with mock.patch(f"{archive_module.__name__}.datetime", wraps=datetime) as clock:
+    with mock.patch(f"{archive_assets.__name__}.datetime", wraps=datetime) as clock:
         clock.now.return_value = datetime(2026, 10, 22, tzinfo=UTC)
         result = materialize_planned(source, archive, PLAN, FETCH)
 

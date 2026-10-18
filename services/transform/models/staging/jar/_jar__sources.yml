@@ -3,17 +3,15 @@ version: 2
 models:
   - name: stg_jar__entities
     description: >
-      One row per registered legal entity and snapshot: the register as each monthly snapshot
-      fetched it, with each entity's legal form and status resolved in that snapshot's
-      classifiers. Deregistered entities are kept, with their deregistration date. The names of
-      individual enterprises and of general and limited partnerships are anonymised by the
-      register: every entity of legal forms 810, 210 and 220, and of their branches 811, 211 and
-      221, is named after its form. The registered address is the seat's, an address_id in
-      stg_address_register__addresses; the register's seats last changed on 2025-09-03, so
-      entities registered since have none.
+      One row per registered legal entity and snapshot, with its legal form and status resolved
+      in that snapshot's classifiers; deregistered entities are kept. The register anonymises
+      individual enterprises and general and limited partnerships (legal forms 810, 210, 220 and
+      their branches 811, 211, 221): each is named after its form. The registered address is the
+      seat's, an address_id in stg_address_register__addresses; seats last changed on 2025-09-03,
+      so entities registered since have none.
     config:
       meta:
-        # What identifies a row: leads-dbt-diff matches rows on it.
+        # leads-dbt-diff matches rows on it.
         key: [company_code, snapshot_month]
     data_tests:
       - unique:

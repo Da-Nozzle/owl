@@ -1,37 +1,25 @@
-# Dagster loads two code locations side by side: live calls the sources and archives what they
-# return; replay reads replay_path and calls none. Each builds a lake of its own (lake.replay).
-# Each source's requests go through an HTTP client configured by its own table, <source>.http
-# (leads_ingest/adapters/http/settings.py). An attempt is given up once the server has sent
-# nothing for timeout_seconds (to connect, or between two reads). A timeout, a dropped connection,
-# a 5xx or a 429 is sent again after backoff_seconds, doubled at each retry, or after the wait the
-# server's Retry-After asks for, at most max_wait_seconds either way, up to attempts times in all.
-# min_interval_seconds is the least time between the starts of two requests, retries included (0
-# for none). Rate limits are per server, but each source's client spaces only its own requests.
+# Each source's <source>.http table configures its HTTP client:
+#   timeout_seconds: how long the server may send nothing, to connect or between two reads
+#   attempts: tries in all, for a timeout, a dropped connection, a 5xx or a 429
+#   backoff_seconds: the wait before the first retry, doubled at each, unless Retry-After asks
+#   max_wait_seconds: the longest wait before a retry, either way
+#   min_interval_seconds: the least time between the starts of two of its requests (0 for none)
 [pipeline]
-# The timezone of every source's snapshot_schedule.
+# The timezone of every source's snapshot_schedule (cron).
 timezone = "Europe/Vilnius"
 user_agent = "vmi-leads-pipeline/0.1"
+# The committed sample the replay code location reads instead of calling the sources.
 replay_path = "/workspace/replay"
 
 [google_places]
-# Google's Places API (New), searched for Vilnius's listings. Every request is billed, at the SKU
-# of the most expensive field it asks for: a sweep is planned with place ids only, which is free,
-# then each tile is asked again for ratings, review counts, opening hours, websites and phones,
-# billed as Text Search Enterprise (1,000 requests a month free, then USD 35 per 1,000).
-api_key = { secret_store = "local", secret_name = "google_places_api_key" }
+# Google's Places API (New). A sweep is planned with place ids only, which is free, then pays for
+# the fields the leads need (ratings, review counts, opening hours, websites, phones).
+api_key = { secret_name = "google_places_api_key" }
 search_text_url = "https://places.googleapis.com/v1/places:searchText"
-# When live fetches a snapshot (cron, pipeline.timezone). Listings change continuously, so the
-# cadence is the leads': monthly, on the 21st with Sodra, so that each month's leads compare
-# Google's month with the declarations, and review counts change from one month to the next.
+# Monthly on the 21st with Sodra, so each month's leads compare Google's month with Sodra's.
 snapshot_schedule = "0 6 21 * *"
-# Where Google is searched is data, not configuration: the google_search_scope seed
-# (services/transform/seeds/) lists the municipalities to price or to fetch, and
-# int_google_search_areas gives each its bounding box; plan_google_places plans and prices them
-# for free.
-# Each query is swept over every area: the categories' words in Lithuanian and English, as
-# English finds places Lithuanian does not ("cafe" added 96 to the 1,698 places "kavinė" found).
-# A place several queries find is paid for once. Priced on 2026-10-17, the ten found 5,858
-# places in Vilnius for 927 paid requests (within the 1,000 free a month) and 7,690 free ones.
+# Each is searched over every search area (the google_search_scope seed). English as well, as it
+# finds places Lithuanian does not; a place several queries find is paid for once.
 queries = [
     "kavinė",
     "restoranas",
@@ -46,30 +34,26 @@ queries = [
 ]
 language_code = "lt"
 region_code = "LT"
-# A tile with places that is wider than this is split into quarters: over a larger tile a search
-# finds only some of the places, even below its cap (13 of the Old Town's cafés in a 1.8 km tile,
-# 2026-10-17). With 1 km, "kavinė" found 1,698 places in Vilnius, where splitting capped tiles
-# only found 712, and 502 of the 582 found in the Old Town and Naujamiestis by sweeps rooted there.
+# A tile with places wider than this is split into quarters: over a larger tile a search finds
+# only some of the places, even below its cap of 60.
 max_tile_meters = 1000
-# A tile whose search is capped at 60 places is split into quarters while they are at least this
-# wide. The smallest tile any query needed was 230 m (cafés in the Old Town), never capped.
+# A tile whose search is capped is split into quarters while they are at least this wide.
 min_tile_meters = 100
-# The fetch counts a sweep's paid requests with its free plan, and fails before paying for any
-# if they are more than this (Vilnius priced at 927 on 2026-10-17).
+# The fetch fails before paying for anything if its plan needs more paid requests than this.
 max_paid_requests = 1500
-# Searches in flight at once, in the plan and the payment. Sent one at a time, Vilnius's plan took
-# 24 minutes (7,690 requests). The Places API's quota is per minute and per project (Cloud console,
-# Google Maps Platform > Quotas); requests over it are answered 429, and each is waited for and
-# sent again, so more workers than the quota allows only means more waiting, not failure.
+# Searches in flight at once. Google's quota is per minute and per project; requests over it are
+# retried (google_places.http), so more workers than it allows only means more waiting.
 workers = 16
+# The fetch's dagster/max_runtime: at the per-minute quota its free plan alone may take hours.
+fetch_max_runtime_seconds = 10800
+# Text Search Enterprise pricing, for the plan's estimate: the requests free each month on the
+# billing account, then USD per request (USD 35 per 1,000).
+free_paid_requests_a_month = 1000
+usd_per_paid_request = 0.035
 
 [google_places.http]
-# A sweep sends its searches without counting the per-minute quota (workers), so a request over
-# it is the usual case, not the exception: each is sent again after 2, 4, 8, 16 and 32 seconds,
-# then every minute, ten times in all, about five minutes, or after the wait Google's Retry-After
-# asks for. Five attempts in 15 seconds, as for the files, would fail a sweep inside one minute of
-# quota. Google's pricing does not say whether it bills a request it answers with an error; at
-# worst a retry costs one request more.
+# A sweep sends past the per-minute quota on purpose, so a 429 is retried for about five minutes:
+# after 2, 4, 8, 16 and 32 s, then every minute.
 timeout_seconds = 30
 attempts = 10
 backoff_seconds = 2
@@ -78,18 +62,16 @@ min_interval_seconds = 0
 
 [sodra]
 download_url_template = "https://atvira.sodra.lt/imones/downloads/{year}/monthly-{year}.csv.zip"
-# When live fetches a snapshot (cron, pipeline.timezone). Sodra publishes the previous month by
-# the 20th, so on the 21st at 06:00. A snapshot is keyed by the month of the tick it follows, so
-# a fetch by hand before the 21st replaces the previous month's snapshot.
+# Sodra publishes the previous month by the 20th. A fetch by hand before the 21st replaces the
+# previous month's snapshot.
 snapshot_schedule = "0 6 21 * *"
-# Months loaded per snapshot, ending with the month before the snapshot's. Each snapshot reloads
-# all of them, so Sodra's revisions land; 13 gives a year-on-year comparison.
+# Months loaded per snapshot, up to the month before it. Each snapshot reloads them all, so
+# Sodra's revisions land; 13 gives a year-on-year comparison.
 history_months = 13
 
 [sodra.http]
-# Whole files: they get long, and a server may take a while to produce one. A failed request is
-# sent again after 1, 2, 4 and 8 seconds, five times in about 15 seconds: long enough to ride out
-# a proxy's hiccup, short enough that a server that is down fails the run.
+# Whole files, which a server may take a while to produce. Five attempts in about 15 s ride out a
+# proxy's hiccup, yet fail the run when a server is down.
 timeout_seconds = 300
 attempts = 5
 backoff_seconds = 1
@@ -97,13 +79,10 @@ max_wait_seconds = 300
 min_interval_seconds = 0
 
 [jar]
-# The register's datasets on get.data.gov.lt, each exported whole as one CSV; {dataset} is its
-# path below rc/jar/, such as iregistruoti/JuridinisAsmuo.
+# {dataset} is a dataset's path below rc/jar/, such as iregistruoti/JuridinisAsmuo.
 download_url_template = "https://get.data.gov.lt/datasets/gov/rc/jar/{dataset}/:format/csv"
-# When live fetches a snapshot (cron, pipeline.timezone). The portal lists the register as
-# updated monthly, on no fixed day, and its changelog shows it less often: 2025-07-23,
-# 2025-09-03, 2026-03-09, 2026-08-20. Monthly is the finest grain worth fetching, and since the
-# day is free, it is the 21st at 06:00 with Sodra, so each month's leads see the newest register.
+# Updated at most monthly, on no fixed day; on the 21st with Sodra, so each month's leads see the
+# newest register.
 snapshot_schedule = "0 6 21 * *"
 
 [jar.http]
@@ -115,13 +94,10 @@ max_wait_seconds = 300
 min_interval_seconds = 0
 
 [address_register]
-# The Address Register's datasets on get.data.gov.lt, each exported whole as one CSV; {dataset}
-# is its path below rc/ar/, such as pastatas/Pastatas.
+# {dataset} is a dataset's path below rc/ar/, such as pastatas/Pastatas.
 download_url_template = "https://get.data.gov.lt/datasets/gov/rc/ar/{dataset}/:format/csv"
-# When live fetches a snapshot (cron, pipeline.timezone). The Registers Centre loads the register
-# in the same batches as JAR, on no fixed day: its streets changed on 2025-05-16, 2025-09-03,
-# 2026-03-09 and 2026-08-18. So, as JAR, monthly on the 21st at 06:00: each month's leads see the
-# newest addresses, and a seat in JAR's snapshot of a month resolves in this one of the same month.
+# Loaded in the same batches as JAR, on no fixed day, so fetched with it: a JAR seat resolves in
+# the same month's snapshot.
 snapshot_schedule = "0 6 21 * *"
 
 [address_register.http]
@@ -133,28 +109,27 @@ max_wait_seconds = 300
 min_interval_seconds = 0
 
 [vmi]
-# The VMI taxpayer register on get.data.gov.lt (one row per company, branch, activity, taxpayer
-# type and group, each with its validity), and the EVRK 2 classifier its activities refer to.
+# The taxpayer register's Spinta model, and the EVRK 2 classifier its activities refer to.
 register_url = "https://get.data.gov.lt/datasets/gov/vmi/mm_registras/MokesciuMoketojas"
 activities_url = "https://get.data.gov.lt/datasets/gov/lsd/cl/evrk/EkonominesVeiklosRusis"
-# vmi_daily_changes: the register changes most days (15 days in September 2026), mostly in a
-# burst at about 00:00 UTC. Its changelog keeps every change, so the changes are fetched daily, at
-# 06:00, each snapshot holding those made in the day before its tick.
+# The register changes most days, mostly at about 00:00 UTC. A snapshot holds the changes made in
+# the day before its tick.
 daily_changes_schedule = "0 6 * * *"
-# The changelog reaches back to 2024-02-07; days from here on can be fetched, again or late.
+# The first day partitioned. The changelog reaches back to 2024-02-07, so any day since can be
+# fetched, again or late.
 first_daily_changes = "2026-09-01"
-# vmi_monthly_register: the whole register (350 MB), fetched monthly as the baseline the daily
-# changes made after it are applied to: often enough to keep that short, rarely enough to keep
-# the archive small.
+# The whole register (350 MB), the baseline the daily changes after it apply to.
 monthly_register_schedule = "0 6 21 * *"
+# Changes per changelog request: about 3 MB of JSON, well within what DuckDB reads as one object.
+changelog_page_size = 10000
+# The portal caches an export for up to a minute (max-age=60), so an export behind the changelog
+# is asked for again after this wait, up to register_export_attempts times in all.
+register_export_attempts = 5
+register_export_wait_seconds = 65
 
 [vmi.daily_changes_http]
-# vmi_daily_changes reads the changelog in many small requests. The portal answers one in under a
-# second, so one that has sent nothing for 30 s has hung, as the changelog did for a few of every
-# 50 requests on 2026-10-17, and is better retried at once. It publishes no rate limit, but stops
-# answering changelog reads for a while after a burst: after about 2,000 in an hour, at up to 10 a
-# second, on 2026-10-17. So one is started at most every second, and a backfill reads its days in
-# one pass (spinta.Changelog).
+# Many small changelog reads, each answered in under a second, so one silent for 30 s has hung.
+# The portal stops answering changelog reads for a while after a burst, hence one a second.
 timeout_seconds = 30
 attempts = 5
 backoff_seconds = 1
@@ -162,7 +137,7 @@ max_wait_seconds = 300
 min_interval_seconds = 1
 
 [vmi.monthly_register_http]
-# vmi_monthly_register: the whole register and the classifier, exported whole, as sodra.http.
+# Whole exports, as sodra.http.
 timeout_seconds = 300
 attempts = 5
 backoff_seconds = 1

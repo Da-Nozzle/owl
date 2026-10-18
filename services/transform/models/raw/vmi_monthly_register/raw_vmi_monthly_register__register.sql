@@ -1,6 +1,3 @@
--- Every snapshot's export of the whole taxpayer register, whole: a build replaces only the rows of
--- its snapshot. Built from nothing, it reads every complete snapshot in the archive. A column the
--- register adds is added here too.
 -- depends_on: {{ source('archive', 'vmi_monthly_register') }}
 {{ config(
     materialized='incremental',

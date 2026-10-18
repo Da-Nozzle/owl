@@ -44,10 +44,8 @@ class FakeDownloader:
 
 @dataclass
 class FakeSpinta:
-    """A Downloader answering as get.data.gov.lt does for one model at `model_url`: its changelog
-    from `changes` (entries in id order, ids may have gaps), read by id with `limit(n)` and
-    `select(...)`, `-1` for the newest; and any other URL with the next of the downloads queued
-    for it in `responses`. Records the URLs asked for."""
+    """Spinta's changelog of the model at `model_url`, from `changes` in id order (with gaps, as
+    Spinta's); any other URL answered with the next download queued for it in `responses`."""
 
     model_url: str
     changes: list[dict[str, object]] = field(default_factory=list)
@@ -88,9 +86,7 @@ def change_entry(change_id: int, made_at: str, **values: object) -> dict[str, ob
 
 @dataclass
 class InMemoryRawArchive:
-    """A RawArchive in dicts: downloads keyed (source, snapshot, file name), and the manifests of
-    complete snapshots keyed (source, snapshot), each with how often it was completed as its
-    version."""
+    """A snapshot's version is how often it was completed."""
 
     downloads: dict[tuple[str, str, str], Download] = field(default_factory=dict)
     manifests: dict[tuple[str, str], tuple[SnapshotManifest, int]] = field(default_factory=dict)
@@ -119,17 +115,11 @@ class InMemoryRawArchive:
     def manifest(self, source: str, snapshot: str) -> SnapshotManifest:
         return self.manifests[(source, snapshot)][0]
 
-    def version_id(self, source: str, snapshot: str, name: str) -> str | None:
-        return None
-
 
 @dataclass
 class FakePlacesApi:
-    """A PlacesApi answering Text Search as Google does over `places` (each query's places,
-    each a dict with at least `id` and `location`): the query's places inside the request's
-    rectangle, edges included, in order, at most `cap`, in pages of the request's `pageSize`
-    with a `nextPageToken` while more remain, `{}` when there are none. A place is sent with
-    the fields the field mask names. Records every request with its field mask."""
+    """Text Search over each query's `places` (dicts with at least `id` and `location`), paged and
+    capped as Google does, each place with the fields the field mask names."""
 
     places: dict[str, list[dict[str, Any]]]
     cap: int = 60
@@ -160,23 +150,10 @@ class FakePlacesApi:
 
 
 def place(place_id: str, latitude: float, longitude: float, **values: object) -> dict[str, Any]:
-    """A place as the Places API sends it with every field asked for: `values` add to its id,
-    location and name."""
+    """A place with every field asked for: `values` add to its id, location and name."""
     return {
         "id": place_id,
         "location": {"latitude": latitude, "longitude": longitude},
         "displayName": {"text": f"Place {place_id}", "languageCode": "lt"},
         **values,
     }
-
-
-@dataclass
-class FakeLakeReader:
-    """A LakeReader answering every query with the same rows, and recording the queries."""
-
-    answer: list[dict[str, object]]
-    queries: list[str] = field(default_factory=list)
-
-    def rows(self, sql: str) -> list[Mapping[str, object]]:
-        self.queries.append(sql)
-        return list(self.answer)

@@ -35,6 +35,7 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
+      # Over TCP: the server that runs initdb listens on its socket only, so this waits for initdb.
       test: ["CMD", "pg_isready", "--host", "127.0.0.1", "--username", "leads", "--dbname", "app"]
       interval: 5s
       timeout: 5s

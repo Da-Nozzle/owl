@@ -1,8 +1,11 @@
-"""How DuckDB reaches the lake: the catalog's connection string, the S3 secret and the ATTACH,
-as dbt's profile builds them from the same settings. The lake MCP server and ingest's lake
-reader run these."""
-
 from leads_lake.settings import LakeCatalog, LakeSettings, LakeStorage
+
+# What DuckDB needs to reach the lake: S3, the Postgres catalog, and DuckLake itself.
+LAKE_EXTENSIONS = ("httpfs", "postgres", "ducklake")
+
+
+def load_lake_extensions_sql() -> list[str]:
+    return [f"INSTALL {name}; LOAD {name}" for name in LAKE_EXTENSIONS]
 
 
 def ducklake_catalog_connection(catalog: LakeCatalog) -> str:
@@ -17,6 +20,7 @@ def ducklake_catalog_connection(catalog: LakeCatalog) -> str:
     )
 
 
+# The secret and the ATTACH mirror those in services/transform/profiles.yml, for DuckDB outside dbt.
 def s3_secret_sql(storage: LakeStorage) -> str:
     return (
         "CREATE SECRET lake_s3 ("

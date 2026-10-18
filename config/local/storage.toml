@@ -2,10 +2,12 @@
 host = "postgres"
 port = 5432
 user = "leads"
-password = "leads" # local only; also set in .devcontainer/compose.yml
+password = "leads" # local only; also in .devcontainer/compose.yml
 # Production example:
 # host = "leads.abc123.eu-central-1.rds.amazonaws.com"
-# password = { secret_store = "prod", secret_name = "leads/postgres-password" }
+# password = { secret_name = "leads/postgres-password" }
+# TODO on RDS, use IAM auth tokens instead of a password. A token expires after 15 minutes, while
+# Configuration caches each resolved secret and dbt is handed the password once.
 
 # Created by .devcontainer/postgres/initdb locally; by infrastructure code in production.
 [postgres.databases]
@@ -16,21 +18,21 @@ app = "app"
 
 [lake]
 data_path = "s3://leads-lake/"
+# data_path = "s3://leads-lake-prod/" # production
 # Raw source downloads, kept so any month can be reloaded without calling the sources again.
-# TODO move to its own bucket with versioning enabled (e.g. s3://leads-archive/), outside
-# data_path, where DuckLake's orphan-file cleanup could delete it. Locally s3mock needs the
-# bucket created and PutBucketVersioning called; in production it is infrastructure code.
 archive_path = "s3://leads-lake/archive/"
 # Postgres schema in ducklake_catalog that holds the lake's metadata.
-# dbt and everything that attaches through leads_lake.connection (the lake reader, the lake MCP
-# server) MUST use the same schema
 metadata_schema = "ducklake"
-# data_path = "s3://leads-lake-prod/" # production
+# TODO give the archive and lake.replay's data_path versioned buckets of their own (e.g.
+# s3://leads-archive/): under data_path, DuckLake's orphan-file cleanup could delete them. Needs a
+# data migration, and locally s3mock's buckets created with PutBucketVersioning. A rerun then
+# overwrites the current object and S3 keeps the old one as a version, so the archive needs no
+# write-once logic. A file's .meta.json sidecar is a separate object whose versions are not tied
+# to the file's: store fetched_at and Last-Modified as S3 object metadata instead (the local
+# replay sample would still need sidecars), or record VersionIds at fetch time.
 
-# The replay code location builds into a lake of its own, so the sample's rows never share a
-# table with live ones. Same Postgres database and bucket; a schema and prefix apart.
-# TODO like the archive, the prefix sits inside the live data_path, where DuckLake's orphan-file
-# cleanup could delete it: give each its own bucket.
+# Replay builds into a lake of its own, so the sample's rows never share a table with live ones:
+# the same Postgres database and bucket, a schema and prefix apart.
 [lake.replay]
 metadata_schema = "ducklake_replay"
 data_path = "s3://leads-lake/replay/"
@@ -42,10 +44,10 @@ url_style = "path"
 use_ssl = false
 key_id = "s3mock"
 secret = "s3mock"
-# Production example (AWS S3). An instance role instead of keys would need the dbt profile's
+# Production example (AWS S3). Keys, not an instance role: a role needs the dbt profile's
 # credential_chain provider, which the LEADS_S3_* variables cannot express yet.
 # endpoint = "s3.eu-central-1.amazonaws.com"
 # url_style = "vhost"
 # use_ssl = true
-# key_id = { secret_store = "prod", secret_name = "leads/lake-s3-key-id" }
-# secret = { secret_store = "prod", secret_name = "leads/lake-s3-secret" }
+# key_id = { secret_name = "leads/lake-s3-key-id" }
+# secret = { secret_name = "leads/lake-s3-secret" }

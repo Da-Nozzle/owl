@@ -9,9 +9,7 @@ from leads_ingest.ports.downloader import Download
 
 @dataclass(frozen=True, slots=True)
 class HttpPlacesApi:
-    """The Places API (New) over HTTPS, as the project whose key it holds, through `client`
-    (`build_http_client` with `google_places.http`, which waits out the per-minute quota), safe to
-    call from several threads at once."""
+    """Safe to call from several threads at once; `client` waits out the per-minute quota."""
 
     client: httpx.Client = field(compare=False)
     api_key: str = field(repr=False)

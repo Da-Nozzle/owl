@@ -8,8 +8,6 @@ MONTHS_PER_YEAR = 12
 
 @dataclass(frozen=True, slots=True, order=True)
 class Month:
-    """A calendar month, keyed `YYYY-MM` as Sodra's snapshots are."""
-
     year: int
     month: int
 

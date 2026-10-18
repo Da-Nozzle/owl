@@ -7,8 +7,6 @@ from leads_config.configuration import Configuration
 class SodraSettings:
     download_url_template: str
     history_months: int
-    # When a snapshot is fetched (cron, in pipeline.timezone); the snapshot is keyed by the
-    # month of the tick it was fetched after.
     snapshot_schedule: str
 
 

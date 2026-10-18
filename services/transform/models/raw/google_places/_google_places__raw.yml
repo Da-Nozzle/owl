@@ -5,20 +5,15 @@ sources:
     tables:
       - name: google_places
         description: >
-          Google's listings, searched with the Places API (New) Text Search, one snapshot a
-          month: each query of google_places.queries swept over each search area to be fetched
-          (int_google_search_areas, a municipality's bounding box), split into tiles of at most
-          google_places.max_tile_meters, smaller where a search was capped at 60 places. Only the
-          searches that hold every place the free plan found are paid for and kept.
-          One JSON page per file as the API sent it ({"places": [...]}, up to 20 places, each
-          with the fields the fetch asked for), named places-<area>-<query>-<tile>-<page>.json:
-          the area's municipality code, the query in ASCII, the tile's path from the area's box
-          (r, then a digit per split: 0 south-west, 1 south-east, 2 north-west, 3 north-east) and
-          the page from 1. Each page's
-          sidecar keeps the request it answered (field mask and body: query, rectangle, page
-          token). Tiles where the free plan found nothing have no pages. Results are ranked by
-          relevance, not exhaustive: a query finds what Google judges to match it, and a tile
-          finds a few places its quarters do not.
+          Google's listings from the Places API (New) Text Search, one snapshot a month: each of
+          google_places.queries swept over each search area to fetch (int_google_search_areas), in
+          tiles of at most google_places.max_tile_meters, split where a search hit its cap of 60
+          places. Only the searches holding every place the free plan found are paid for and kept.
+          One JSON page per file as the API sent it ({"places": [...]}, up to 20 places), named
+          places-<area>-<query>-<tile>-<page>.json (area code, query in ASCII, tile path as in
+          _search_tile, page from 1); its sidecar keeps the request it answered (field mask and
+          body). Tiles where the free plan found nothing have no pages. Results are ranked by
+          relevance, not exhaustive.
 
 models:
   - name: raw_google_places__places

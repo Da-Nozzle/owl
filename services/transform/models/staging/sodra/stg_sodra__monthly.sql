@@ -1,11 +1,7 @@
--- Sodra's published headers mapped to names and types, one line per column. A renamed or
--- dropped header fails here, and so does a value that does not parse; the columns not used
--- yet are in raw_sodra.monthly. A table, so every value is cast when it is built.
-{{ config(materialized='table') }}
+{{ config(materialized='table') }}  -- so a value that does not parse fails the build
 
--- Raw keeps every snapshot's download of each yearly file. Sodra rewrites a year's file in place, so
--- the newest download of it is the current version of every month in it. Whole files are
--- picked, not rows, so an employer Sodra drops from a month in a revision is dropped here too.
+-- Sodra rewrites each year's file in place, so its newest download is current. Whole files are
+-- picked, not rows, so an employer a revision drops is dropped here too.
 with current_version as (
     select *
     from {{ ref('raw_sodra__monthly') }}

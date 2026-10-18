@@ -1,13 +1,5 @@
--- The register's addresses mapped to names and types, one line per column: every building's or
--- land plot's address, and every premises' address within its building, with the street,
--- settlement and municipality each is in. A value that does not parse fails here; the columns not
--- used yet are in raw_address_register. A table, so every value is cast when it is built.
-{{ config(materialized='table') }}
+{{ config(materialized='table') }}  -- so a value that does not parse fails the build
 
--- Every snapshot is the whole register as fetched then, so each is kept, as JAR's are: a seat in
--- JAR's snapshot of a month is resolved in this register's snapshot of the same month. A
--- reference is resolved in the datasets of the address's own snapshot, so a dataset fetched by
--- several snapshots matches each address once.
 with buildings as (
     select * from {{ ref('raw_address_register__buildings') }}
 ),
@@ -31,6 +23,7 @@ municipalities as (
     from {{ ref('raw_address_register__municipalities') }}
 ),
 
+-- References resolve in the address's own snapshot: every snapshot holds each dataset whole.
 building_addresses as (
     select
         buildings._snapshot_month,
@@ -61,7 +54,6 @@ building_addresses as (
         and buildings."gatve._id" = streets._id
 ),
 
--- A premises' address is its building's with the premises' number.
 premises_addresses as (
     select
         premises."aob_kodas._id" as address_id,

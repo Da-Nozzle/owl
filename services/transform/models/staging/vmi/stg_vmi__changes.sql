@@ -1,15 +1,11 @@
--- One row per change the taxpayer register's changelog holds for the days fetched: when it was
--- made, how, to which register row, the fields it set, and the company the row belongs to. A
--- table, so every value is cast when it is built.
-{{ config(materialized='table') }}
+{{ config(materialized='table') }}  -- so a value that does not parse fails the build
 
 with changes as (
     select * from {{ ref('raw_vmi_daily_changes__changes') }}
 ),
 
--- A patch or a delete names only its register row. The row's company is in the newest export that
--- holds the row, or in the row's insert among the changes; a row deleted before every export,
--- whose insert is older than the first day fetched, has none.
+-- A patch or a delete names only its register row: its company is in the newest export holding
+-- the row, or in the row's insert among the changes.
 exported_rows as (
     select _id, ja_kodas
     from {{ ref('raw_vmi_monthly_register__register') }}

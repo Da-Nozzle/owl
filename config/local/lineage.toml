@@ -1,0 +1,24 @@
+# Each code location's `lineage` sensor sends its assets' materializations to Marquez as
+# OpenLineage events. Marquez's UI is marquez-web, on http://localhost:3001.
+[lineage]
+url = "http://marquez:5000"
+# Production example:
+# url = "https://marquez.internal.example.com"
+# Marquez's OpenLineage endpoint, under url.
+endpoint = "api/v1/lineage"
+# The namespace of every job and dataset sent.
+namespace = "leads"
+# Seconds between the sensor's ticks.
+sensor_interval_seconds = 30
+# The most events one tick sends: a longer backlog, such as a first tick's whole history, goes
+# over several ticks, each well within the time the daemon gives a sensor.
+events_per_tick = 500
+
+[lineage.http]
+# Marquez is beside the pipeline: a failed request is retried after 1 and 2 seconds; still
+# failing, the tick stops and the next one resends from there.
+timeout_seconds = 10
+attempts = 3
+backoff_seconds = 1
+max_wait_seconds = 5
+min_interval_seconds = 0

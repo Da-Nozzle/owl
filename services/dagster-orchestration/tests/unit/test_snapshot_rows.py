@@ -8,7 +8,7 @@ from typing import Any, cast
 import dagster as dg
 from dagster_dbt import DbtCliInvocation
 
-from leads_dagster_orchestration.assets.transform import snapshot_metadata
+from leads_dagster_orchestration.dbt.step_metadata import snapshot_metadata
 
 RAW_MONTHLY = {
     "unique_id": "model.leads.raw_sodra__monthly",

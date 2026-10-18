@@ -1,10 +1,8 @@
--- Sodra may add a column to a year's file but not drop one: a column that an older file fills
--- must have values in the newest file. Reading by name would otherwise turn a dropped column
--- into nulls for the new months. Returns each column that went empty. Columns starting with _ are
--- ours (the file and its fetch), not Sodra's.
+-- Sodra may add a column to a year's file but not drop one: read by name, a dropped column would
+-- turn into nulls for the new months. Fails on a column older files fill and the newest leaves empty.
 with filled as (
     unpivot (
-        select _source_file, count(columns(c -> not starts_with(c, '_')))
+        select _source_file, count(columns(c -> not starts_with(c, '_')))  -- _ columns are ours
         from {{ ref('sodra_monthly_files') }}
         group by _source_file
     )

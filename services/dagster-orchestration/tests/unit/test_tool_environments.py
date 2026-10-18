@@ -5,14 +5,13 @@ from hypothesis import strategies as st
 from psycopg2.extensions import parse_dsn
 
 from leads_config.configuration import Configuration
-from leads_dagster_orchestration.tool_environments import (
-    dagster_dbt_environment,
+from leads_dagster_orchestration.dbt.environment import dagster_dbt_environment, dbt_environment
+from leads_dagster_orchestration.dev_tools.dagster_dev import (
     dagster_storage_environment,
     dagster_webserver_url,
-    dbt_dev_environment,
-    dbt_environment,
-    lake_init_sql,
 )
+from leads_dagster_orchestration.dev_tools.dbt_cli import dbt_dev_environment
+from leads_dagster_orchestration.dev_tools.mcp_servers import lake_init_sql
 from leads_ingest.settings import PipelineMode
 from leads_lake.connection import libpq_connection_string
 from leads_testing.config import build_config, secret_reference
@@ -165,6 +164,26 @@ def test_dbt_caps_duckdbs_memory_and_spills_under_the_projects_target() -> None:
     # Assert
     assert environment["LEADS_DUCKDB_MEMORY_LIMIT"] == "1GB"
     assert environment["LEADS_DUCKDB_TEMP_DIRECTORY"] == "/project/target/duckdb_tmp"
+
+
+def test_dbt_builds_as_many_models_at_once_as_configured() -> None:
+    # Arrange
+    config = build_config({"transform.dbt_threads": 2})
+
+    # Act
+    environment = dbt_environment(config, PipelineMode.LIVE)
+
+    # Assert
+    assert environment["LEADS_DBT_THREADS"] == "2"
+
+
+def test_dbt_needs_at_least_one_thread() -> None:
+    # Arrange
+    config = build_config({"transform.dbt_threads": 0})
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="dbt_threads"):
+        dbt_environment(config, PipelineMode.LIVE)
 
 
 def test_the_lake_mcp_server_attaches_both_lakes_under_their_names() -> None:

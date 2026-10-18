@@ -1,5 +1,3 @@
--- Every snapshot's export of the EVRK 2 classifier the register's activities refer to, whole,
--- kept as raw_vmi_monthly_register.register is: a build replaces only its snapshot's rows.
 -- depends_on: {{ source('archive', 'vmi_monthly_register') }}
 {{ config(
     materialized='incremental',

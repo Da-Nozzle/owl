@@ -8,32 +8,22 @@ from fsspec import AbstractFileSystem
 from fsspec.core import url_to_fs
 
 from leads_ingest.ports.downloader import Download
-from leads_ingest.ports.raw_archive import SnapshotManifest, file_record, sidecar_record
+from leads_ingest.ports.raw_archive import SnapshotManifest, file_record
 
 META_SUFFIX = ".meta.json"
-# A source's manifests are one folder, <source>/_snapshots/<snapshot>.json, beside its snapshot
-# folders: finding the complete snapshots is one listing, not a walk through every file fetched.
+# One folder of manifests per source, so finding the complete snapshots is a single listing.
 MANIFESTS = "_snapshots"
 
 
 @dataclass(frozen=True, slots=True)
 class FsspecRawArchive:
-    """The raw archive on any fsspec filesystem (S3 for live runs, a local directory for
-    replay): `<root>/<source>/<snapshot>/<name>`, each file with a `.meta.json` sidecar, and each
+    """`<root>/<source>/<snapshot>/<name>`, each file with a `.meta.json` sidecar, and each
     complete snapshot's manifest at `<root>/<source>/_snapshots/<snapshot>.json`."""
-
-    # TODO the live archive moves to its own S3 bucket with versioning enabled, outside the
-    # lake's data_path. A rerun then overwrites the current object and S3 keeps the old one as a
-    # version, so this class needs no write-once logic of its own.
 
     filesystem: AbstractFileSystem
     root: str
 
     def save(self, source: str, snapshot: str, name: str, download: Download) -> None:
-        # TODO the sidecar is a separate object, so its versions are not tied to the file's.
-        # Either store fetched_at and Last-Modified as S3 object metadata (versioned with the
-        # file; the local replay sample would still need sidecars) or rely on the VersionIds
-        # the fetch records.
         path = f"{self._source_path(source)}/{snapshot}/{name}"
         self.filesystem.makedirs(path.rsplit("/", 1)[0], exist_ok=True)
         self.filesystem.pipe_file(path, download.body)
@@ -71,11 +61,6 @@ class FsspecRawArchive:
             completed_at=datetime.fromisoformat(values["completed_at"]), files=values["files"]
         )
 
-    def version_id(self, source: str, snapshot: str, name: str) -> str | None:
-        # TODO open the S3 filesystem with version_aware=True (s3fs) and return
-        # filesystem.info(path)["VersionId"]; None for a local directory.
-        raise NotImplementedError
-
     def _source_path(self, source: str) -> str:
         return f"{self.root.rstrip('/')}/{source}"
 
@@ -86,9 +71,8 @@ class FsspecRawArchive:
         return f"{self._manifests_path(source)}/{snapshot}.json"
 
     def _version(self, entry: Mapping[str, object]) -> str:
-        """S3 lists each object's ETag, which changes with its content. A local directory lists
-        a modification time too coarse to tell two writes in a row apart, so there the manifest
-        is read; it is small, and a local archive is the replay sample."""
+        """S3's ETag; a local directory's modification time is too coarse to tell two writes in a
+        row apart, so there the (small) manifest is hashed."""
         etag = entry.get("ETag")
         if etag:
             return str(etag)
@@ -98,8 +82,16 @@ class FsspecRawArchive:
         self.filesystem.pipe_file(path, json.dumps(values, indent=2).encode())
 
 
+def sidecar_record(download: Download) -> dict[str, object]:
+    """The file's record, with the request it answered if any. Only the sidecar holds the request:
+    a search's is larger than the rest of its record, and a manifest lists a whole sweep's pages."""
+    record = file_record(download)
+    if download.request is not None:
+        record["request"] = dict(download.request)
+    return record
+
+
 def open_fsspec_archive(url: str, options: Mapping[str, object] | None = None) -> FsspecRawArchive:
-    """The archive at `url` (`s3://...`, or a local path), its filesystem opened with `options`
-    (`s3fs_options` for the lake bucket)."""
+    """The archive at `url` (`s3://...` or a local path), its filesystem opened with `options`."""
     filesystem, root = url_to_fs(url, **(options or {}))
     return FsspecRawArchive(filesystem=filesystem, root=root)

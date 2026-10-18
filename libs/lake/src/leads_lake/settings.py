@@ -36,10 +36,8 @@ class LakeSettings:
 
 
 def load_lake_settings(config: Configuration, *, replay: bool = False) -> LakeSettings:
-    """The live lake, or with `replay` the lake replay runs build into: a catalog schema and data
-    path of its own (`lake.replay`), on the same Postgres and bucket. Replay's sample is not what
-    the sources published, so its rows never share a table with live rows, where staging's newest
-    download could be the sample's."""
+    """The live lake, or with `replay` the replay lake: its own catalog schema and data path
+    (`lake.replay`) on the same Postgres and bucket."""
     catalog = load_lake_catalog(config)
     storage = load_lake_storage(config)
     if not replay:
@@ -50,9 +48,7 @@ def load_lake_settings(config: Configuration, *, replay: bool = False) -> LakeSe
     )
 
 
-def load_lake_catalog(
-    config: Configuration,
-) -> LakeCatalog:  # TODO in aws would use IAM tokens so this can only work for local dev. Meed to re-think how to do this in a way that works for both local dev and AWS in a elegant way.
+def load_lake_catalog(config: Configuration) -> LakeCatalog:
     return LakeCatalog(
         host=config.get_str("postgres.host"),
         port=config.get_int("postgres.port"),
@@ -64,16 +60,13 @@ def load_lake_catalog(
 
 
 def load_lake_storage(config: Configuration) -> LakeStorage:
-    use_ssl = config.get("lake.s3.use_ssl")
-    if not isinstance(use_ssl, bool):
-        raise TypeError(f"'lake.s3.use_ssl' is {type(use_ssl).__name__}, expected bool")
     return LakeStorage(
         data_path=config.get_str("lake.data_path"),
         archive_path=config.get_str("lake.archive_path"),
         endpoint=config.get_str("lake.s3.endpoint"),
         region=config.get_str("lake.s3.region"),
         url_style=config.get_str("lake.s3.url_style"),
-        use_ssl=use_ssl,
+        use_ssl=config.get_bool("lake.s3.use_ssl"),
         key_id=config.get_str("lake.s3.key_id"),
         secret=config.get_str("lake.s3.secret"),
     )

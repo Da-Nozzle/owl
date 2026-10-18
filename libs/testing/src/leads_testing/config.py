@@ -3,9 +3,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
-from leads_config.configuration import SECRET_NAME_KEY, SECRET_STORE_KEY, Configuration
-
-MEMORY_STORE = "memory"
+from leads_config.configuration import SECRET_NAME_KEY, Configuration
 
 
 def http_table(
@@ -59,7 +57,10 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
     },
     "lineage": {
         "url": "http://marquez:5000",
+        "endpoint": "api/v1/lineage",
         "namespace": "leads",
+        "sensor_interval_seconds": 30,
+        "events_per_tick": 500,
         "http": http_table(timeout=10, attempts=3, max_wait=5),
     },
     "sodra": {
@@ -84,11 +85,14 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "daily_changes_schedule": "0 6 * * *",
         "first_daily_changes": "2026-09-01",
         "monthly_register_schedule": "0 6 21 * *",
+        "changelog_page_size": 10_000,
+        "register_export_attempts": 5,
+        "register_export_wait_seconds": 65,
         "daily_changes_http": http_table(timeout=30, interval=1),
         "monthly_register_http": http_table(),
     },
     "google_places": {
-        "api_key": {SECRET_STORE_KEY: MEMORY_STORE, SECRET_NAME_KEY: "google_places_api_key"},
+        "api_key": {SECRET_NAME_KEY: "google_places_api_key"},
         "search_text_url": "https://places.test/v1/places:searchText",
         "snapshot_schedule": "0 6 21 * *",
         "queries": ["kavinė", "kirpykla", "autoservisas"],
@@ -98,10 +102,26 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "min_tile_meters": 100,
         "max_paid_requests": 1500,
         "workers": 4,
+        "fetch_max_runtime_seconds": 10_800,
+        "free_paid_requests_a_month": 1_000,
+        "usd_per_paid_request": 0.035,
         "http": http_table(timeout=30, attempts=10, backoff=2, max_wait=60),
     },
-    "transform": {"project_dir": "/workspace/services/transform", "duckdb_memory_limit": "2GB"},
-    "dagster": {"webserver": {"host": "0.0.0.0", "port": 3000}},
+    "archive_index": {"sensor_interval_seconds": 60},
+    "transform": {
+        "project_dir": "/workspace/services/transform",
+        "duckdb_memory_limit": "2GB",
+        "dbt_threads": 4,
+    },
+    "dagster": {
+        "workspace": "/workspace/.devcontainer/dagster/workspace.yaml",
+        "webserver": {"host": "0.0.0.0", "port": 3000},
+    },
+    "mcp": {
+        "dbt": {"package": "dbt-mcp@2.7.0", "command_timeout_seconds": 3600},
+        "lake": {"package": "mcp-server-motherduck@1.1.0"},
+        "dagster": {"package": "dagster-mcp@0.12.3"},
+    },
 }
 
 
@@ -120,9 +140,8 @@ class InMemorySecretStore:
 def build_config(
     overrides: Mapping[str, object] | None = None, *, secrets: Mapping[str, str] | None = None
 ) -> Configuration:
-    """A configuration like config/local with each dotted key of `overrides` replaced, e.g.
-    `{"sodra.history_months": 1}`. A key that is not a setting fails, so a typo cannot pass
-    unnoticed. `secrets` are in the store that `secret_reference` names."""
+    """LOCAL_LIKE_VALUES with each dotted key of `overrides` replaced, e.g.
+    `{"sodra.history_months": 1}`; a key that is not a setting fails, so a typo cannot pass."""
     values: dict[str, Any] = deepcopy(dict(LOCAL_LIKE_VALUES))
     for key, value in (overrides or {}).items():
         *parents, leaf = key.split(".")
@@ -132,11 +151,9 @@ def build_config(
         if leaf not in table:
             raise KeyError(f"{key!r} is not a setting of the local-like configuration")
         table[leaf] = value
-    return Configuration(
-        values=values, secret_stores={MEMORY_STORE: InMemorySecretStore(secrets or {})}
-    )
+    return Configuration(values=values, secret_store=InMemorySecretStore(secrets or {}))
 
 
 def secret_reference(name: str) -> dict[str, str]:
     """A setting's value that `build_config` resolves from its `secrets`."""
-    return {SECRET_STORE_KEY: MEMORY_STORE, SECRET_NAME_KEY: name}
+    return {SECRET_NAME_KEY: name}

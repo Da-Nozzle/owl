@@ -9,7 +9,7 @@ models:
       stg_vmi__current_register.
     config:
       meta:
-        # What identifies a row: leads-dbt-diff matches rows on it.
+        # leads-dbt-diff matches rows on it.
         key: [change_id]
     columns:
       - name: change_id
@@ -47,13 +47,13 @@ models:
   - name: stg_vmi__current_register
     description: >
       The taxpayer register as it stands after the newest change fetched: one row per register
-      row, as the register publishes them, one per company, branch, activity, taxpayer type and
-      group, each part with its validity dates. The newest monthly export, with every change made
-      after it applied in changelog order: a patch sets the fields it names (null included), an
-      insert adds a row, a delete removes it. Activities are resolved in the EVRK 2 classifier,
-      not the EVRK 2.1 Sodra uses.
+      row (one per company, branch, activity, taxpayer type and group, each with its validity
+      dates). The newest monthly export with every later change applied in changelog order: a
+      patch sets the fields it names (null included), an insert adds a row, a delete removes it.
+      Activities are resolved in the EVRK 2 classifier, not the EVRK 2.1 Sodra uses.
     config:
       meta:
+        # leads-dbt-diff matches rows on it.
         key: [register_row_id]
     columns:
       - name: register_row_id

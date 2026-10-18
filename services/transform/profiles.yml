@@ -3,15 +3,13 @@ leads:
   outputs:
     local: &lake_target
       type: duckdb
-      # In memory. Dagster's own process reads each built table's columns and row count through
-      # this profile, read-only, which DuckDB cannot do in memory, so it opens an empty file
-      # (LEADS_DBT_DUCKDB_PATH). dbt's runs, which dagster-dbt marks with DAGSTER_DBT_CLI, stay in
-      # memory: two runs cannot hold one DuckDB file, and they run side by side.
+      # dbt's runs (DAGSTER_DBT_CLI) stay in memory, as parallel runs cannot share a DuckDB file.
+      # Dagster's own process reads table metadata read-only, which needs a file.
       path: "{{ ':memory:' if env_var('DAGSTER_DBT_CLI', '') else env_var('LEADS_DBT_DUCKDB_PATH', ':memory:') }}"
       database: lake
-      threads: 4
-      # Capped (transform.duckdb_memory_limit): several dbt processes run at once. Each spills
-      # into a folder of its own, as DuckDB's spill files have the same names in every process.
+      threads: "{{ env_var('LEADS_DBT_THREADS') | as_number }}"
+      # Several dbt processes run at once: each is capped (transform.duckdb_memory_limit) and
+      # spills into a folder of its own, as DuckDB names its spill files alike in every process.
       settings:
         memory_limit: "{{ env_var('LEADS_DUCKDB_MEMORY_LIMIT') }}"
         temp_directory: "{{ env_var('LEADS_DUCKDB_TEMP_DIRECTORY') }}/{{ invocation_id }}"
@@ -36,8 +34,7 @@ leads:
           options:
             data_path: "{{ env_var('LEADS_LAKE_DATA_PATH') }}"
             metadata_schema: "{{ env_var('LEADS_DUCKLAKE_METADATA_SCHEMA') }}"
-    # leads-dbt-dev, for iterating on models: builds into a DuckDB file of its own, with the lake
-    # attached read-only. A model it does not build resolves to the lake's table (dbt's defer).
+    # leads-dbt-dev: builds into a DuckDB file of its own; unbuilt models defer to the lake's.
     dev:
       <<: *lake_target
       path: "{{ env_var('LEADS_DBT_DEV_PATH') }}"

@@ -41,9 +41,9 @@ def test_file_store_secret_resolves_from_its_directory(tmp_path: Path) -> None:
     config_directory.mkdir()
     (config_directory / "pipeline.toml").write_text(
         "[postgres]\n"
-        'password = { secret_store = "local", secret_name = "postgres_password" }\n'
+        'password = { secret_name = "postgres_password" }\n'
         "\n"
-        "[secret_stores.local]\n"
+        "[secret_store]\n"
         'kind = "file"\n'
         f'directory = "{secrets_directory.as_posix()}"\n'
     )

@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 import dagster as dg
 import pytest
 
-from leads_dagster_orchestration.archive_index import build_archive_index
+from leads_dagster_orchestration.archive.index import ArchiveIndexSettings, build_archive_index
 from leads_dagster_orchestration.snapshots import (
     ArchivedSource,
     SnapshotCadence,
@@ -34,7 +34,9 @@ def tick(
     archive: InMemoryRawArchive, instance: dg.DagsterInstance, cursor: str | None = None
 ) -> dg.SensorResult:
     """Evaluates the index and applies its partition requests, as the sensor daemon does."""
-    sensor = build_archive_index([SOURCE], archive, LAKE, {"sodra": PARTITIONS}, LABELS)
+    sensor = build_archive_index(
+        [SOURCE], archive, LAKE, {"sodra": PARTITIONS}, LABELS, ArchiveIndexSettings(60)
+    )
     result = sensor(dg.build_sensor_context(instance=instance, cursor=cursor))
     assert isinstance(result, dg.SensorResult)
     for request in result.dynamic_partitions_requests or []:

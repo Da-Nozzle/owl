@@ -1,7 +1,6 @@
 from collections.abc import Iterator, Mapping
 from typing import Protocol
 
-SECRET_STORE_KEY = "secret_store"  # TODO maybe convert to string enums?
 SECRET_NAME_KEY = "secret_name"
 SECRET_ARGS_KEY = "secret_args"
 
@@ -11,19 +10,16 @@ class SecretStore(Protocol):
 
 
 class Configuration:
-    """Settings looked up by dotted key; secret references resolve on first request."""
+    """Settings looked up by dotted key; a secret reference resolves on first request."""
 
     def __init__(
-        self, values: Mapping[str, object], secret_stores: Mapping[str, SecretStore]
+        self, values: Mapping[str, object], secret_store: SecretStore | None = None
     ) -> None:
-        referenced_stores = {
-            str(reference[SECRET_STORE_KEY]) for reference in secret_references(values)
-        }
-        unknown_stores = referenced_stores - secret_stores.keys()
-        if unknown_stores:
-            raise ValueError(f"No secret store registered for {sorted(unknown_stores)}")
+        secret_keys = sorted(secret_reference_keys(values))
+        if secret_keys and secret_store is None:
+            raise ValueError(f"No secret store declared for the secrets at {secret_keys}")
         self._values = values
-        self._secret_stores = secret_stores
+        self._secret_store = secret_store
         self._resolved_secrets: dict[str, str] = {}
 
     def get(self, key: str) -> object:
@@ -44,8 +40,14 @@ class Configuration:
             raise TypeError(f"{key!r} is {type(value).__name__}, expected int")
         return value
 
+    def get_bool(self, key: str) -> bool:
+        value = self.get(key)
+        if not isinstance(value, bool):
+            raise TypeError(f"{key!r} is {type(value).__name__}, expected bool")
+        return value
+
     def get_float(self, key: str) -> float:
-        """A number, which TOML writes as an int or a float."""
+        """TOML writes a whole number as an int, so either is accepted."""
         value = self.get(key)
         if not isinstance(value, int | float) or isinstance(value, bool):
             raise TypeError(f"{key!r} is {type(value).__name__}, expected a number")
@@ -67,24 +69,26 @@ class Configuration:
 
     def _resolve_secret(self, key: str, reference: Mapping[str, object]) -> str:
         if key not in self._resolved_secrets:
-            store = self._secret_stores[str(reference[SECRET_STORE_KEY])]
-            name = reference.get(SECRET_NAME_KEY)
+            name = reference[SECRET_NAME_KEY]
             if not isinstance(name, str):
-                raise ValueError(f"Secret reference at {key!r} has no {SECRET_NAME_KEY!r}")
+                raise TypeError(f"{SECRET_NAME_KEY!r} at {key!r} must be a string")
             args = reference.get(SECRET_ARGS_KEY, {})
             if not isinstance(args, Mapping):
                 raise TypeError(f"{SECRET_ARGS_KEY!r} at {key!r} must be a table")
-            self._resolved_secrets[key] = store.fetch(name, args)
+            if self._secret_store is None:
+                raise ValueError(f"No secret store declared for the secret at {key!r}")
+            self._resolved_secrets[key] = self._secret_store.fetch(name, args)
         return self._resolved_secrets[key]
 
 
 def is_secret_reference(value: object) -> bool:
-    return isinstance(value, Mapping) and SECRET_STORE_KEY in value
+    return isinstance(value, Mapping) and SECRET_NAME_KEY in value
 
 
-def secret_references(values: Mapping[str, object]) -> Iterator[Mapping[str, object]]:
-    for value in values.values():
+def secret_reference_keys(values: Mapping[str, object], prefix: str = "") -> Iterator[str]:
+    for name, value in values.items():
+        key = f"{prefix}{name}"
         if is_secret_reference(value):
-            yield value
+            yield key
         elif isinstance(value, Mapping):
-            yield from secret_references(value)
+            yield from secret_reference_keys(value, prefix=f"{key}.")

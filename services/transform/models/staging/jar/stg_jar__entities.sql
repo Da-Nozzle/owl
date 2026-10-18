@@ -1,12 +1,5 @@
--- The register's published columns mapped to names and types, one line per column, with the legal
--- form and status each entity refers to by _id, and its seat. A value that does not parse fails
--- here; the columns not used yet are in raw_jar.entities. A table, so every value is cast when it
--- is built.
-{{ config(materialized='table') }}
+{{ config(materialized='table') }}  -- so a value that does not parse fails the build
 
--- Every snapshot is the whole register as fetched then, so each is kept: the leads of a month read
--- the register as of that month. A reference is resolved in the classifiers and seats of the
--- entity's own snapshot, so a dataset fetched by several snapshots matches each entity once.
 with entities as (
     select * from {{ ref('raw_jar__entities') }}
 ),
@@ -39,6 +32,7 @@ select
     entities._snapshot_month as snapshot_month,
     strptime(entities._file_last_modified, '%a, %d %b %Y %H:%M:%S GMT') as file_published_at
 from entities
+-- References resolve in the entity's own snapshot: every snapshot holds each dataset whole.
 left join legal_forms
     on entities._snapshot_month = legal_forms._snapshot_month
     and entities."forma._id" = legal_forms._id

@@ -5,12 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from leads_dagster_orchestration.entrypoints.tool_launchers import (
-    built_models,
-    launch_environment,
-    split_lake_option,
-)
+from leads_dagster_orchestration.dev_tools.dbt_cli import built_models
+from leads_dagster_orchestration.dev_tools.launch import launch_environment, split_lake_option
+from leads_dagster_orchestration.dev_tools.mcp_servers import dbt_mcp_environment, load_mcp_settings
 from leads_ingest.settings import PipelineMode
+from leads_testing.config import build_config
 
 
 def test_project_scripts_come_before_other_installs_on_path(
@@ -88,3 +87,14 @@ def test_the_models_to_diff_are_those_the_last_dev_command_built(tmp_path: Path)
 def test_no_dev_command_yet_means_no_models_to_diff(tmp_path: Path) -> None:
     # Act / Assert
     assert built_models(tmp_path / "run_results.json") == []
+
+
+def test_the_dbt_mcp_server_waits_on_dbt_as_long_as_configured() -> None:
+    # Arrange
+    config = build_config({"mcp.dbt.command_timeout_seconds": 600})
+
+    # Act
+    environment = dbt_mcp_environment(load_mcp_settings(config).dbt_command_timeout_seconds)
+
+    # Assert
+    assert environment["DBT_CLI_TIMEOUT"] == "600"

@@ -4,9 +4,9 @@ import httpx
 import pytest
 from pytest_httpserver import HTTPServer
 
-from leads_ingest.adapters.http.client import build_http_client
+from leads_http.client import build_http_client
+from leads_http.settings import load_http_client_settings
 from leads_ingest.adapters.http.places_api import HttpPlacesApi
-from leads_ingest.adapters.http.settings import load_http_client_settings
 from leads_testing.config import build_config
 
 # Answers are matched on path only (see test_http_downloader.py); what was sent is checked from

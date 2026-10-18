@@ -1,6 +1,5 @@
--- A snapshot loads only once Sodra has published the month before the snapshot's month (Sodra's
--- snapshots are keyed YYYY-MM); until then the raw table is left as it was. Returns that month
--- when it is missing.
+-- A snapshot loads only once Sodra has published the month before it; until then raw is left as
+-- it was.
 {% set previous_month %}strftime(date '{{ snapshot("sodra") }}-01' - interval 1 month, '%Y%m'){% endset %}
 select {{ previous_month }} as missing_month
 where not exists (

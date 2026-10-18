@@ -51,10 +51,10 @@ seeds:
 
   - name: google_search_scope
     description: >
-      Where Google is searched: one row per municipality to search, `price` to have the Google
-      price asset plan it for free and show what fetching it would pay for, `fetch` to have the
-      monthly fetch pay for it too. A municipality not listed is not searched. Every change is
-      priced again by itself before anything is paid for it.
+      Where Google is searched: one row per municipality to search, `price` to have
+      plan_google_places plan it for free and show what fetching it would pay for, `fetch` to have
+      the monthly fetch pay for it too. A municipality not listed is not searched. Every change is
+      priced again before anything is paid for it.
     columns:
       - name: municipality_code
         data_tests:

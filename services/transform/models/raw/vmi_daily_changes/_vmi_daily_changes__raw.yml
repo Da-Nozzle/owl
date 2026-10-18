@@ -6,13 +6,12 @@ sources:
       - name: vmi_daily_changes
         description: >
           The VMI taxpayer register's changelog on get.data.gov.lt
-          (vmi/mm_registras/MokesciuMoketojas/:changes), one snapshot a day: the changes made in the
-          day before the snapshot's 06:00 tick, as JSON pages ({"_data": [...]}) of up to 10,000
-          changes, each page named after the first change id it may hold
-          (changes-<id>.json). A change is an insert (every field), a patch (only the fields it
-          set, a field emptied as null) or a delete, with its id (_cid), time (_created, UTC),
-          register row (_id), transaction and revision. A day with no changes has no pages. The
-          changelog keeps every past day, so a day can be fetched again with the same result.
+          (vmi/mm_registras/MokesciuMoketojas/:changes), one snapshot a day holding the changes of
+          the day before its tick, as JSON pages ({"_data": [...]}) of up to 10,000 changes, named
+          changes-<first change id>.json. A change is an insert (every field), a patch (only the
+          fields it set, an emptied field as null) or a delete, with its id (_cid), time (_created,
+          UTC), register row (_id), transaction and revision. A day with no changes has no pages.
+          The changelog keeps every past day, so a day can be fetched again with the same result.
 
 models:
   - name: raw_vmi_daily_changes__changes

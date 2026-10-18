@@ -8,9 +8,6 @@ from leads_ingest.ports.downloader import Download
 
 @dataclass(frozen=True, slots=True)
 class HttpDownloader:
-    """GETs a whole file through `client` (`build_http_client`), whose settings say how long to
-    wait for the server and what to retry."""
-
     client: httpx.Client
 
     def download(self, url: str) -> Download:

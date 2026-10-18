@@ -1,7 +1,3 @@
--- Sodra's yearly files as a snapshot downloaded them, whole and as published: every row, every
--- column, as text. Sodra rewrites each year's file in place, so a download is one version of it.
--- Reads this build's snapshot from the archive, or every complete snapshot when raw is built from
--- nothing. Ephemeral, so the checks on it run before raw_sodra.monthly is written.
 -- depends_on: {{ source('archive', 'sodra') }}
 {{ config(materialized='ephemeral') }}
 
@@ -24,8 +20,7 @@ with published as (
     )
 ),
 
--- What the download's .meta.json sidecar recorded. Sidecars written before size and sha256 were
--- recorded have null there.
+-- Sidecars written before size and sha256 were recorded have them null.
 fetches as (
     select
         regexp_replace(_meta_file, '\.meta\.json$', '') as archived_file,

@@ -1,6 +1,3 @@
-"""The lineage sensor on a test instance, sending to a fake Marquez: what each event says, and
-what the sensor does when Marquez is down or refuses an event."""
-
 import json
 from collections.abc import Callable, Iterator
 from typing import Any
@@ -9,14 +6,10 @@ import dagster as dg
 import httpx
 import pytest
 
-from leads_dagster_orchestration.assets.transform import COMPILED_SQL
-from leads_dagster_orchestration.lineage import (
-    LINEAGE,
-    LineageSettings,
-    build_lineage_sensor,
-    unsent,
-)
-from leads_ingest.adapters.http.settings import HttpClientSettings, RetryPolicy
+from leads_dagster_orchestration.lineage.sensor import LINEAGE, build_lineage_sensor, unsent
+from leads_dagster_orchestration.lineage.settings import LineageSettings
+from leads_dagster_orchestration.metadata_keys import COMPILED_SQL
+from leads_http.settings import HttpClientSettings, RetryPolicy
 
 ARCHIVE = dg.AssetKey(["live", "archive", "archive_sodra"])
 RAW = dg.AssetKey(["live", "raw", "raw_sodra__monthly"])
@@ -24,8 +17,11 @@ STAGING = dg.AssetKey(["live", "staging", "stg_sodra__monthly"])
 SNAPSHOTS = dg.StaticPartitionsDefinition(["2026-09"])
 SETTINGS = LineageSettings(
     url="http://marquez.test:5000",
+    endpoint="api/v1/lineage",
     namespace="leads",
-    # One attempt, so a failing Marquez fails at once rather than after the retries' waits.
+    sensor_interval_seconds=30,
+    events_per_tick=500,
+    # One attempt, so a failing Marquez fails at once.
     http=HttpClientSettings(
         timeout_seconds=1,
         retry=RetryPolicy(attempts=1, backoff_seconds=0, max_wait_seconds=0),
@@ -44,8 +40,7 @@ RAW_LINEAGE = dg.TableColumnLineage(
         "draudėjo kodas (code)": [dg.TableColumnDep(asset_key=ARCHIVE, column_name="kodas")]
     }
 )
-# As dagster-dbt reports them: a build, each column's type read from the table; the definition,
-# the descriptions of the dbt YAML, with no type.
+# As dagster-dbt reports them: a build's columns typed, the definition's described.
 STAGING_SCHEMA = dg.TableSchema(columns=[dg.TableColumn("insurer_code", "bigint")])
 STAGING_DEFINITION_SCHEMA = dg.TableSchema(
     columns=[dg.TableColumn("insurer_code", "?", description="Sodra's code for the employer")]

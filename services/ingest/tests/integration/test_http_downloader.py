@@ -2,14 +2,13 @@ import httpx
 import pytest
 from pytest_httpserver import HTTPServer
 
-from leads_ingest.adapters.http.client import build_http_client
+from leads_http.client import build_http_client
+from leads_http.settings import load_http_client_settings
 from leads_ingest.adapters.http.downloader import HttpDownloader
-from leads_ingest.adapters.http.settings import load_http_client_settings
 from leads_testing.config import build_config
 
-# Answers are matched on path only: a request the server does not expect gets a 500, which the
-# downloader retries with backoff, so a header mismatch would fail slowly. Headers are checked
-# from the server's log instead.
+# Answers match on path only, as an unexpected request gets a 500, retried with backoff, which
+# would fail slowly. Headers are checked from the server's log instead.
 
 
 def downloader() -> HttpDownloader:

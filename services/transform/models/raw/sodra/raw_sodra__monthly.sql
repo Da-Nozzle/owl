@@ -1,7 +1,3 @@
--- Every snapshot's download of Sodra's yearly files, whole: a build replaces only the rows of its
--- snapshot, so rebuilds in any order leave the other snapshots as they were. Built from nothing
--- (first build, --full-refresh), it reads every complete snapshot in the archive. Staging picks
--- the newest download of each year's file. A column Sodra adds is added here too.
 {{ config(
     materialized='incremental',
     alias='monthly',

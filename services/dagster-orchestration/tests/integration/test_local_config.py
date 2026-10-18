@@ -1,18 +1,19 @@
 import pytest
 
 from leads_config.loading import load_configuration
-from leads_dagster_orchestration.tool_environments import (
-    dagster_dbt_environment,
-    dagster_storage_environment,
-    dbt_dev_environment,
-    dbt_environment,
-)
-from leads_ingest.adapters.http.settings import load_http_client_settings
+from leads_dagster_orchestration.archive.index import load_archive_index_settings
+from leads_dagster_orchestration.dbt.environment import dagster_dbt_environment, dbt_environment
+from leads_dagster_orchestration.dev_tools.dagster_dev import dagster_storage_environment
+from leads_dagster_orchestration.dev_tools.dbt_cli import dbt_dev_environment
+from leads_dagster_orchestration.dev_tools.mcp_servers import load_mcp_settings
+from leads_dagster_orchestration.lineage.settings import load_lineage_settings
+from leads_http.settings import load_http_client_settings
 from leads_ingest.settings import PipelineMode, load_pipeline_settings
 from leads_ingest.sources.address_register.settings import load_address_register_settings
 from leads_ingest.sources.google_places.settings import load_google_places_settings
 from leads_ingest.sources.jar.settings import load_jar_settings
 from leads_ingest.sources.sodra.settings import load_sodra_settings
+from leads_ingest.sources.vmi.settings import load_vmi_settings
 from leads_lake.settings import load_lake_settings
 
 HTTP_TABLES = [
@@ -36,6 +37,7 @@ def test_the_local_config_loads_into_every_packages_settings(pytestconfig: pytes
     load_sodra_settings(config)
     load_jar_settings(config)
     load_address_register_settings(config)
+    load_vmi_settings(config)
     load_google_places_settings(config)
     for key in HTTP_TABLES:
         load_http_client_settings(config, key)
@@ -45,6 +47,9 @@ def test_the_local_config_loads_into_every_packages_settings(pytestconfig: pytes
         dbt_environment(config, mode)
         dagster_dbt_environment(config, mode)
         dbt_dev_environment(config, mode)
+    load_mcp_settings(config)
+    load_lineage_settings(config)
+    load_archive_index_settings(config)
 
 
 def test_googles_client_retries_for_longer_than_a_minute_of_quota(

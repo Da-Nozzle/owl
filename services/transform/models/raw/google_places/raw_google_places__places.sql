@@ -1,9 +1,3 @@
--- Every snapshot's sweep of the Places API, as the API sent it: one row per place on each page,
--- with the search that found it (its query, from the request the page's sidecar recorded, and
--- its search area, tile and page, from the file name) and the place itself in `place`, which holds the fields
--- the fetch asked for. A place found by several queries, or by a tile and its quarters, has a row
--- for each. A build replaces only the rows of its snapshot. Built from nothing (first build,
--- --full-refresh), it reads every complete snapshot in the archive.
 -- depends_on: {{ source('archive', 'google_places') }}
 {{ config(
     materialized='incremental',

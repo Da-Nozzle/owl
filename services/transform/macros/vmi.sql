@@ -1,7 +1,6 @@
-{# The VMI taxpayer register's published columns (its DSA, vmi/mm_registras/MokesciuMoketojas),
-   each with its staging name and type, in the order the export has them. A reference to another
-   dataset is <property>._id in the CSV export and {"_id": ...} under <property> in a change.
-   `flag` is 1 or 0, staged as a boolean. #}
+{# The register's published columns in export order, with staging name and type. A reference is
+   <property>._id in the CSV but {"_id": ...} under <property> in a change; `flag` (1 or 0) is
+   staged as a boolean. #}
 {% macro vmi_register_columns() %}
     {{- return([
         {'published': 'id', 'name': 'record_number', 'type': 'varchar'},
@@ -44,7 +43,6 @@
     ]) -}}
 {% endmacro %}
 
-{# A published value, as text, cast to its column's type. #}
 {% macro vmi_typed(value, column) -%}
     {%- if column.type == 'flag' -%}
         ({{ value }})::integer = 1

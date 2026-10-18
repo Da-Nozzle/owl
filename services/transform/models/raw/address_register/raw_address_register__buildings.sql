@@ -1,7 +1,3 @@
--- Every snapshot's export of the register's building and land plot addresses, whole: a build
--- replaces only the rows of its snapshot, so rebuilds in any order leave the other snapshots as
--- they were. Built from nothing (first build, --full-refresh), it reads every complete snapshot
--- in the archive. A column the register adds is added here too.
 -- depends_on: {{ source('archive', 'address_register') }}
 {{ config(
     materialized='incremental',

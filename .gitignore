@@ -5,6 +5,7 @@
 target/
 dbt_modules/
 dbt_packages/
+.user.yml
 logs/
 
 ### Git ###

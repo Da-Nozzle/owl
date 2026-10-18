@@ -1,7 +1,6 @@
 import pytest
 
 from leads_ingest.sources.google_places.settings import (
-    Area,
     GooglePlacesSettings,
     load_google_places_settings,
 )
@@ -21,6 +20,9 @@ def test_google_places_settings_are_read_from_config() -> None:
             "google_places.min_tile_meters": 100,
             "google_places.max_paid_requests": 1500,
             "google_places.workers": 16,
+            "google_places.fetch_max_runtime_seconds": 10_800,
+            "google_places.free_paid_requests_a_month": 1_000,
+            "google_places.usd_per_paid_request": 0.035,
         }
     )
 
@@ -38,12 +40,14 @@ def test_google_places_settings_are_read_from_config() -> None:
         min_tile_meters=100.0,
         max_paid_requests=1500,
         workers=16,
+        fetch_max_runtime_seconds=10_800,
+        free_paid_requests_a_month=1_000,
+        usd_per_paid_request=0.035,
     )
 
 
 def test_loading_the_settings_reads_no_key() -> None:
-    # Arrange: a secret store without the key, which fails any read of it. The key is read by
-    # the live fetch, when it first sends a request.
+    # Arrange: no key in the secret store, so reading it would fail.
     config = build_config(secrets={})
 
     # Act
@@ -68,16 +72,19 @@ def test_queries_must_be_a_list_of_distinct_strings(
         load_google_places_settings(config)
 
 
-def test_a_sweep_has_at_least_one_search_in_flight() -> None:
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [
+        ("workers", 0),
+        ("fetch_max_runtime_seconds", 0),
+        ("free_paid_requests_a_month", -1),
+        ("usd_per_paid_request", -0.035),
+    ],
+)
+def test_a_count_or_price_out_of_range_is_rejected(key: str, value: float) -> None:
     # Arrange
-    config = build_config({"google_places.workers": 0})
+    config = build_config({f"google_places.{key}": value})
 
     # Act / Assert
-    with pytest.raises(ValueError, match=r"google_places\.workers"):
+    with pytest.raises(ValueError, match=rf"google_places\.{key}"):
         load_google_places_settings(config)
-
-
-def test_an_area_must_run_south_west_to_north_east() -> None:
-    # Act / Assert
-    with pytest.raises(ValueError, match="south-west to north-east"):
-        Area(south=54.83, west=25.02, north=54.57, east=25.48)

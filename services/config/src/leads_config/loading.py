@@ -4,14 +4,14 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from leads_config.configuration import Configuration
-from leads_config.secret_stores import build_secret_stores
+from leads_config.secret_stores import build_secret_store
 
 MOUNTED_CONFIG_DIRECTORY = Path("/etc/leads")
 
 
 def load_configuration(directory: Path = MOUNTED_CONFIG_DIRECTORY) -> Configuration:
     values = read_config_directory(directory)
-    return Configuration(values=values, secret_stores=build_secret_stores(values))
+    return Configuration(values=values, secret_store=build_secret_store(values))
 
 
 def read_config_directory(directory: Path) -> dict[str, object]:

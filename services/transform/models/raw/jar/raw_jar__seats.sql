@@ -1,5 +1,3 @@
--- Every snapshot's export of the register's seats (registered offices), whole, kept as
--- raw_jar.entities is: a build replaces only its snapshot's rows.
 -- depends_on: {{ source('archive', 'jar') }}
 {{ config(
     materialized='incremental',

@@ -3,17 +3,15 @@ version: 2
 models:
   - name: stg_google__listings
     description: >
-      One row per Google listing and snapshot: each place a monthly sweep of the Places API found
-      around Vilnius. The sweep searches each query over tiles of at most a kilometre, smaller
-      where a search is capped, but results are ranked by relevance, so a listing a query does
-      not match well can be missing, and a query also finds listings outside its category (a
-      park or a supermarket for "kavinė"); primary_type and types say what the place is. Only
-      operating listings were found. The area is Vilnius city municipality's bounding box, so
-      some listings are in Vilnius district (locality). Google's terms allow only place_id to be
-      stored indefinitely.
+      One row per Google listing and snapshot: each place a monthly Places API sweep of the search
+      areas (int_google_search_areas) found. Results are ranked by relevance, so a listing a query
+      matches poorly can be missing, and a query also finds listings outside its category (a park
+      or a supermarket for "kavinė"); primary_type and types say what the place is. An area is a
+      bounding box, so some listings lie outside its municipality (locality). Google's terms allow
+      only place_id to be stored indefinitely.
     config:
       meta:
-        # What identifies a row: leads-dbt-diff matches rows on it.
+        # leads-dbt-diff matches rows on it.
         key: [place_id, snapshot_month]
     data_tests:
       - unique:
@@ -76,8 +74,7 @@ models:
         data_tests:
           - not_null:
               config:
-                # Every listing's URI held one on 2026-10-17; a new URI format should not stop the
-                # pipeline, as nothing joins on it yet.
+                # Nothing joins on cid yet, so a new URI format should not stop the pipeline.
                 severity: warn
       - name: snapshot_month
         description: The snapshot (YYYY-MM) whose sweep found the listing.

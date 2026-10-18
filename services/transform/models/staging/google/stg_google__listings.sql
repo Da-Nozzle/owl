@@ -1,19 +1,13 @@
--- Google's listings mapped to names and types: one row per place and snapshot, as the Places API
--- sent it in that snapshot's sweep. A value that does not parse fails here; the fields not used
--- yet are in raw_google_places__places. A table, so every value is cast when it is built.
-{{ config(materialized='table') }}
+{{ config(materialized='table') }}  -- so a value that does not parse fails the build
 
--- Minutes in a week, as opening hours are given per weekday (0 is Sunday).
 {% set week_minutes = 7 * 24 * 60 %}
 
 with found as (
     select * from {{ ref('raw_google_places__places') }}
 ),
 
--- A place on the pages of several searches paid for (a tile and its quarter, or two queries) was
--- sent once per page; the copies of one sweep differ by at most the minutes between their
--- requests, so the last fetched is kept. Which queries found a place is not known here: the sweep
--- pays for a place once, whatever found it, and keeps only the pages it paid for.
+-- A place on several searches' pages comes once per page; the copies differ only by the minutes
+-- between their requests, so the last fetched is kept.
 places as (
     select
         id,
@@ -59,8 +53,8 @@ select
     (place ->> 'rating')::decimal(2, 1) as rating,
     (place ->> 'userRatingCount')::integer as review_count,
     place -> 'regularOpeningHours' as regular_opening_hours,
-    -- A place open around the clock has one period with no close. Otherwise each period runs from
-    -- its open to its close, which may be on a later day, and on Sunday after Saturday.
+    -- Open around the clock is one period with no close. A period may close on a later day, or
+    -- wrap from Saturday to Sunday (day 0), hence the modulo.
     case
         when list_bool_or(list_transform(opening_periods, period -> period.close is null))
             then 168
@@ -77,8 +71,6 @@ select
     place ->> 'websiteUri' as website,
     place ->> 'nationalPhoneNumber' as phone,
     place ->> 'googleMapsUri' as google_maps_uri,
-    -- The listing's customer id, which Maps pages carry as the second half of a feature id
-    -- (0x...:0x<cid>), so a scraped listing can be matched to this one.
     nullif(regexp_extract(place ->> 'googleMapsUri', '[?&]cid=([0-9]+)', 1), '')::ubigint as cid,
     _snapshot_month as snapshot_month,
     fetched_at::timestamptz at time zone 'UTC' as fetched_at

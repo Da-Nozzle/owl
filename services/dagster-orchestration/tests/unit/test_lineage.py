@@ -2,7 +2,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from leads_dagster_orchestration.lineage import load_lineage_settings, nominal_time_facet
+from leads_dagster_orchestration.lineage.events import nominal_time_facet
+from leads_dagster_orchestration.lineage.settings import load_lineage_settings
 from leads_testing.config import build_config
 
 VILNIUS = ZoneInfo("Europe/Vilnius")
@@ -45,6 +46,17 @@ def test_lineage_settings_come_from_the_lineage_table() -> None:
     settings = load_lineage_settings(config)
 
     # Assert
-    assert settings.url == "http://marquez.test:5000"
+    assert settings.endpoint_url == "http://marquez.test:5000/api/v1/lineage"
     assert settings.namespace == "leads"
+    assert (settings.sensor_interval_seconds, settings.events_per_tick) == (30, 500)
     assert settings.http.retry.attempts == 3
+
+
+@pytest.mark.parametrize("key", ["lineage.sensor_interval_seconds", "lineage.events_per_tick"])
+def test_the_sensor_must_tick_and_send_something(key: str) -> None:
+    # Arrange
+    config = build_config({key: 0})
+
+    # Act / Assert
+    with pytest.raises(ValueError, match=key):
+        load_lineage_settings(config)

@@ -1,6 +1,3 @@
-"""Both code locations built as Dagster loads them, from a copy of the dbt project: the parse
-writes into the project's target/, which the copy keeps away from the working tree."""
-
 import os
 import shutil
 import sysconfig
@@ -16,8 +13,8 @@ from dagster._core.definitions.unresolved_asset_job_definition import (
     UnresolvedAssetJobDefinition,
 )
 
-from leads_dagster_orchestration.archive_index import ARCHIVE_INDEX
-from leads_dagster_orchestration.assets.archive import WITHIN_BUDGET
+from leads_dagster_orchestration.archive.assets import WITHIN_BUDGET
+from leads_dagster_orchestration.archive.index import ARCHIVE_INDEX
 from leads_dagster_orchestration.automation import (
     BUILD_NEW_SNAPSHOTS,
     PLAN_ON_CHANGE,
@@ -25,7 +22,7 @@ from leads_dagster_orchestration.automation import (
     TRANSFORM_AUTOMATION,
 )
 from leads_dagster_orchestration.entrypoints.definitions import pipeline_definitions
-from leads_dagster_orchestration.lineage import LINEAGE
+from leads_dagster_orchestration.lineage.sensor import LINEAGE
 from leads_ingest.settings import PipelineMode
 from leads_testing.config import build_config
 
@@ -34,10 +31,8 @@ FETCH = dg.AssetKey(["live", "fetch", "fetch_sodra"])
 ARCHIVE = dg.AssetKey(["live", "archive", "archive_sodra"])
 RAW = dg.AssetKey(["live", "raw", "raw_sodra__monthly"])
 STAGING = dg.AssetKey(["live", "staging", "stg_sodra__monthly"])
-# Each source's dbt models, by layer. The VMI register's two sources have no staging of their
-# own: the staging models that combine them are in a folder of the dataset's, `vmi` (COMBINED).
-# Google's Places API source has none either: its listings are staged in `google`, which a second
-# backend would feed too.
+# Each source's dbt models, by layer. The VMI sources and Google's are staged in a folder of
+# their dataset's (COMBINED).
 MODELS = {
     "sodra": {"raw": {"raw_sodra__monthly"}, "staging": {"stg_sodra__monthly"}},
     "jar": {
@@ -66,8 +61,7 @@ COMBINED = {
     "vmi": {"stg_vmi__changes", "stg_vmi__current_register"},
     "google": {"stg_google__listings"},
 }
-# Where a source's assets are drawn, if not in a group of its own name: in the group of the
-# folder its staging models are in (COMBINED).
+# Sources drawn in their dataset's group rather than one of their own.
 GROUPS = {
     "vmi_daily_changes": "vmi/daily_changes",
     "vmi_monthly_register": "vmi/monthly_register",
@@ -82,13 +76,11 @@ SCHEDULES = {
     "vmi_monthly_register": MONTHLY,
     "google_places": MONTHLY,
 }
-# The sources whose history the source keeps, so that any day of it can be fetched.
+# Sources whose fetch takes any period of their history.
 WITH_HISTORY = {"vmi_daily_changes"}
 # The sources billed per request: their schedules start stopped, and each has a plan.
 PAID = {"google_places"}
-# Models of no source: seeds, drawn in the lake's static data group, and the intermediate model
-# that says where Google is searched, which reads Sodra's staging, in the lake's own group. They
-# are one step, `transform`.
+# Models of no source, in one step: the seeds, and where Google is searched.
 SHARED = {
     "seeds": {"municipalities", "activity_categories", "google_search_scope"},
     "intermediate": {"int_google_search_areas"},
@@ -130,8 +122,8 @@ def archive_of(lake: PipelineMode, source: str) -> dg.AssetKey:
 def locations(
     tmp_path_factory: pytest.TempPathFactory, pytestconfig: pytest.Config
 ) -> Iterator[dict[PipelineMode, dg.Definitions]]:
-    """Each mode's definitions. Both load in this one process here, so the second's dbt
-    variables replace the first's, which is why Dagster runs them as two code locations."""
+    """From a copy of the dbt project, as the parse writes into its target/. Both lakes load in
+    this one process, so the second's dbt variables replace the first's."""
     project = tmp_path_factory.mktemp("transform") / "transform"
     shutil.copytree(
         pytestconfig.rootpath / "services" / "transform",
@@ -344,10 +336,8 @@ def test_a_snapshot_registered_before_the_automation_started_is_built_too(
 
 
 def rebuilt(lake: PipelineMode, source: str) -> set[dg.AssetKey]:
-    """What a rebuild of the source's archive builds: its models, and for a source drawn in a
-    dataset's group (either VMI source, Google's) the staging models in the dataset's folder.
-    Sodra's is followed by the model of where Google is searched, but never by Google's plan,
-    which reads it, or its fetch."""
+    """The source's models, its dataset's combined staging, and for Sodra the search areas, but
+    never Google's plan or fetch."""
     built = models(lake, source, "raw") | models(lake, source, "staging")
     if source in GROUPS:
         built |= combined(lake, GROUPS[source].split("/")[0])

@@ -11,7 +11,7 @@ models:
       dataset has not changed since. Coordinates are not published.
     config:
       meta:
-        # What identifies a row: leads-dbt-diff matches rows on it.
+        # leads-dbt-diff matches rows on it.
         key: [address_id, snapshot_month]
     data_tests:
       - unique:
@@ -54,8 +54,8 @@ models:
       - name: street_code
         description: Empty for an address with no street, as in most villages.
         data_tests:
-          # Every address in a city has a street, so this fails when a street is not in its
-          # snapshot's streets.
+          # Every city address has a street, so this also fails on a street missing from its
+          # snapshot.
           - not_null:
               config:
                 where: "settlement_type = 'm.'"

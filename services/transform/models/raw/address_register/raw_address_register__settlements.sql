@@ -1,5 +1,3 @@
--- Every snapshot's export of the register's settlements, whole, kept as
--- raw_address_register.buildings is: a build replaces only its snapshot's rows.
 -- depends_on: {{ source('archive', 'address_register') }}
 {{ config(
     materialized='incremental',

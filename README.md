@@ -56,7 +56,8 @@ configuration service in `services/config/`. Commented blocks in each file show 
 would differ.
 
 Local dev credentials (Postgres, s3mock) are plain values in the config. Real secrets are
-references that resolve when first read; locally they come from files in `config/local/secrets/`,
+references (`{ secret_name = "..." }`) that resolve when first read, from the one secret store
+each config directory declares (`secret_store.toml`); locally, files in `config/local/secrets/`,
 which is git-ignored. Replay needs none. To run live against the Places API, put the key in
 `config/local/secrets/google_places_api_key`; it is read only when a Google fetch sends its first
 request.
@@ -175,10 +176,12 @@ fetch, `automation` on what Dagster built by itself, `rebuild` on a rebuild by h
 snapshot also shows `archive_fetched_at`, the download it was built from. Filter the runs list by
 `leads/trigger` to see, say, every rebuild.
 
-A new source is one `ArchivedSource` in `archived_sources()` (`entrypoints/definitions.py`): its
-name, its schedule and key format, and its fetch (`leads_ingest/sources/<source>/`, with its
-settings in `config/<env>/pipeline.toml`), plus its dbt models in `models/raw/<source>/` (schema
-`raw_<source>` in `dbt_project.yml`) and `models/staging/<source>/`. Its partitions, archive,
+A new source is one `ArchivedSource`, built in its own module in
+`leads_dagster_orchestration/sources/` and listed in `archived_sources()`
+(`entrypoints/definitions.py`): its name, its schedule and key format, and its fetch
+(`leads_ingest/sources/<source>/`, with its settings in `config/<env>/pipeline.toml`), plus its
+dbt models in `models/raw/<source>/` (schema `raw_<source>` in `dbt_project.yml`) and
+`models/staging/<source>/`. Its partitions, archive,
 fetch job and schedule, rebuild job, automation and group all follow from that. `jar` is the
 smallest example: three CSV exports, read by the `archived_csv` macro. The VMI register is the
 example of one dataset fetched as two sources, drawn together in one box (`ArchivedSource.group`):
@@ -288,10 +291,11 @@ readable only by you.
 Notes:
 - The `lake` server pins its own DuckDB, which must stay the project's (`duckdb` in
   `services/dagster-orchestration/pyproject.toml`): another version may not read the catalog. Bump
-  `LAKE_MCP` in `tool_launchers.py` with it.
+  `mcp.lake.package` in `config/local/mcp.toml` with it.
 - dbt-mcp declares Python below 3.14, which uv does not enforce; it runs on the project's 3.14.
 - dbt-mcp's lineage tools read `services/transform/target/manifest.json`, which the lake target
   writes; on `dbt-dev` they show the same models, from that parse.
 - dbt raw models need `LEADS_SNAPSHOT` on the lake target, which an agent cannot pass: build raw
   through Dagster, or on `dbt-dev`, which reads the newest snapshot.
-- Each dbt command an agent starts may take up to an hour (`DBT_MCP_TIMEOUT_SECONDS`).
+- Each dbt command an agent starts may take up to an hour (`mcp.dbt.command_timeout_seconds` in
+  `config/local/mcp.toml`).

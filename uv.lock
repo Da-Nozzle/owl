@@ -10,6 +10,7 @@ resolution-markers = [
 members = [
     "leads-config",
     "leads-dagster-orchestration",
+    "leads-http",
     "leads-ingest",
     "leads-lake",
     "leads-testing",
@@ -1155,6 +1156,7 @@ dependencies = [
     { name = "dbt-duckdb" },
     { name = "duckdb" },
     { name = "leads-config" },
+    { name = "leads-http" },
     { name = "leads-ingest" },
     { name = "leads-lake" },
     { name = "openlineage-python" },
@@ -1171,10 +1173,28 @@ requires-dist = [
     { name = "dbt-duckdb", specifier = ">=1.11,<1.12" },
     { name = "duckdb", specifier = "==1.5.6" },
     { name = "leads-config", editable = "services/config" },
+    { name = "leads-http", editable = "libs/http" },
     { name = "leads-ingest", editable = "services/ingest" },
     { name = "leads-lake", editable = "libs/lake" },
     { name = "openlineage-python", specifier = "==1.53.0" },
     { name = "packaging", specifier = ">=26.3" },
+]
+
+[[package]]
+name = "leads-http"
+version = "0.1.0"
+source = { editable = "libs/http" }
+dependencies = [
+    { name = "httpx" },
+    { name = "leads-config" },
+    { name = "tenacity" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1,<1" },
+    { name = "leads-config", editable = "services/config" },
+    { name = "tenacity", specifier = ">=9.2,<10" },
 ]
 
 [[package]]
@@ -1186,9 +1206,9 @@ dependencies = [
     { name = "fsspec" },
     { name = "httpx" },
     { name = "leads-config" },
+    { name = "leads-http" },
     { name = "leads-lake" },
     { name = "s3fs" },
-    { name = "tenacity" },
 ]
 
 [package.metadata]
@@ -1197,9 +1217,9 @@ requires-dist = [
     { name = "fsspec", specifier = ">=2026.9" },
     { name = "httpx", specifier = ">=0.28.1,<1" },
     { name = "leads-config", editable = "services/config" },
+    { name = "leads-http", editable = "libs/http" },
     { name = "leads-lake", editable = "libs/lake" },
     { name = "s3fs", specifier = ">=2026.9" },
-    { name = "tenacity", specifier = ">=9.2,<10" },
 ]
 
 [[package]]
@@ -1570,6 +1590,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "leads-config" },
     { name = "leads-dagster-orchestration" },
+    { name = "leads-http" },
     { name = "leads-ingest" },
     { name = "leads-lake" },
 ]
@@ -1589,6 +1610,7 @@ dev = [
 requires-dist = [
     { name = "leads-config", editable = "services/config" },
     { name = "leads-dagster-orchestration", editable = "services/dagster-orchestration" },
+    { name = "leads-http", editable = "libs/http" },
     { name = "leads-ingest", editable = "services/ingest" },
     { name = "leads-lake", editable = "libs/lake" },
 ]

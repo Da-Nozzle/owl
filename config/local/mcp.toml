@@ -1,0 +1,14 @@
+# The MCP servers agents use (.mcp.json), each run by uvx from the package pinned here.
+[mcp.dbt]
+# dbt-mcp before 2.7 imports a function pydantic 2.14 removed, so it no longer starts.
+package = "dbt-mcp@2.7.0"
+# How long one dbt command an agent starts may take; dbt-mcp's default is a minute.
+command_timeout_seconds = 3600
+
+[mcp.lake]
+# It pins its own DuckDB, which must be the project's (duckdb in pyproject.toml): another version
+# may not read the lake's DuckLake catalog.
+package = "mcp-server-motherduck@1.1.0"
+
+[mcp.dagster]
+package = "dagster-mcp@0.12.3"

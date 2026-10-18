@@ -23,13 +23,11 @@ models:
 
   - name: raw_sodra__monthly
     description: >
-      Sodra's open employer data as each snapshot downloaded it: every row of every yearly file
-      the snapshot fetched, under its published header, as text, with no window applied. One row
-      per snapshot, file, employer and declared month; a file Sodra did not change since the last
-      snapshot is there again, as that snapshot's download of it. Built from nothing, it reads
-      every complete snapshot in the archive. Average wage and contributions are suppressed for
-      employers with 3 or fewer insured. The "II" pair (avgWage2, numInsured2) is undocumented by
-      Sodra.
+      Every row of every yearly file each snapshot downloaded, under its published header, as
+      text: one row per snapshot, file, employer and declared month, an unchanged file repeated as
+      that snapshot's download. Built from nothing, it reads every complete snapshot in the
+      archive. Sodra suppresses average wage and contributions for employers with 3 or fewer
+      insured, and does not document the "II" pair (avgWage2, numInsured2).
     columns:
       - name: _source_file
         description: The archived file the row was read from, inside its zip.

@@ -5,15 +5,15 @@ models:
     description: >
       Where Google is searched: one row per municipality, with its bounding box, the employers
       Sodra counts there in the leads' categories (activity_categories, EVRK 2.1) in its latest
-      declared month, and its search mode from google_search_scope (empty for a municipality not
-      searched). The counts rank where a search would find the most of what the leads compare;
-      a municipality is searched only once the seed lists it, so data from the whole country
-      never starts a country-wide sweep. Google's plan (plan_google_places) plans every row with
-      a mode for free, again whenever this table changes, and the fetch (fetch_google_places)
-      pays for the plan's fetch rows. A bounding box is a rectangle, so it holds some of the
-      neighbouring municipalities, and a city's lies inside its district's.
+      declared month, and its search mode from google_search_scope (empty when not searched).
+      The counts show where a search would find the most; a municipality is searched only once
+      the seed lists it, so country-wide data never triggers a country-wide sweep.
+      plan_google_places plans every row with a mode for free whenever this table changes, and
+      fetch_google_places pays for the plan's fetch rows. A bounding box overlaps its
+      neighbours, and a city's lies inside its district's.
     config:
       meta:
+        # leads-dbt-diff matches rows on it.
         key: [municipality_code]
     columns:
       - name: municipality_code
@@ -27,8 +27,7 @@ models:
       - name: target_employers
         description: >
           Employers Sodra counts in the municipality in the leads' categories, in its latest
-          declared month. Sodra writes the employer's municipality; 2,222 of its employers in
-          2026-08 have none (Nenustatyta) and are not counted anywhere.
+          declared month. Employers Sodra gives no municipality (Nenustatyta) are not counted.
       - name: employers_by_category
         description: The same, by category (cafes_restaurants, hair_beauty, car_repair).
       - name: search_mode

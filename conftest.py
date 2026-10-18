@@ -1,6 +1,3 @@
-"""Each test is unit or integration by the directory below its package's tests/ that holds it,
-and is marked so: `pytest -m unit` runs the in-process tests only."""
-
 import os
 from collections.abc import Iterator, MutableMapping
 from pathlib import Path
@@ -36,8 +33,7 @@ def kind_of_test(path: Path) -> str | None:
 
 @pytest.fixture
 def environ() -> Iterator[MutableMapping[str, str]]:
-    """This process's environment, restored after the test: a variable the test added is removed
-    too, which monkeypatch.delenv does not do for one that was missing when it was called."""
+    """os.environ, restored after the test to what it was, whatever the code under test set."""
     environment = os.environ  # noqa: TID251 - tests what code sets for the tools it starts
     with mock.patch.dict(environment):
         yield environment

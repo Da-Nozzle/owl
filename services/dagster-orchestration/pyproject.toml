@@ -5,6 +5,7 @@ description = "Dagster definitions and the composition root for pipeline runs"
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "leads-config",
+    "leads-http",
     "leads-ingest",
     "leads-lake",
     "dagster==1.13.26",
@@ -19,16 +20,17 @@ dependencies = [
 ]
 
 [project.scripts]
-leads-dagster-dev = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dagster_dev"
-leads-dbt = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt"
-leads-dbt-dev = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt_dev"
-leads-dbt-diff = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt_diff"
-leads-mcp-dbt = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dbt_mcp"
-leads-mcp-lake = "leads_dagster_orchestration.entrypoints.tool_launchers:run_lake_mcp"
-leads-mcp-dagster = "leads_dagster_orchestration.entrypoints.tool_launchers:run_dagster_mcp"
+leads-dagster-dev = "leads_dagster_orchestration.dev_tools.dagster_dev:run_dagster_dev"
+leads-dbt = "leads_dagster_orchestration.dev_tools.dbt_cli:run_dbt"
+leads-dbt-dev = "leads_dagster_orchestration.dev_tools.dbt_cli:run_dbt_dev"
+leads-dbt-diff = "leads_dagster_orchestration.dev_tools.dbt_cli:run_dbt_diff"
+leads-mcp-dbt = "leads_dagster_orchestration.dev_tools.mcp_servers:run_dbt_mcp"
+leads-mcp-lake = "leads_dagster_orchestration.dev_tools.mcp_servers:run_lake_mcp"
+leads-mcp-dagster = "leads_dagster_orchestration.dev_tools.mcp_servers:run_dagster_mcp"
 
 [tool.uv.sources]
 leads-config = { workspace = true }
+leads-http = { workspace = true }
 leads-ingest = { workspace = true }
 leads-lake = { workspace = true }
 

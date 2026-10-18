@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from leads_ingest.sources.spinta import Changelog
+from leads_ingest.sources.spinta.changelog import Changelog
 from leads_ingest.sources.vmi.daily_changes import archive_changes
 from leads_ingest.sources.vmi.monthly_register import (
     ACTIVITIES_FILE,
@@ -22,6 +22,9 @@ SETTINGS = VmiSettings(
     daily_changes_schedule="0 6 * * *",
     first_daily_changes="2026-09-01",
     monthly_register_schedule="0 6 21 * *",
+    changelog_page_size=10_000,
+    register_export_attempts=5,
+    register_export_wait_seconds=65,
 )
 CHANGES = [
     change_entry(10, "2026-09-16T23:57:00"),
@@ -48,7 +51,7 @@ def test_a_snapshot_archives_the_changes_made_in_its_window() -> None:
         utc("2026-09-17T03:00:00"),
         utc("2026-09-18T03:00:00"),
         archive,
-        Changelog(REGISTER, spinta),
+        Changelog(REGISTER, spinta, SETTINGS.changelog_page_size),
     )
 
     # Assert
@@ -69,7 +72,7 @@ def test_a_day_without_changes_archives_nothing() -> None:
         utc("2026-09-18T03:00:00"),
         utc("2026-09-19T00:00:00"),
         archive,
-        Changelog(REGISTER, FakeSpinta(REGISTER, CHANGES)),
+        Changelog(REGISTER, FakeSpinta(REGISTER, CHANGES), SETTINGS.changelog_page_size),
     )
 
     # Assert
@@ -122,7 +125,7 @@ def test_an_export_from_before_the_newest_change_is_fetched_again() -> None:
 
     # Assert
     assert archived[REGISTER_FILE].etag == "revision-16"
-    assert len(waits) == 1
+    assert waits == [SETTINGS.register_export_wait_seconds]
 
 
 def test_an_export_that_never_matches_the_changelog_is_not_archived() -> None:
@@ -135,7 +138,7 @@ def test_an_export_that_never_matches_the_changelog_is_not_archived() -> None:
             "2026-09",
             archive,
             SETTINGS,
-            spinta_exporting(*["revision-15"] * 5),
+            spinta_exporting(*["revision-15"] * SETTINGS.register_export_attempts),
             wait=lambda _: None,
         )
     assert archive.downloads == {}

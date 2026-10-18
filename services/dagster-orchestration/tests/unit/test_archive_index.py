@@ -1,4 +1,11 @@
-from leads_dagster_orchestration.archive_index import IndexChanges, index_changes
+import pytest
+
+from leads_dagster_orchestration.archive.index import (
+    IndexChanges,
+    index_changes,
+    load_archive_index_settings,
+)
+from leads_testing.config import build_config
 
 
 def test_a_new_snapshot_gets_a_partition_and_is_reported() -> None:
@@ -49,3 +56,12 @@ def test_partitions_lost_with_the_instance_come_back_from_the_archive() -> None:
 
     # Assert
     assert changes == IndexChanges(added=["2026-09"], removed=[], completed=["2026-09"])
+
+
+def test_the_index_must_look_at_the_archive_at_least_every_second() -> None:
+    # Arrange
+    config = build_config({"archive_index.sensor_interval_seconds": 0})
+
+    # Act / Assert
+    with pytest.raises(ValueError, match="sensor_interval_seconds"):
+        load_archive_index_settings(config)

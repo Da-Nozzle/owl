@@ -6,12 +6,12 @@ sources:
       - name: vmi_monthly_register
         description: >
           The whole VMI taxpayer register, fetched monthly as the baseline its daily changes
-          (archive vmi_daily_changes) are applied to: MokesciuMoketojas.csv, the register as get.data.gov.lt
-          exports it (comma-separated, double-quoted UTF-8; about 350 MB and 930,000 rows, one per
-          company, branch, activity, taxpayer type and group); EkonominesVeiklosRusis.csv, the EVRK
-          2 classifier its activities refer to by _id; and last-change.json, the changelog's newest
-          change when the export was taken. The export's ETag is the revision of the last change
-          it holds, and the fetch keeps only an export whose ETag is last-change.json's revision.
+          (archive vmi_daily_changes) are applied to: MokesciuMoketojas.csv, the register as
+          get.data.gov.lt exports it (comma-separated, double-quoted UTF-8; one row per company,
+          branch, activity, taxpayer type and group); EkonominesVeiklosRusis.csv, the EVRK 2
+          classifier its activities refer to by _id; and last-change.json, the changelog's newest
+          change when the export was taken. The export's ETag is the revision of its last change,
+          and the fetch keeps an export only when that is last-change.json's revision.
 
 models:
   - name: raw_vmi_monthly_register__register

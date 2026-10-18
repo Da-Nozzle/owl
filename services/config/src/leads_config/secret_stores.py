@@ -4,7 +4,7 @@ from pathlib import Path
 
 from leads_config.configuration import SecretStore
 
-SECRET_STORES_TABLE = "secret_stores"
+SECRET_STORE_TABLE = "secret_store"
 
 
 @dataclass(frozen=True, slots=True)
@@ -21,25 +21,21 @@ class FileSecretStore:
         return secret
 
 
-def build_secret_stores(values: Mapping[str, object]) -> dict[str, SecretStore]:
-    declared_stores = values.get(SECRET_STORES_TABLE, {})
-    if not isinstance(declared_stores, Mapping):
-        raise TypeError(f"[{SECRET_STORES_TABLE}] must be a table of stores")
-    return {name: build_secret_store(name, settings) for name, settings in declared_stores.items()}
-
-
-def build_secret_store(name: str, settings: object) -> SecretStore:
+def build_secret_store(values: Mapping[str, object]) -> SecretStore | None:
+    settings = values.get(SECRET_STORE_TABLE)
+    if settings is None:
+        return None
     if not isinstance(settings, Mapping):
-        raise TypeError(f"[{SECRET_STORES_TABLE}.{name}] must be a table")
+        raise TypeError(f"[{SECRET_STORE_TABLE}] must be a table")
     match settings.get("kind"):
         case "file":
-            return build_file_secret_store(name, settings)
+            return build_file_secret_store(settings)
         case unknown_kind:
-            raise ValueError(f"Secret store {name!r} has unknown kind {unknown_kind!r}")
+            raise ValueError(f"[{SECRET_STORE_TABLE}] has unknown kind {unknown_kind!r}")
 
 
-def build_file_secret_store(name: str, settings: Mapping[str, object]) -> FileSecretStore:
+def build_file_secret_store(settings: Mapping[str, object]) -> FileSecretStore:
     directory = settings.get("directory")
     if not isinstance(directory, str):
-        raise TypeError(f"File secret store {name!r} needs a 'directory' string")
+        raise TypeError(f"A file [{SECRET_STORE_TABLE}] needs a 'directory' string")
     return FileSecretStore(directory=Path(directory))

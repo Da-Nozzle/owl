@@ -6,6 +6,7 @@ requires-python = ">=3.14,<3.15"
 dependencies = [
     "leads-config",
     "leads-dagster-orchestration",
+    "leads-http",
     "leads-ingest",
     "leads-lake",
 ]
@@ -31,6 +32,7 @@ exclude = ["services/transform"]
 [tool.uv.sources]
 leads-config = { workspace = true }
 leads-dagster-orchestration = { workspace = true }
+leads-http = { workspace = true }
 leads-ingest = { workspace = true }
 leads-lake = { workspace = true }
 leads-testing = { workspace = true }
@@ -88,7 +90,7 @@ ban-relative-imports = "all"
 "os.getenv".msg = "Read config from TOML."
 
 [tool.ruff.lint.per-file-ignores]
-"services/dagster-orchestration/src/leads_dagster_orchestration/entrypoints/tool_launchers.py" = [
+"services/dagster-orchestration/src/leads_dagster_orchestration/dev_tools/launch.py" = [
     "TID251",
 ]
 

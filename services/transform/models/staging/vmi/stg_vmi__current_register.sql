@@ -1,8 +1,4 @@
--- The taxpayer register as it stands after the newest change fetched: the newest export, with every
--- change made after it applied in changelog order. The register's published columns mapped to
--- names and types, one line per column (macros/vmi.sql), and each activity resolved in the EVRK 2
--- classifier exported with it. A table, so every value is cast when it is built.
-{{ config(materialized='table') }}
+{{ config(materialized='table') }}  -- so a value that does not parse fails the build
 
 {%- set columns = vmi_register_columns() %}
 
@@ -12,15 +8,15 @@ with export as (
     where _snapshot_month = (select max(_snapshot_month) from {{ ref('raw_vmi_monthly_register__register') }})
 ),
 
--- Where in the changelog the export stands: it holds every change up to its last change.
+-- The export holds every change up to its last change.
 last_change as (
     select _cid::bigint as change_id
     from {{ ref('raw_vmi_monthly_register__last_change') }}
     where _snapshot_month = (select max(_snapshot_month) from export)
 ),
 
--- Each row's latest value of every field a change after the export set, as JSON: absent when no
--- such change set the field, JSON null when the latest one emptied it. An insert sets them all.
+-- Each field's latest value set after the export, as JSON: SQL null when no change set it, JSON
+-- null when the latest emptied it. An insert sets every field.
 changed_rows as (
     select
         register_row_id,

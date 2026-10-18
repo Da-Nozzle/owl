@@ -1,7 +1,3 @@
--- Where Google is searched, one row per municipality: its bounding box, how many employers Sodra
--- counts there in the leads' categories in its latest month, and whether it is priced or fetched
--- (the google_search_scope seed). Every municipality is listed, so the counts show where a search
--- would find the most; the Google fetch and its price read only the rows with a search mode.
 {{ config(materialized='table') }}
 
 with municipalities as (

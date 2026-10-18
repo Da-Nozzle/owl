@@ -25,7 +25,7 @@
                 "esbenp.prettier-vscode",
                 "tamasfe.even-better-toml",
                 "ms-azuretools.vscode-containers",
-                "dbtlabsinc.dbt", // NOTE not OSS
+                "dbtlabsinc.dbt", // not open source
                 "mechatroner.rainbow-csv"
             ],
             "settings": {

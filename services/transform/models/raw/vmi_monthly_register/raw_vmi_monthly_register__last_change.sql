@@ -1,6 +1,3 @@
--- Each snapshot's last change: the register changelog's newest entry when the snapshot's export was
--- taken, which the export holds and no later change. The changes after it are what staging applies
--- to the export. One row per snapshot.
 -- depends_on: {{ source('archive', 'vmi_monthly_register') }}
 {{ config(
     materialized='incremental',

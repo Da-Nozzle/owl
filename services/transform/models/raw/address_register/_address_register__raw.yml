@@ -5,15 +5,13 @@ sources:
     tables:
       - name: address_register
         description: >
-          The Address Register (Adresų registras) on get.data.gov.lt, each dataset as the portal
-          exports it whole: Pastatas.csv (the addresses of buildings and land plots, about 317 MB
-          and 1.1 M rows), Patalpa.csv (the addresses of premises, each in its building, 229 MB
-          and 1.2 M rows), Gatve.csv (streets), GyvenamojiVietove.csv (settlements) and
-          Savivaldybe.csv (municipalities). Comma-separated, double-quoted UTF-8 with no BOM; the
-          header names Spinta's own columns first (_type, _id, _revision, _page.next), and a
-          reference to another dataset as <property>._id. The Registers Centre loads it in the
-          same batches as JAR, every one to six months on no fixed day; premises last changed on
-          2024-05-28, so premises registered since are not in Patalpa.csv.
+          The Address Register (Adresų registras) on get.data.gov.lt, each dataset exported whole:
+          Pastatas.csv (building and land plot addresses), Patalpa.csv (premises addresses, each
+          in its building), Gatve.csv (streets), GyvenamojiVietove.csv (settlements) and
+          Savivaldybe.csv (municipalities). Comma-separated, double-quoted UTF-8 with no BOM;
+          Spinta's own columns (_type, _id, _revision, _page.next) come first, and a reference to
+          another dataset is <property>._id. Updated with JAR every one to six months, on no fixed
+          day; premises last changed on 2024-05-28, so premises registered since are missing.
 
 models:
   - name: raw_address_register__buildings

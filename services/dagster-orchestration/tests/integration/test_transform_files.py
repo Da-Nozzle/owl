@@ -6,12 +6,9 @@ import dagster as dg
 import duckdb
 from dagster_dbt import DbtCliInvocation
 
-from leads_dagster_orchestration.assets.transform import (
-    COMPILED_SQL,
-    ensure_metadata_database,
-    keep_main_state,
-    with_compiled_sql,
-)
+from leads_dagster_orchestration.dbt.project import ensure_metadata_database, keep_main_state
+from leads_dagster_orchestration.dbt.step_metadata import with_compiled_sql
+from leads_dagster_orchestration.metadata_keys import COMPILED_SQL
 
 MODEL = "model.leads_transform.stg_sodra__monthly"
 SEED = "seed.leads_transform.municipalities"

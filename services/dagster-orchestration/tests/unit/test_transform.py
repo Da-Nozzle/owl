@@ -8,15 +8,10 @@ from dagster._core.definitions.definitions_load_context import (
 )
 from dagster_dbt import DbtProject
 
-from leads_dagster_orchestration.assets.transform import (
-    environment_variable,
-    has_shared_models,
-    pool_name,
-    prepare_on_initial_load,
-    set_dbt_environment,
-    snapshot_query,
-    source_layers,
-)
+from leads_dagster_orchestration.dbt.assets import has_shared_models, pool_name, source_layers
+from leads_dagster_orchestration.dbt.environment import environment_variable, set_dbt_environment
+from leads_dagster_orchestration.dbt.project import prepare_on_initial_load
+from leads_dagster_orchestration.dbt.step_metadata import snapshot_query
 from leads_ingest.settings import PipelineMode
 
 

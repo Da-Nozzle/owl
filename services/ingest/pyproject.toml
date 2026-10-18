@@ -5,16 +5,17 @@ description = "Source fetches, the raw archive they write to, and the adapters t
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "leads-config",
+    "leads-http",
     "leads-lake",
     "duckdb==1.5.6",
     "fsspec>=2026.9",
     "httpx>=0.28.1,<1",
     "s3fs>=2026.9",
-    "tenacity>=9.2,<10",
 ]
 
 [tool.uv.sources]
 leads-config = { workspace = true }
+leads-http = { workspace = true }
 leads-lake = { workspace = true }
 
 [build-system]

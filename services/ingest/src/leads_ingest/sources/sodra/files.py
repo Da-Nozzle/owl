@@ -7,8 +7,7 @@ from leads_ingest.ports.raw_archive import RawArchive
 from leads_ingest.sources.sodra.settings import SodraSettings
 
 SOURCE_NAME = "sodra"
-# Sodra is fetched once a month, so a snapshot is keyed by its month, which its dbt models read
-# from the archive path (_snapshot_month).
+# Its dbt models read the month from the archive path (_snapshot_month).
 SNAPSHOT_KEY_FORMAT = "%Y-%m"
 
 
@@ -18,10 +17,8 @@ def archive_yearly_files(
     settings: SodraSettings,
     downloader: Downloader,
 ) -> dict[str, Download]:
-    """Fetches the yearly files that cover the snapshot's window into the archive, where dbt
-    reads them, all of each file: the window only picks which years' files are fetched. Returns
-    each file's download by name; completing the snapshot is the caller's.
-    """
+    """Saves the whole yearly files that cover the snapshot's window. Completing the snapshot is
+    the caller's."""
     archived = {}
     for year in window_years(Month.parse(snapshot), settings.history_months):
         name = file_name(year)
@@ -33,8 +30,7 @@ def archive_yearly_files(
 
 
 def window_years(snapshot: Month, history_months: int) -> list[int]:
-    """Years of the files a snapshot fetches: those holding the `history_months` before the
-    snapshot's month."""
+    """The years of the `history_months` before the snapshot's month."""
     return list(range(snapshot.minus(history_months).year, snapshot.minus(1).year + 1))
 
 
@@ -43,8 +39,7 @@ def file_name(year: int) -> str:
 
 
 def require_single_csv(zipped: bytes) -> None:
-    """Sodra publishes each yearly file as a zip holding one CSV; dbt reads `*.csv` inside it,
-    so a second CSV would be read as more rows."""
+    """dbt reads every `*.csv` in the zip, so a second CSV would be read as more rows."""
     with zipfile.ZipFile(io.BytesIO(zipped)) as archive:
         members = [name for name in archive.namelist() if name.lower().endswith(".csv")]
     if len(members) != 1:

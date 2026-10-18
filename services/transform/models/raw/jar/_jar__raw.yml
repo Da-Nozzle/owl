@@ -5,25 +5,23 @@ sources:
     tables:
       - name: jar
         description: >
-          The Register of Legal Entities (JAR) on get.data.gov.lt, each dataset as the portal
-          exports it whole: JuridinisAsmuo.csv (registered entities), Forma.csv (legal forms),
-          Statusas.csv (legal statuses) and Buveine.csv (seats: each entity's registered office,
-          as an address in the Address Register). Snapshots before 2026-10-17 have no Buveine.csv;
-          2026-09 was fetched again with it. Comma-separated, double-quoted UTF-8 with no BOM; the
-          header names Spinta's own columns first (_type, _id, _revision, _page.next), and a
-          reference to another dataset as <property>._id. The portal lists the register as updated
-          monthly; its changelog shows updates every one to six months, on no fixed day.
+          The Register of Legal Entities (JAR) on get.data.gov.lt, each dataset exported whole:
+          JuridinisAsmuo.csv (registered entities), Forma.csv (legal forms), Statusas.csv (legal
+          statuses) and Buveine.csv (seats: each entity's registered office, an Address Register
+          address). Snapshots fetched before 2026-10-17 have no Buveine.csv, except 2026-09,
+          fetched again. Comma-separated, double-quoted UTF-8 with no BOM; Spinta's own columns
+          (_type, _id, _revision, _page.next) come first, and a reference to another dataset is
+          <property>._id. Updated every one to six months, on no fixed day.
 
 models:
   - name: raw_jar__entities
     description: >
-      The register's entities as each snapshot fetched them: every row of JuridinisAsmuo.csv, under
-      its published header, as text. One row per snapshot and entity; an export the register did
-      not change since the last snapshot is there again, as that snapshot's fetch of it. Built from
-      nothing, it reads every complete snapshot in the archive. The names of individual
-      enterprises and of general and limited partnerships are anonymised by the register.
-      pilnas_adresas and adresas._id are empty on every row: the registered address is the
-      seat's (raw_jar__seats), resolved in the Address Register (archive address_register).
+      Every row of JuridinisAsmuo.csv as each snapshot fetched it, under its published header, as
+      text: one row per snapshot and entity, an unchanged export repeated as that snapshot's fetch.
+      Built from nothing, it reads every complete snapshot in the archive. The register anonymises
+      the names of individual enterprises and of general and limited partnerships.
+      pilnas_adresas and adresas._id are always empty: the registered address is the seat's
+      (raw_jar__seats).
     columns: &file_columns
       - name: _source_file
         description: The archived file the row was read from.

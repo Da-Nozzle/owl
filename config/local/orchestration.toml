@@ -1,6 +1,7 @@
-# Read by leads-dagster-dev only. In production the webserver is deployed on its own.
+# Read by the dev tools only (leads-dagster-dev, leads-mcp-dagster). In production the webserver is
+# deployed on its own.
 [dagster]
-# The code locations, live and replay, loaded side by side. Production deploys live only.
+# The code locations, live and replay, side by side. Production deploys live only.
 workspace = "/workspace/.devcontainer/dagster/workspace.yaml"
 
 [dagster.webserver]
@@ -9,26 +10,12 @@ port = 3000
 
 [transform]
 project_dir = "/workspace/services/transform"
-# The most memory DuckDB takes in each dbt process (its memory_limit), beyond which it spills to
-# disk under the project's target/ or fails. Unset, DuckDB takes up to 80% of RAM per process,
-# and two sources building side by side (JAR and the Address Register, 2026-10-17) exhausted a
-# 14 GB machine with no swap. Several dbt processes can run at once, one per source and lake.
+# DuckDB's memory_limit in each dbt process, beyond which it spills to target/ or fails. Unset,
+# each takes up to 80% of RAM, and several run at once (one per source and lake).
 duckdb_memory_limit = "2GB"
+# Models each dbt process builds at once, all within its duckdb_memory_limit.
+dbt_threads = 4
 
-# Lineage: each code location's sensor `lineage` sends its assets' materializations to Marquez as
-# OpenLineage events (<url>/api/v1/lineage), every job and dataset in `namespace`. Its UI is
-# marquez-web, on http://localhost:3001.
-[lineage]
-url = "http://marquez:5000"
-namespace = "leads"
-# Production example:
-# url = "https://marquez.internal.example.com"
-
-[lineage.http]
-# Marquez is beside the pipeline: a failed request is sent again after 1 and 2 seconds. Still
-# failing, the sensor stops and its next tick, half a minute on, resends from there.
-timeout_seconds = 10
-attempts = 3
-backoff_seconds = 1
-max_wait_seconds = 5
-min_interval_seconds = 0
+[archive_index]
+# Seconds between the sensor's looks for complete snapshots in the archive.
+sensor_interval_seconds = 60
