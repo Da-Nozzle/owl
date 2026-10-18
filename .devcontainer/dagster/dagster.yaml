@@ -20,9 +20,13 @@ run_coordinator:
 
 # Each lake writer's pool is named after what it writes: one run per pool at a time, so two runs
 # never write the same tables, while different pools run in parallel.
+# Locally one run at a time, so a reload that marks everything stale queues the rebuild instead of
+# running both lakes at once and exhausting memory; the rest wait in the queue.
 concurrency:
   pools:
     default_limit: 1
+  runs:
+    max_concurrent_runs: 1
 
 run_launcher:
   module: dagster.core.launcher

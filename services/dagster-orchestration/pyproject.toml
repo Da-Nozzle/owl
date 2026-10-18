@@ -24,6 +24,7 @@ leads-dagster-dev = "leads_dagster_orchestration.dev_tools.dagster_dev:run_dagst
 leads-dbt = "leads_dagster_orchestration.dev_tools.dbt_cli:run_dbt"
 leads-dbt-dev = "leads_dagster_orchestration.dev_tools.dbt_cli:run_dbt_dev"
 leads-dbt-diff = "leads_dagster_orchestration.dev_tools.dbt_cli:run_dbt_diff"
+leads-dbt-vscode = "leads_dagster_orchestration.dev_tools.dbt_cli:write_vscode_settings"
 leads-mcp-dbt = "leads_dagster_orchestration.dev_tools.mcp_servers:run_dbt_mcp"
 leads-mcp-lake = "leads_dagster_orchestration.dev_tools.mcp_servers:run_lake_mcp"
 leads-mcp-dagster = "leads_dagster_orchestration.dev_tools.mcp_servers:run_dagster_mcp"

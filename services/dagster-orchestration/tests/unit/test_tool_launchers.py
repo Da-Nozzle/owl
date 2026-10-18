@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from leads_dagster_orchestration.dev_tools.dbt_cli import built_models
+from leads_dagster_orchestration.dev_tools.dbt_cli import built_models, with_setting
 from leads_dagster_orchestration.dev_tools.launch import launch_environment, split_lake_option
 from leads_dagster_orchestration.dev_tools.mcp_servers import dbt_mcp_environment, load_mcp_settings
 from leads_ingest.settings import PipelineMode
@@ -98,3 +98,38 @@ def test_the_dbt_mcp_server_waits_on_dbt_as_long_as_configured() -> None:
 
     # Assert
     assert environment["DBT_CLI_TIMEOUT"] == "600"
+
+
+@pytest.mark.parametrize("text", ["", "{}"])
+def test_a_setting_is_written_into_empty_vscode_settings(text: str) -> None:
+    # Act
+    updated = with_setting(text, "dbt.environmentVariables", {"LEADS_DBT_THREADS": "4"})
+
+    # Assert
+    assert json.loads(updated) == {"dbt.environmentVariables": {"LEADS_DBT_THREADS": "4"}}
+
+
+def test_writing_a_vscode_setting_keeps_the_others_and_replaces_its_old_value() -> None:
+    # Arrange
+    text = json.dumps(
+        {
+            "python.defaultInterpreterPath": "/usr/local/bin/python",
+            "dbt.environmentVariables": {"OLD": "1"},
+        }
+    )
+
+    # Act
+    updated = with_setting(text, "dbt.environmentVariables", {"NEW": "2"})
+
+    # Assert
+    assert json.loads(updated) == {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "dbt.environmentVariables": {"NEW": "2"},
+    }
+
+
+@pytest.mark.parametrize("text", ['{"a": 1, // a comment\n}', "[]"])
+def test_vscode_settings_that_are_not_a_plain_json_object_are_left_alone(text: str) -> None:
+    # Act / Assert
+    with pytest.raises(json.JSONDecodeError):
+        with_setting(text, "dbt.environmentVariables", {})

@@ -22,6 +22,7 @@ Everything for local work lives in `.devcontainer/`; Compose is not used outside
    leads-dbt --lake replay debug  # dbt on a lake (live or replay), secrets resolved from config
    leads-dbt-dev build -s state:modified+  # your model changes, in a dev copy (below)
    leads-dbt-diff              # what those changes did to the tables (below)
+   leads-dbt-vscode            # the dbt VS Code extension's environment, then reload the window
    leads-dagster-dev           # Dagster webserver and daemon; UI on http://localhost:3000
    ```
 
@@ -240,6 +241,13 @@ leads-dbt-dev show -s stg_sodra__monthly --limit 20   # look at the result
 leads-dbt-dev build -s raw_sodra__monthly            # raw, read from the archive
 leads-dbt-dev --lake live build -s state:modified+   # the same against the live lake
 ```
+
+The dbt VS Code extension (lineage, hover, compile, preview) runs on the same `dev` target, but it
+cannot resolve the profile's `env_var()`s by itself. `leads-dbt-vscode` (`--lake` as above) writes
+them into `dbt.environmentVariables` in the machine's VS Code settings, kept out of the repository
+as they hold the lake's credentials; then run **Developer: Reload Window**. Run it again after
+changing the config. The extension parses into `services/transform/target/<lake>/vscode/`, apart
+from `leads-dbt-dev`'s files.
 
 Then `leads-dbt-diff` compares each model the last `leads-dbt-dev` command built with the lake's
 table: rows on one side only, columns added, dropped or retyped, and on a model whose meta names

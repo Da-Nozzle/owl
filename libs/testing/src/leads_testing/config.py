@@ -122,6 +122,7 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "lake": {"package": "mcp-server-motherduck@1.1.0"},
         "dagster": {"package": "dagster-mcp@0.12.3"},
     },
+    "vscode": {"machine_settings": "/home/dev/.vscode-server/data/Machine/settings.json"},
 }
 
 

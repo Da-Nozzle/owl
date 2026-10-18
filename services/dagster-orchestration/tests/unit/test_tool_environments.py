@@ -10,7 +10,10 @@ from leads_dagster_orchestration.dev_tools.dagster_dev import (
     dagster_storage_environment,
     dagster_webserver_url,
 )
-from leads_dagster_orchestration.dev_tools.dbt_cli import dbt_dev_environment
+from leads_dagster_orchestration.dev_tools.dbt_cli import (
+    dbt_dev_environment,
+    vscode_dbt_environment,
+)
 from leads_dagster_orchestration.dev_tools.mcp_servers import lake_init_sql
 from leads_ingest.settings import PipelineMode
 from leads_lake.connection import libpq_connection_string
@@ -149,6 +152,23 @@ def test_dbt_dev_builds_into_its_lakes_own_file_and_defers_to_its_lakes_state(
         "LEADS_DBT_DEV_PATH": f"/project/target/{mode.value}/dev/dev.duckdb",
         "DBT_DEFER": "true",
         "DBT_STATE": f"/project/target/{mode.value}/main",
+    }
+
+
+@pytest.mark.parametrize("mode", list(PipelineMode))
+def test_the_vscode_extension_parses_into_a_folder_and_duckdb_file_of_its_own(
+    mode: PipelineMode,
+) -> None:
+    # Arrange
+    config = build_config({"transform.project_dir": "/project"})
+
+    # Act
+    environment = vscode_dbt_environment(config, mode)
+
+    # Assert
+    assert environment == {
+        "DBT_TARGET_PATH": f"/project/target/{mode.value}/vscode",
+        "LEADS_DBT_DEV_PATH": f"/project/target/{mode.value}/vscode/editor.duckdb",
     }
 
 
