@@ -1,0 +1,50 @@
+from zoneinfo import ZoneInfo
+
+import pytest
+
+from leads_dagster_orchestration.lineage import load_lineage_settings, nominal_time_facet
+from leads_testing.config import build_config
+
+VILNIUS = ZoneInfo("Europe/Vilnius")
+
+
+def test_a_monthly_snapshot_runs_from_its_first_day_to_the_next_months() -> None:
+    # Act
+    facet = nominal_time_facet("2026-12", VILNIUS)
+
+    # Assert
+    assert facet is not None
+    assert facet.nominalStartTime == "2026-12-01T00:00:00+02:00"
+    assert facet.nominalEndTime == "2027-01-01T00:00:00+02:00"
+
+
+def test_a_daily_snapshot_runs_one_day_in_the_pipelines_timezone() -> None:
+    # Act
+    facet = nominal_time_facet("2026-10-24", VILNIUS)
+
+    # Assert
+    assert facet is not None
+    assert facet.nominalStartTime == "2026-10-24T00:00:00+03:00"
+    assert facet.nominalEndTime == "2026-10-25T00:00:00+03:00"
+
+
+@pytest.mark.parametrize("partition", [None, "sample", "2026-13", "2026-10-18|vilnius"])
+def test_a_key_that_names_no_snapshot_has_no_nominal_time(partition: str | None) -> None:
+    # Act
+    facet = nominal_time_facet(partition, VILNIUS)
+
+    # Assert
+    assert facet is None
+
+
+def test_lineage_settings_come_from_the_lineage_table() -> None:
+    # Arrange
+    config = build_config({"lineage.url": "http://marquez.test:5000"})
+
+    # Act
+    settings = load_lineage_settings(config)
+
+    # Assert
+    assert settings.url == "http://marquez.test:5000"
+    assert settings.namespace == "leads"
+    assert settings.http.retry.attempts == 3

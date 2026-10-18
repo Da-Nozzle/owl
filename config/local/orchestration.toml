@@ -14,3 +14,21 @@ project_dir = "/workspace/services/transform"
 # and two sources building side by side (JAR and the Address Register, 2026-10-17) exhausted a
 # 14 GB machine with no swap. Several dbt processes can run at once, one per source and lake.
 duckdb_memory_limit = "2GB"
+
+# Lineage: each code location's sensor `lineage` sends its assets' materializations to Marquez as
+# OpenLineage events (<url>/api/v1/lineage), every job and dataset in `namespace`. Its UI is
+# marquez-web, on http://localhost:3001.
+[lineage]
+url = "http://marquez:5000"
+namespace = "leads"
+# Production example:
+# url = "https://marquez.internal.example.com"
+
+[lineage.http]
+# Marquez is beside the pipeline: a failed request is sent again after 1 and 2 seconds. Still
+# failing, the sensor stops and its next tick, half a minute on, resends from there.
+timeout_seconds = 10
+attempts = 3
+backoff_seconds = 1
+max_wait_seconds = 5
+min_interval_seconds = 0

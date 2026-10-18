@@ -57,6 +57,11 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "user_agent": "leads-test",
         "replay_path": "/workspace/replay",
     },
+    "lineage": {
+        "url": "http://marquez:5000",
+        "namespace": "leads",
+        "http": http_table(timeout=10, attempts=3, max_wait=5),
+    },
     "sodra": {
         "download_url_template": "https://sodra.test/{year}/monthly-{year}.csv.zip",
         "history_months": 13,

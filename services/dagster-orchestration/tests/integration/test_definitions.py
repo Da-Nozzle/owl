@@ -25,6 +25,7 @@ from leads_dagster_orchestration.automation import (
     TRANSFORM_AUTOMATION,
 )
 from leads_dagster_orchestration.entrypoints.definitions import pipeline_definitions
+from leads_dagster_orchestration.lineage import LINEAGE
 from leads_ingest.settings import PipelineMode
 from leads_testing.config import build_config
 
@@ -288,7 +289,7 @@ def test_new_snapshots_and_changed_models_build_themselves(
     assert staging is not None
     assert staging.get_label() == REBUILD_ON_CHANGE
     assert graph.get(FETCH).automation_condition is None
-    for name in (ARCHIVE_INDEX, TRANSFORM_AUTOMATION):
+    for name in (ARCHIVE_INDEX, TRANSFORM_AUTOMATION, LINEAGE):
         assert definitions.resolve_sensor_def(name).default_status is dg.DefaultSensorStatus.RUNNING
 
 

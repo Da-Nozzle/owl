@@ -27,6 +27,7 @@ from leads_dagster_orchestration.dbt_resource import dbt_core_resource
 from leads_dagster_orchestration.executors import sequential_in_process_executor
 from leads_dagster_orchestration.jobs import fetch_job, fetch_schedule, rebuild_job
 from leads_dagster_orchestration.lake_labels import lake_labels
+from leads_dagster_orchestration.lineage import build_lineage_sensor, load_lineage_settings
 from leads_dagster_orchestration.snapshots import (
     ArchivedSource,
     FetchPlan,
@@ -175,6 +176,9 @@ def pipeline_definitions(mode: PipelineMode, config: Configuration | None = None
             *(
                 plan_automation_sensor(source, plan_key(source.name, PipelineMode.LIVE))
                 for source in planned
+            ),
+            build_lineage_sensor(
+                load_lineage_settings(config), user_agent, pipeline_settings.timezone
             ),
         ],
         resources={"dbt": dbt_core_resource(transform_project)},

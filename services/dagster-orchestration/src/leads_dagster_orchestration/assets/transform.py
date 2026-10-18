@@ -36,6 +36,7 @@ FETCHED_AT_COLUMN_META = "fetched_at_column"
 ROW_COUNT = "dagster/row_count"
 TABLE_ROW_COUNT = "table_row_count"
 ARCHIVE_FETCHED_AT = "archive_fetched_at"
+COMPILED_SQL = "compiled_sql"
 
 
 def build_transform_assets(
@@ -160,10 +161,10 @@ def build_dbt_step(
         snapshot = context.partition_key if partitions else None
         with environment_variable(SNAPSHOT_VARIABLE, snapshot) if snapshot else nullcontext():
             build = dbt.cli(["build"], context=context)
-        events = build.stream().fetch_column_metadata(with_column_lineage=False).fetch_row_counts()
+        events = build.stream().fetch_column_metadata(with_column_lineage=True).fetch_row_counts()
         for event in events:
             counted = snapshot_metadata(event, build, snapshot) if snapshot else event
-            yield with_labels(counted, run_labels)
+            yield with_labels(with_compiled_sql(counted, build), run_labels)
         keep_main_state(build.target_path / "manifest.json", main_state_dir)
 
     return dbt_step
@@ -213,6 +214,23 @@ def snapshot_metadata[Event](event: Event, build: DbtCliInvocation, snapshot: st
             **({ARCHIVE_FETCHED_AT: dg.MetadataValue.text(str(fetched_at))} if fetched_at else {}),
         }
     )
+
+
+def with_compiled_sql[Event](event: Event, build: DbtCliInvocation) -> Event:
+    """A model's SQL as dbt compiled it for this build (refs resolved, ephemeral models inlined,
+    a raw model reading this snapshot's files), kept as compiled_sql: what this version of the
+    table was computed by. The lineage sensor sends it to Marquez, which shows it with the run."""
+    if not isinstance(event, dg.Output | dg.AssetMaterialization):
+        return event
+    unique_id = event.metadata.get("unique_id")
+    node = build.manifest["nodes"].get(unique_id.value if unique_id else None)
+    if node is None or node["resource_type"] != "model":
+        return event
+    path = build.target_path / "compiled" / node["package_name"] / node["original_file_path"]
+    if not path.exists():
+        return event
+    sql = dg.MetadataValue.text(path.read_text())
+    return event.with_metadata({**event.metadata, COMPILED_SQL: sql})
 
 
 def snapshot_query(node: Mapping[str, Any], snapshot: str) -> str | None:
