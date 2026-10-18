@@ -92,6 +92,45 @@ sources go in the lake's box itself. Each lake is also one folder in the asset c
 own history and pools. Node names say the layer (`fetch_`, `archive_`, `raw_`, `stg_`); only live
 has a fetch, and the archive is drawn dashed, as nothing can materialize it.
 
+### Lineage (Marquez)
+
+Marquez's UI is on http://localhost:3001; pick the namespace `leads` at the top. Each code location
+has a sensor, `lineage`, running from the start, which sends Marquez every materialization of the
+location's assets as an OpenLineage event, within half a minute of its run's end
+(`leads_dagster_orchestration/lineage.py`). Its first tick sends the instance's history.
+
+- **Graph:** an asset is a job and a dataset of the same name, its key (`live/raw/raw_sodra__monthly`);
+  the job reads the asset's parents. So Marquez draws Dagster's graph, fetch → archive → raw →
+  staging → models, one per lake. Search a table by name and open its lineage.
+- **Per table:** its columns, each typed as built and described as the dbt YAML describes it, and
+  the table's description (in the facets panel: Marquez 0.51 does not copy it to the description
+  field).
+- **Column lineage:** each staging and later column, from the columns it is computed from, back to
+  raw's. Open it from the Datasets list (Column Lineage → VIEW) or from a dataset's column table
+  (the split-screen icon beside a column); click a column for its description. dagster-dbt works it
+  out with sqlglot after each build, so a model has it from its next build on. Raw has none: it
+  reads the archive's files, which sqlglot cannot see into, and each raw build logs a warning
+  saying so.
+- **How a column is computed:** the SQL dbt compiled for the build (refs resolved), on the run in
+  the job's page (open the model's job, then a run). Every dbt build keeps it as `compiled_sql` in
+  Dagster too. Marquez shows which columns feed a column, not the expression: OpenLineage can carry
+  a transformation per column, but Marquez 0.51's UI does not show one, so none is sent.
+- **Quality:** each table's checks (its dbt tests, as dagster-dbt makes them checks, and any other
+  asset check) from the run that built it, each passed or failed. Marquez shows them on the
+  dataset's page (QUALITY, the passed and failed counts, then each check), healthy if all
+  passed. The Datasets list's Quality column stays N/A: Marquez 0.51's list API returns no facets,
+  so the column has nothing to read. Raw, archive and fetch have no checks.
+- **Per run:** a materialization is a completed run of the asset's job, with the rows it wrote and
+  the snapshot it built as its nominal time (Marquez lists that under the run's `args`). It is
+  sent once its run has ended, so that it carries the run's checks.
+- **Not sent:** failures. Dagster OSS records which step failed, not which of its assets did; see
+  them in Dagster.
+
+`[lineage]` in `config/local/orchestration.toml` says where Marquez is. If it is down, the sensor's
+tick says so and the next one carries on where it stopped. To send everything again, clear the
+sensor's cursor in Dagster: each run's id is derived from the Dagster run, so Marquez gets the same
+runs, not new ones.
+
 ### Snapshots
 
 Every source goes through the raw archive. What one fetch of a source captures is a snapshot,
