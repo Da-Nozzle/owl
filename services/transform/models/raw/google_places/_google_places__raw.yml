@@ -1,0 +1,60 @@
+version: 2
+
+sources:
+  - name: archive
+    tables:
+      - name: google_places
+        description: >
+          Google's listings, searched with the Places API (New) Text Search, one snapshot a
+          month: each query of google_places.queries swept over each search area to be fetched
+          (int_google_search_areas, a municipality's bounding box), split into tiles of at most
+          google_places.max_tile_meters, smaller where a search was capped at 60 places. Only the
+          searches that hold every place the free plan found are paid for and kept.
+          One JSON page per file as the API sent it ({"places": [...]}, up to 20 places, each
+          with the fields the fetch asked for), named places-<area>-<query>-<tile>-<page>.json:
+          the area's municipality code, the query in ASCII, the tile's path from the area's box
+          (r, then a digit per split: 0 south-west, 1 south-east, 2 north-west, 3 north-east) and
+          the page from 1. Each page's
+          sidecar keeps the request it answered (field mask and body: query, rectangle, page
+          token). Tiles where the free plan found nothing have no pages. Results are ranked by
+          relevance, not exhaustive: a query finds what Google judges to match it, and a tile
+          finds a few places its quarters do not.
+
+models:
+  - name: raw_google_places__places
+    description: >
+      The places each snapshot's sweep found, as the API sent them: one row per place on each
+      page, the place as JSON and the search that found it. A place found by several queries, or
+      by a tile and its quarters, has a row for each. Built from nothing, it reads every complete
+      snapshot in the archive.
+    columns:
+      - name: id
+        description: The place id, the only field Google's terms allow to be stored indefinitely.
+      - name: _search_area
+        description: >
+          The search area (municipality code, int_google_search_areas) whose sweep the page is
+          of; a place in two areas' boxes may be on either's pages.
+      - name: _search_query
+        description: The query that found the place, as sent.
+      - name: _search_tile
+        description: >
+          The tile searched: its path from the area's box (r), a digit per split (0 south-west,
+          1 south-east, 2 north-west, 3 north-east).
+      - name: _search_page
+        description: The page of the tile's search the place was on, from 1.
+      - name: _search_rectangle
+        description: The tile as the request restricted it (JSON, low and high corners).
+      - name: place
+        description: The place as the API sent it (JSON), with the fields the fetch asked for.
+      - name: _source_file
+        description: The archived page the place was read from.
+      - name: _snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch this row is from, from the archive path.
+      - name: _file_url
+        description: The endpoint the page was requested from.
+      - name: _file_fetched_at
+        description: When the page was fetched (ISO 8601, UTC).
+      - name: _file_last_modified
+        description: Empty; the API sends no Last-Modified.
+      - name: _file_sha256
+        description: The page's SHA-256 as fetched.

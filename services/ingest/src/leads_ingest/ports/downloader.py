@@ -1,4 +1,5 @@
 import hashlib
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
@@ -15,6 +16,9 @@ class Download:
     # The server's version of what it sent (its ETag header), as sent. get.data.gov.lt sets it
     # to the revision of the dataset's last change, which places an export in its changelog.
     etag: str | None = None
+    # What was asked for beyond the URL, for a response that a GET of the URL would not give
+    # again (a search's body and field mask), never its credentials. None for a plain GET.
+    request: Mapping[str, object] | None = None
 
     @property
     def size(self) -> int:

@@ -12,9 +12,9 @@ from leads_dagster_orchestration.tool_environments import (
     dbt_dev_environment,
     dbt_environment,
     lake_init_sql,
-    libpq_connection_string,
 )
 from leads_ingest.settings import PipelineMode
+from leads_lake.connection import libpq_connection_string
 from leads_testing.config import build_config, secret_reference
 
 

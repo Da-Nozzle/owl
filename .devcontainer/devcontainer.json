@@ -25,7 +25,8 @@
                 "esbenp.prettier-vscode",
                 "tamasfe.even-better-toml",
                 "ms-azuretools.vscode-containers",
-                "dbtlabsinc.dbt" // NOTE not OSS
+                "dbtlabsinc.dbt", // NOTE not OSS
+                "mechatroner.rainbow-csv"
             ],
             "settings": {
                 "python.defaultInterpreterPath": "/usr/local/bin/python"

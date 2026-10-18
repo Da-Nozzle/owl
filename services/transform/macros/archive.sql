@@ -62,12 +62,14 @@ left join fetches
 {% endmacro %}
 
 {# Every entry of the archived JSON pages matching `pattern` of the snapshots a build of
-   `model_name` reads (archived_snapshots), as get.data.gov.lt sends them ({"_data": [...]}): one
-   row per entry, the entry as published in `entry` (JSON), plus the file it was read from, its
-   snapshot (in `snapshot_column`, from the archive path) and the fetch its .meta.json sidecar
-   recorded. A snapshot may hold no such file, as a day with no changes holds none; it then has
-   no rows. #}
-{% macro archived_json_entries(source, pattern, model_name, snapshot_column) %}
+   `model_name` reads (archived_snapshots), each page an object whose `list_key` holds the
+   entries, as get.data.gov.lt sends them ({"_data": [...]}) or the Places API ({"places": [...]},
+   or {} when nothing was found): one row per entry, the entry as published in `entry` (JSON),
+   plus the file it was read from, its snapshot (in `snapshot_column`, from the archive path) and
+   the fetch its .meta.json sidecar recorded; with `with_request`, also the request the page
+   answered, as the sidecar recorded it (`_file_request`, JSON). A snapshot may hold no such file,
+   as a day with no changes holds none; it then has no rows. #}
+{% macro archived_json_entries(source, pattern, model_name, snapshot_column, list_key='_data', with_request=false) %}
     {%- set snapshots = archived_snapshots(model_name, source) -%}
     {%- set files = existing_archived_files(source, pattern, snapshots) -%}
     {%- set sidecars = [] -%}
@@ -76,10 +78,10 @@ left join fetches
     {%- endfor -%}
     {%- if files %}
 with published as (
-    select unnest(_data) as entry, _source_file
+    select unnest({{ list_key }}) as entry, _source_file
     from read_json(
         {{ files }},
-        columns = {_data: 'json[]'},
+        columns = { {{- list_key }}: 'json[]'},
         format = 'unstructured',
         maximum_object_size = 67108864,  -- a page of 10,000 changes is about 3 MB
         filename = '_source_file'
@@ -87,7 +89,7 @@ with published as (
 ),
 
 fetches as (
-    select _meta_file, url, fetched_at, last_modified, sha256
+    select _meta_file, url, fetched_at, last_modified, sha256{% if with_request %}, request{% endif %}
     from read_json(
         {{ sidecars }},
         columns = {
@@ -95,7 +97,8 @@ fetches as (
             fetched_at: 'varchar',
             last_modified: 'varchar',
             size: 'varchar',
-            sha256: 'varchar'
+            sha256: 'varchar'{% if with_request %},
+            request: 'json'{% endif %}
         },
         filename = '_meta_file'
     )
@@ -108,7 +111,8 @@ select
     fetches.url as _file_url,
     fetches.fetched_at as _file_fetched_at,
     fetches.last_modified as _file_last_modified,
-    fetches.sha256 as _file_sha256
+    fetches.sha256 as _file_sha256{% if with_request %},
+    fetches.request as _file_request{% endif %}
 from published
 left join fetches
     on published._source_file || '.meta.json' = fetches._meta_file
@@ -120,7 +124,8 @@ select
     null::varchar as _file_url,
     null::varchar as _file_fetched_at,
     null::varchar as _file_last_modified,
-    null::varchar as _file_sha256
+    null::varchar as _file_sha256{% if with_request %},
+    null::json as _file_request{% endif %}
 where false
     {%- endif %}
 {% endmacro %}

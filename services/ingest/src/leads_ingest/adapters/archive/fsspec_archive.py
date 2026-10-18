@@ -9,7 +9,7 @@ from dlt.common.storages.fsspec_filesystem import fsspec_from_config
 from fsspec import AbstractFileSystem
 
 from leads_ingest.ports.downloader import Download
-from leads_ingest.ports.raw_archive import SnapshotManifest, file_record
+from leads_ingest.ports.raw_archive import SnapshotManifest, file_record, sidecar_record
 
 META_SUFFIX = ".meta.json"
 # A source's manifests are one folder, <source>/_snapshots/<snapshot>.json, beside its snapshot
@@ -38,7 +38,7 @@ class FsspecRawArchive:
         path = f"{self._source_path(source)}/{snapshot}/{name}"
         self.filesystem.makedirs(path.rsplit("/", 1)[0], exist_ok=True)
         self.filesystem.pipe_file(path, download.body)
-        self._write_json(path + META_SUFFIX, file_record(download))
+        self._write_json(path + META_SUFFIX, sidecar_record(download))
 
     def complete(
         self,

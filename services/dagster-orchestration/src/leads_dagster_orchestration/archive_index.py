@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import dagster as dg
 
 from leads_dagster_orchestration.asset_keys import archive_key
+from leads_dagster_orchestration.assets.archive import files_listing
 from leads_dagster_orchestration.snapshots import ArchivedSource
 from leads_ingest.ports.raw_archive import RawArchive
 from leads_ingest.settings import PipelineMode
@@ -80,7 +81,7 @@ def build_archive_index(
                         partition=snapshot,
                         metadata={
                             "completed_at": manifest.completed_at.isoformat(),
-                            "files": dg.MetadataValue.json(dict(manifest.files)),
+                            "files": dg.MetadataValue.json(files_listing(manifest.files)),
                             **labels,
                         },
                     )

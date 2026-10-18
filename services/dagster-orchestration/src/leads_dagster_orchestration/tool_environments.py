@@ -1,6 +1,12 @@
 from leads_config.configuration import Configuration
 from leads_ingest.settings import PipelineMode, load_pipeline_settings, raw_archive_path
-from leads_lake.settings import LakeCatalog, load_lake_settings
+from leads_lake.connection import (
+    attach_sql,
+    ducklake_catalog_connection,
+    s3_secret_sql,
+    sql_literal,
+)
+from leads_lake.settings import load_lake_settings
 
 
 def dagster_storage_environment(config: Configuration) -> dict[str, str]:
@@ -80,27 +86,16 @@ def lake_init_sql(config: Configuration) -> str:
     each dbt process is, with both lakes attached writable as `live` and `replay`, through the
     same catalog, bucket and secret the dbt profile uses. DuckLake keeps its catalog in Postgres,
     so this connection writes beside Dagster's and dbt's runs without locking them out."""
-    lakes = {mode: dbt_environment(config, mode) for mode in PipelineMode}
-    any_lake = lakes[PipelineMode.LIVE]
+    environment = dbt_environment(config, PipelineMode.LIVE)
     statements = [
-        f"SET memory_limit = {sql_literal(any_lake['LEADS_DUCKDB_MEMORY_LIMIT'])}",
-        f"SET temp_directory = {sql_literal(any_lake['LEADS_DUCKDB_TEMP_DIRECTORY'] + '/mcp')}",
+        f"SET memory_limit = {sql_literal(environment['LEADS_DUCKDB_MEMORY_LIMIT'])}",
+        f"SET temp_directory = {sql_literal(environment['LEADS_DUCKDB_TEMP_DIRECTORY'] + '/mcp')}",
         *(f"INSTALL {name}; LOAD {name}" for name in ["httpfs", "postgres", "ducklake"]),
         "INSTALL zipfs FROM community; LOAD zipfs",  # reads the archived zips in place
-        "CREATE SECRET lake_s3 ("
-        "TYPE s3, "
-        f"KEY_ID {sql_literal(any_lake['LEADS_S3_KEY_ID'])}, "
-        f"SECRET {sql_literal(any_lake['LEADS_S3_SECRET'])}, "
-        f"REGION {sql_literal(any_lake['LEADS_S3_REGION'])}, "
-        f"ENDPOINT {sql_literal(any_lake['LEADS_S3_ENDPOINT'])}, "
-        f"URL_STYLE {sql_literal(any_lake['LEADS_S3_URL_STYLE'])}, "
-        f"USE_SSL {any_lake['LEADS_S3_USE_SSL']})",
+        s3_secret_sql(load_lake_settings(config).storage),
         *(
-            f"ATTACH {sql_literal('ducklake:postgres:' + lake['LEADS_DUCKLAKE_CATALOG'])} "
-            f"AS {mode.value} ("
-            f"DATA_PATH {sql_literal(lake['LEADS_LAKE_DATA_PATH'])}, "
-            f"METADATA_SCHEMA {sql_literal(lake['LEADS_DUCKLAKE_METADATA_SCHEMA'])})"
-            for mode, lake in lakes.items()
+            attach_sql(load_lake_settings(config, replay=mode is PipelineMode.REPLAY), mode.value)
+            for mode in PipelineMode
         ),
     ]
     return "".join(f"{statement};\n" for statement in statements)
@@ -127,29 +122,3 @@ def dbt_location_dir(config: Configuration, mode: PipelineMode) -> str:
 
 def dbt_target_dir(config: Configuration) -> str:
     return f"{config.get_str('transform.project_dir').rstrip('/')}/target"
-
-
-def ducklake_catalog_connection(catalog: LakeCatalog) -> str:
-    return libpq_connection_string(
-        {
-            "host": catalog.host,
-            "port": str(catalog.port),
-            "dbname": catalog.database,
-            "user": catalog.user,
-            "password": catalog.password,
-        }
-    )
-
-
-def libpq_connection_string(parameters: dict[str, str]) -> str:
-    return " ".join(f"{key}={quote_libpq_value(value)}" for key, value in parameters.items())
-
-
-def quote_libpq_value(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace("'", "\\'")
-    return f"'{escaped}'"
-
-
-def sql_literal(value: str) -> str:
-    escaped = value.replace("'", "''")
-    return f"'{escaped}'"

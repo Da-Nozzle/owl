@@ -58,7 +58,8 @@ would differ.
 Local dev credentials (Postgres, s3mock) are plain values in the config. Real secrets are
 references that resolve when first read; locally they come from files in `config/local/secrets/`,
 which is git-ignored. Replay needs none. To run live against the Places API, put the key in
-`config/local/secrets/google_places_api_key`.
+`config/local/secrets/google_places_api_key`; it is read only when a Google fetch sends its first
+request.
 
 Logs go to stderr at INFO and to `logs/leads.log` at DEBUG, rotated at 10 MB across 10 files.
 
@@ -106,6 +107,7 @@ publishes:
 | `address_register` | the Address Register's building and premises addresses, streets, settlements and municipalities, each whole (about 565 MB) | 21st at 06:00 (`address_register.snapshot_schedule`): loaded in the same batches as JAR, every one to six months | `YYYY-MM` |
 | `vmi_daily_changes` | the VMI taxpayer register's changelog: the changes made in the day before the snapshot's tick | daily at 06:00 (`vmi.daily_changes_schedule`): the register changes most days, mostly at about 03:00 | `YYYY-MM-DD` |
 | `vmi_monthly_register` | the whole VMI register, the EVRK 2 classifier, and the changelog's newest change at that moment | 21st at 06:00 (`vmi.monthly_register_schedule`), the baseline `vmi_daily_changes`' changes are applied to | `YYYY-MM` |
+| `google_places` | Google's listings from the Places API in the search areas to be fetched (`int_google_search_areas`; Vilnius): each query swept over tiles of at most 1 km, planned for free with place ids, then the searches holding every place found paid for (Vilnius priced at 927 requests on 2026-10-17; 1,000 a month are free) | 21st at 06:00 (`google_places.snapshot_schedule`), with the leads; **its schedule starts stopped**, as each sweep is paid for | `YYYY-MM` |
 
 A second fetch in the same period replaces that period's snapshot.
 
@@ -143,7 +145,31 @@ smallest example: three CSV exports, read by the `archived_csv` macro. The VMI r
 example of one dataset fetched as two sources, drawn together in one box (`ArchivedSource.group`):
 `vmi_daily_changes`, a source with history (`history_start`) whose changelog pages are read by the
 `archived_json_entries` macro, and `vmi_monthly_register`, the baseline the changes are applied to
-by the staging models in `models/staging/vmi/`.
+by the staging models in `models/staging/vmi/`. `google_places` is the example of a paid API: a
+client of its own (`ports/places_api.py`), a plan in place of a fetch (`ArchivedSource.plan`), a
+schedule that starts stopped, a longer `dagster/max_runtime` for its job, and a plan that reads a
+model of the lake (`fetch_deps`). The plan and the fetch are two assets made in one step
+(`build_planned_fetch_asset`): `plan_google_places` plans the sweep for free and shows what it
+pays for, with a blocking check `within_budget` against `google_places.max_paid_requests`;
+`fetch_google_places` pays for that plan, made in the same step, and refuses one over the budget.
+The fetch job selects both, so a fetch always pays for a plan made minutes before. The snapshot
+keeps the plan it was paid for, `plan.json`: every search, the places it found and whether it was
+paid for. Both the plan and the payment send `google_places.workers` searches at once, without
+counting Google's per-minute quota: a request over it is answered 429, then waited for and sent
+again, for about five minutes (`HttpPlacesApi`).
+
+### Where Google is searched
+
+Google is searched in the municipalities listed in `services/transform/seeds/google_search_scope.csv`,
+each `price` or `fetch`; only Vilnius (13) is listed, as `fetch`. Seeds, data kept by hand, are
+drawn in each lake's `static_data` box. `int_google_search_areas` lists
+all 60 municipalities with their bounding boxes and how many employers Sodra counts there in the
+leads' categories, ranked, so the next one worth searching is the top row without a mode. To see
+what Kaunas would cost, add `19,price` to the seed and **Reload definitions** (live): the seed, the
+areas and `plan_google_places` rebuild by themselves (the plan alone, in a run of its own), and the
+plan's metadata shows each area's places and paid requests, and the next fetch's in USD against
+`google_places.max_paid_requests`, having paid for nothing. Change it to `19,fetch` to have the next
+fetch pay for it. A rebuild of any source's archive never fetches or plans.
 
 ### Tests
 
@@ -200,3 +226,33 @@ Dagster sets it per partition.
 
 Once a model is built in dev, the models after it read the dev copy, not the lake's. To read the
 lake's again, add `--favor-state`, or start over by deleting `target/<lake>/dev/`.
+
+### Agents (MCP servers)
+
+`.mcp.json` gives coding agents (Claude Code, and any MCP client that reads it) four servers. Each
+starts through a launcher that asks the configuration service for its settings, as `leads-dbt`
+does, and runs a pinned release with `uvx`, outside the project's environment. All of them can
+write: they are for local work only.
+
+| Server | Launcher | Upstream | Gives an agent |
+|---|---|---|---|
+| `dagster` | `leads-mcp-dagster` | [dagster-mcp](https://github.com/fabdendev/dagster-mcp) (community) | runs, their logs and failures, assets, schedules, sensors, backfills; launching, terminating, materializing, reloading a code location. Needs `leads-dagster-dev` running |
+| `lake` | `leads-mcp-lake` | [mcp-server-motherduck](https://github.com/motherduckdb/mcp-server-motherduck) | SQL on DuckDB in memory, with both lakes attached writable as `live` and `replay` (`select * from replay.staging.stg_sodra__monthly`), capped at `transform.duckdb_memory_limit` |
+| `dbt` | `leads-mcp-dbt --lake replay` | [dbt-mcp](https://github.com/dbt-labs/dbt-mcp) (dbt Labs) | `build`, `run`, `test`, `show`, `list`, `compile`, lineage, as `leads-dbt --lake replay`: it writes to the replay lake |
+| `dbt-dev` | `leads-mcp-dbt --dev --lake replay` | dbt-mcp | the same as `leads-dbt-dev`: builds into the dev copy, defers to the lake |
+
+For the live lake, add a server with `--lake live`. The lake's DuckLake catalog is in Postgres, so
+the `lake` server writes beside Dagster's runs and dbt's without locking them out. Its startup SQL
+holds the lake's credentials and is written to `services/transform/target/mcp/lake_init.sql`,
+readable only by you.
+
+Notes:
+- The `lake` server pins its own DuckDB, which must stay the project's (`duckdb` in
+  `services/dagster-orchestration/pyproject.toml`): another version may not read the catalog. Bump
+  `LAKE_MCP` in `tool_launchers.py` with it.
+- dbt-mcp declares Python below 3.14, which uv does not enforce; it runs on the project's 3.14.
+- dbt-mcp's lineage tools read `services/transform/target/manifest.json`, which the lake target
+  writes; on `dbt-dev` they show the same models, from that parse.
+- dbt raw models need `LEADS_SNAPSHOT` on the lake target, which an agent cannot pass: build raw
+  through Dagster, or on `dbt-dev`, which reads the newest snapshot.
+- Each dbt command an agent starts may take up to an hour (`DBT_MCP_TIMEOUT_SECONDS`).

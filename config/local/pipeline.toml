@@ -6,9 +6,55 @@ timezone = "Europe/Vilnius"
 user_agent = "vmi-leads-pipeline/0.1"
 replay_path = "/workspace/replay"
 
-[google]
-backend = "places_api"
+[google_places]
+# Google's Places API (New), searched for Vilnius's listings. Every request is billed, at the SKU
+# of the most expensive field it asks for: a sweep is planned with place ids only, which is free,
+# then each tile is asked again for ratings, review counts, opening hours, websites and phones,
+# billed as Text Search Enterprise (1,000 requests a month free, then USD 35 per 1,000).
 api_key = { secret_store = "local", secret_name = "google_places_api_key" }
+search_text_url = "https://places.googleapis.com/v1/places:searchText"
+# When live fetches a snapshot (cron, pipeline.timezone). Listings change continuously, so the
+# cadence is the leads': monthly, on the 21st with Sodra, so that each month's leads compare
+# Google's month with the declarations, and review counts change from one month to the next.
+snapshot_schedule = "0 6 21 * *"
+# Where Google is searched is data, not configuration: the google_search_scope seed
+# (services/transform/seeds/) lists the municipalities to price or to fetch, and
+# int_google_search_areas gives each its bounding box; plan_google_places plans and prices them
+# for free.
+# Each query is swept over every area: the categories' words in Lithuanian and English, as
+# English finds places Lithuanian does not ("cafe" added 96 to the 1,698 places "kavinė" found).
+# A place several queries find is paid for once. Priced on 2026-10-17, the ten found 5,858
+# places in Vilnius for 927 paid requests (within the 1,000 free a month) and 7,690 free ones.
+queries = [
+    "kavinė",
+    "restoranas",
+    "cafe",
+    "restaurant",
+    "kirpykla",
+    "grožio salonas",
+    "hair salon",
+    "beauty salon",
+    "autoservisas",
+    "car repair",
+]
+language_code = "lt"
+region_code = "LT"
+# A tile with places that is wider than this is split into quarters: over a larger tile a search
+# finds only some of the places, even below its cap (13 of the Old Town's cafés in a 1.8 km tile,
+# 2026-10-17). With 1 km, "kavinė" found 1,698 places in Vilnius, where splitting capped tiles
+# only found 712, and 502 of the 582 found in the Old Town and Naujamiestis by sweeps rooted there.
+max_tile_meters = 1000
+# A tile whose search is capped at 60 places is split into quarters while they are at least this
+# wide. The smallest tile any query needed was 230 m (cafés in the Old Town), never capped.
+min_tile_meters = 100
+# The fetch counts a sweep's paid requests with its free plan, and fails before paying for any
+# if they are more than this (Vilnius priced at 927 on 2026-10-17).
+max_paid_requests = 1500
+# Searches in flight at once, in the plan and the payment. Sent one at a time, Vilnius's plan took
+# 24 minutes (7,690 requests). The Places API's quota is per minute and per project (Cloud console,
+# Google Maps Platform > Quotas); requests over it are answered 429, and each is waited for and
+# sent again, so more workers than the quota allows only means more waiting, not failure.
+workers = 16
 
 [sodra]
 download_url_template = "https://atvira.sodra.lt/imones/downloads/{year}/monthly-{year}.csv.zip"

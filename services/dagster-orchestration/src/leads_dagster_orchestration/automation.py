@@ -2,8 +2,11 @@ from collections.abc import Sequence
 
 import dagster as dg
 
+from leads_dagster_orchestration.snapshots import MAX_RUNTIME_TAG, ArchivedSource
+
 BUILD_NEW_SNAPSHOTS = "build_new_snapshots"
 REBUILD_ON_CHANGE = "rebuild_on_change"
+PLAN_ON_CHANGE = "plan_on_change"
 TRANSFORM_AUTOMATION = "transform_automation"
 
 
@@ -35,6 +38,16 @@ def rebuild_on_change() -> dg.AutomationCondition:
     return eager_or(changed).with_label(REBUILD_ON_CHANGE)
 
 
+def plan_on_change() -> dg.AutomationCondition:
+    """For a paid source's plan, which reads the API for free: `eager()`, so a change to what
+    it reads (Google's search areas) is planned and priced again, plus a plan missing when it is
+    first evaluated, once what it reads is built, as raw's catch-up. Only free requests: the
+    fetch, which pays for the plan, has no condition."""
+    automation = dg.AutomationCondition
+    catch_up = (automation.initial_evaluation() & automation.missing()).with_label("catch_up")
+    return eager_or(catch_up).with_label(PLAN_ON_CHANGE)
+
+
 def eager_or(also: dg.AutomationCondition) -> dg.AutomationCondition:
     """Dagster's `eager()` (built when newly missing or a dependency updated, once nothing
     upstream is missing or running), true also when `also` is, under the same guards."""
@@ -57,3 +70,23 @@ def transform_automation_sensor(
         target=dg.AssetSelection.assets(*assets),
         default_status=dg.DefaultSensorStatus.RUNNING,
     )
+
+
+def plan_automation_sensor(
+    source: ArchivedSource, plan: dg.AssetKey
+) -> dg.AutomationConditionSensorDefinition:
+    """Evaluates a paid source's plan, in a sensor of its own: it targets the plan alone, so its
+    runs plan and pay for nothing, and they take as long as the fetch's planning does (Google's
+    thousands of searches, more with each area), so they carry the fetch's longer runtime
+    (`fetch_max_runtime_seconds`), which the dbt runs must not."""
+    runtime = source.fetch_max_runtime_seconds
+    return dg.AutomationConditionSensorDefinition(
+        plan_automation_name(source.name),
+        target=dg.AssetSelection.assets(plan),
+        run_tags={MAX_RUNTIME_TAG: str(runtime)} if runtime else None,
+        default_status=dg.DefaultSensorStatus.RUNNING,
+    )
+
+
+def plan_automation_name(source: str) -> str:
+    return f"plan_{source}_automation"

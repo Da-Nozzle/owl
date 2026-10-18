@@ -1,0 +1,84 @@
+version: 2
+
+models:
+  - name: int_google_search_areas
+    description: >
+      Where Google is searched: one row per municipality, with its bounding box, the employers
+      Sodra counts there in the leads' categories (activity_categories, EVRK 2.1) in its latest
+      declared month, and its search mode from google_search_scope (empty for a municipality not
+      searched). The counts rank where a search would find the most of what the leads compare;
+      a municipality is searched only once the seed lists it, so data from the whole country
+      never starts a country-wide sweep. Google's plan (plan_google_places) plans every row with
+      a mode for free, again whenever this table changes, and the fetch (fetch_google_places)
+      pays for the plan's fetch rows. A bounding box is a rectangle, so it holds some of the
+      neighbouring municipalities, and a city's lies inside its district's.
+    config:
+      meta:
+        key: [municipality_code]
+    columns:
+      - name: municipality_code
+        description: The Address Register's code (sav_kodas).
+        data_tests:
+          - unique
+          - not_null
+      - name: municipality
+        data_tests:
+          - not_null
+      - name: target_employers
+        description: >
+          Employers Sodra counts in the municipality in the leads' categories, in its latest
+          declared month. Sodra writes the employer's municipality; 2,222 of its employers in
+          2026-08 have none (Nenustatyta) and are not counted anywhere.
+      - name: employers_by_category
+        description: The same, by category (cafes_restaurants, hair_beauty, car_repair).
+      - name: search_mode
+        description: price, fetch or empty (not searched).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [price, fetch]
+      - name: south
+        data_tests: [not_null]
+      - name: west
+        data_tests: [not_null]
+      - name: north
+        data_tests: [not_null]
+      - name: east
+        data_tests: [not_null]
+      - name: target_employers_rank
+        description: 1 for the municipality with the most target_employers.
+      - name: declared_month
+        description: Sodra's latest declared month, which the counts are of.
+
+unit_tests:
+  - name: int_google_search_areas_counts_the_latest_months_employers_in_the_leads_categories
+    description: >
+      Vilnius has a restaurant and a hair salon in August, a car repair only in July, and a
+      shop; Kaunas has nothing in the categories. Only Vilnius is searched.
+    model: int_google_search_areas
+    given:
+      - input: ref('municipalities')
+        rows:
+          - {municipality_code: 13, municipality: "Vilniaus miesto sav.", sodra_municipality: "Vilniaus m. sav.", south: 54.5689, west: 25.0245, north: 54.8324, east: 25.4815}
+          - {municipality_code: 19, municipality: "Kauno miesto sav.", sodra_municipality: "Kauno m. sav.", south: 54.8207, west: 23.7535, north: 54.9596, east: 24.1003}
+      - input: ref('google_search_scope')
+        rows:
+          - {municipality_code: 13, search_mode: fetch}
+      - input: ref('activity_categories')
+        rows:
+          - {category: cafes_restaurants, classification: "EVRK 2.1", code_prefix: "5611"}
+          - {category: hair_beauty, classification: "EVRK 2.1", code_prefix: "9621"}
+          - {category: car_repair, classification: "EVRK 2.1", code_prefix: "9531"}
+          - {category: car_repair, classification: "EVRK 2", code_prefix: "4520"}
+      - input: ref('stg_sodra__monthly')
+        rows:
+          - {insurer_code: 1, municipality: "Vilniaus m. sav.", activity_code: "561100", declared_month: "2026-08-01"}
+          - {insurer_code: 2, municipality: "Vilniaus m. sav.", activity_code: "962100", declared_month: "2026-08-01"}
+          - {insurer_code: 3, municipality: "Vilniaus m. sav.", activity_code: "953100", declared_month: "2026-07-01"}
+          - {insurer_code: 4, municipality: "Vilniaus m. sav.", activity_code: "452000", declared_month: "2026-08-01"}
+          - {insurer_code: 5, municipality: "Vilniaus m. sav.", activity_code: "471100", declared_month: "2026-08-01"}
+          - {insurer_code: 6, municipality: "Kauno m. sav.", activity_code: "471100", declared_month: "2026-08-01"}
+    expect:
+      rows:
+        - {municipality_code: 13, target_employers: 2, search_mode: fetch, target_employers_rank: 1, declared_month: "2026-08-01"}
+        - {municipality_code: 19, target_employers: 0, search_mode: null, target_employers_rank: 2, declared_month: "2026-08-01"}

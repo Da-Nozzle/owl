@@ -23,9 +23,29 @@ models:
         +schema: raw_vmi_daily_changes
       vmi_monthly_register:
         +schema: raw_vmi_monthly_register
+      google_places:
+        +schema: raw_google_places
     staging:
       +schema: staging
     intermediate:
       +schema: intermediate
     marts:
       +schema: marts
+
+seeds:
+  leads_transform:
+    +schema: seeds
+    municipalities:
+      +column_types:
+        municipality_code: integer
+        south: double
+        west: double
+        north: double
+        east: double
+    activity_categories:
+      +column_types:
+        code_prefix: varchar
+    google_search_scope:
+      +column_types:
+        municipality_code: integer
+        search_mode: varchar

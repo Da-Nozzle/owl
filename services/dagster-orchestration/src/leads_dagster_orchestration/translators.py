@@ -6,7 +6,12 @@ from dagster_dbt import DagsterDbtTranslator, DbtProject
 from dagster_dlt import DagsterDltTranslator
 from dagster_dlt.translator import DltResourceTranslatorData
 
-from leads_dagster_orchestration.asset_keys import dbt_resource_key, raw_table_key, source_group
+from leads_dagster_orchestration.asset_keys import (
+    dbt_resource_key,
+    raw_table_key,
+    source_group,
+    static_data_group,
+)
 from leads_ingest.settings import PipelineMode
 
 
@@ -34,7 +39,7 @@ class RawTableDltTranslator(DagsterDltTranslator):
 class LakeDbtTranslator(DagsterDbtTranslator):
     """Keys dbt resources so that dbt, dlt and the archive form one graph, under the lake's key
     prefix. A step's models get its group (its source's, within the lake's) and its automation
-    condition, if any."""
+    condition, if any; its seeds, the lake's static data group."""
 
     def __init__(
         self,
@@ -50,11 +55,13 @@ class LakeDbtTranslator(DagsterDbtTranslator):
     def get_asset_spec(
         self, manifest: Mapping[str, Any], unique_id: str, project: DbtProject | None
     ) -> dg.AssetSpec:
-        key = dbt_resource_key(self.get_resource_props(manifest, unique_id), self._lake)
+        props = self.get_resource_props(manifest, unique_id)
+        key = dbt_resource_key(props, self._lake)
+        group = static_data_group(self._lake) if props["resource_type"] == "seed" else self._group
         return (
             super()
             .get_asset_spec(manifest, unique_id, project)
-            .replace_attributes(key=key, group_name=self._group)
+            .replace_attributes(key=key, group_name=group)
         )
 
     def get_automation_condition(

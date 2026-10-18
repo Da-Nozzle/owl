@@ -17,8 +17,10 @@ from dagster._core.definitions.unresolved_asset_job_definition import (
 )
 
 from leads_dagster_orchestration.archive_index import ARCHIVE_INDEX
+from leads_dagster_orchestration.assets.archive import WITHIN_BUDGET
 from leads_dagster_orchestration.automation import (
     BUILD_NEW_SNAPSHOTS,
+    PLAN_ON_CHANGE,
     REBUILD_ON_CHANGE,
     TRANSFORM_AUTOMATION,
 )
@@ -33,6 +35,8 @@ RAW = dg.AssetKey(["live", "raw", "raw_sodra__monthly"])
 STAGING = dg.AssetKey(["live", "staging", "stg_sodra__monthly"])
 # Each source's dbt models, by layer. The VMI register's two sources have no staging of their
 # own: the staging models that combine them are in a folder of the dataset's, `vmi` (COMBINED).
+# Google's Places API source has none either: its listings are staged in `google`, which a second
+# backend would feed too.
 MODELS = {
     "sodra": {"raw": {"raw_sodra__monthly"}, "staging": {"stg_sodra__monthly"}},
     "jar": {
@@ -55,10 +59,19 @@ MODELS = {
         },
         "staging": set(),
     },
+    "google_places": {"raw": {"raw_google_places__places"}, "staging": set()},
 }
-COMBINED = {"vmi": {"stg_vmi__changes", "stg_vmi__current_register"}}
-# Where a source's assets are drawn, if not in a group of its own name.
-GROUPS = {"vmi_daily_changes": "vmi/daily_changes", "vmi_monthly_register": "vmi/monthly_register"}
+COMBINED = {
+    "vmi": {"stg_vmi__changes", "stg_vmi__current_register"},
+    "google": {"stg_google__listings"},
+}
+# Where a source's assets are drawn, if not in a group of its own name: in the group of the
+# folder its staging models are in (COMBINED).
+GROUPS = {
+    "vmi_daily_changes": "vmi/daily_changes",
+    "vmi_monthly_register": "vmi/monthly_register",
+    "google_places": "google/places",
+}
 MONTHLY, DAILY = "0 6 21 * *", "0 6 * * *"
 SCHEDULES = {
     "sodra": MONTHLY,
@@ -66,9 +79,20 @@ SCHEDULES = {
     "address_register": MONTHLY,
     "vmi_daily_changes": DAILY,
     "vmi_monthly_register": MONTHLY,
+    "google_places": MONTHLY,
 }
 # The sources whose history the source keeps, so that any day of it can be fetched.
 WITH_HISTORY = {"vmi_daily_changes"}
+# The sources billed per request: their schedules start stopped, and each has a plan.
+PAID = {"google_places"}
+# Models of no source: seeds, drawn in the lake's static data group, and the intermediate model
+# that says where Google is searched, which reads Sodra's staging, in the lake's own group. They
+# are one step, `transform`.
+SHARED = {
+    "seeds": {"municipalities", "activity_categories", "google_search_scope"},
+    "intermediate": {"int_google_search_areas"},
+}
+SEARCH_AREAS = dg.AssetKey(["live", "intermediate", "int_google_search_areas"])
 
 
 def models(lake: PipelineMode, source: str, layer: str) -> set[dg.AssetKey]:
@@ -77,6 +101,20 @@ def models(lake: PipelineMode, source: str, layer: str) -> set[dg.AssetKey]:
 
 def combined(lake: PipelineMode, folder: str) -> set[dg.AssetKey]:
     return {dg.AssetKey([lake.value, "staging", model]) for model in COMBINED[folder]}
+
+
+def shared(lake: PipelineMode, *layers: str) -> set[dg.AssetKey]:
+    """The lake's models of no source, in the layers given (all, by default)."""
+    return {
+        dg.AssetKey([lake.value, layer, model])
+        for layer, names in SHARED.items()
+        if not layers or layer in layers
+        for model in names
+    }
+
+
+def plan_of(source: str) -> dg.AssetKey:
+    return dg.AssetKey(["live", "plan", f"plan_{source}"])
 
 
 def fetch_of(source: str) -> dg.AssetKey:
@@ -138,6 +176,13 @@ def test_each_sources_assets_are_a_group_within_their_lakes(
                 for folder in COMBINED
                 for key in combined(lake, folder)
             },
+            **dict.fromkeys(shared(lake, "intermediate"), lake.value),
+            **dict.fromkeys(shared(lake, "seeds"), f"{lake.value}/static_data"),
+            **(
+                {plan_of(source): f"live/{GROUPS.get(source, source)}" for source in PAID}
+                if lake is LIVE
+                else {}
+            ),
         }
         for lake in PipelineMode
     }
@@ -298,10 +343,16 @@ def test_a_snapshot_registered_before_the_automation_started_is_built_too(
 
 
 def rebuilt(lake: PipelineMode, source: str) -> set[dg.AssetKey]:
-    """What a rebuild of the source's archive builds: its models, and for either VMI source the
-    staging models that combine them."""
+    """What a rebuild of the source's archive builds: its models, and for a source drawn in a
+    dataset's group (either VMI source, Google's) the staging models in the dataset's folder.
+    Sodra's is followed by the model of where Google is searched, but never by Google's plan,
+    which reads it, or its fetch."""
     built = models(lake, source, "raw") | models(lake, source, "staging")
-    return built | (combined(lake, "vmi") if source in GROUPS else set())
+    if source in GROUPS:
+        built |= combined(lake, GROUPS[source].split("/")[0])
+    if source == "sodra":
+        built |= {dg.AssetKey([lake.value, "intermediate", "int_google_search_areas"])}
+    return built
 
 
 def test_live_fetches_on_its_schedule_and_rebuilds_without_fetching(
@@ -317,13 +368,36 @@ def test_live_fetches_on_its_schedule_and_rebuilds_without_fetching(
 
     # Assert
     for source, schedule in schedules.items():
-        assert job_assets(definitions, f"fetch_{source}") == {fetch_of(source)}
+        assert job_assets(definitions, f"fetch_{source}") == {
+            fetch_of(source),
+            *({plan_of(source)} if source in PAID else set()),
+        }
         assert job_assets(definitions, f"rebuild_{source}_from_archive") == rebuilt(LIVE, source)
         assert (schedule.cron_schedule, schedule.execution_timezone) == (
             SCHEDULES[source],
             "Europe/Vilnius",
         )
-        assert schedule.default_status is dg.DefaultScheduleStatus.RUNNING
+        assert schedule.default_status is (
+            dg.DefaultScheduleStatus.STOPPED if source in PAID else dg.DefaultScheduleStatus.RUNNING
+        )
+
+
+def test_only_googles_fetch_may_run_longer_than_run_monitorings_hour(
+    locations: dict[PipelineMode, dg.Definitions],
+) -> None:
+    # Arrange
+    definitions = locations[LIVE]
+
+    # Act
+    runtimes = {
+        source: definitions.resolve_job_def(f"fetch_{source}").tags.get("dagster/max_runtime")
+        for source in MODELS
+    }
+
+    # Assert
+    assert {source: runtime for source, runtime in runtimes.items() if runtime} == {
+        "google_places": "10800"
+    }
 
 
 def test_a_source_with_history_fetches_the_period_its_tick_begins(
@@ -386,5 +460,63 @@ def test_each_lakes_steps_run_in_its_own_pools(
         for source in MODELS
     }
     for lake in PipelineMode:
-        for key in combined(lake, "vmi"):
-            assert locations[lake].resolve_assets_def(key).op.pool == f"{lake.value}_transform_vmi"
+        for folder in COMBINED:
+            for key in combined(lake, folder):
+                pool = locations[lake].resolve_assets_def(key).op.pool
+                assert pool == f"{lake.value}_transform_{folder}"
+        for key in shared(lake):
+            assert locations[lake].resolve_assets_def(key).op.pool == f"{lake.value}_transform"
+    for source in PAID:
+        pool = locations[LIVE].resolve_assets_def(plan_of(source)).op.pool
+        assert pool == f"live_fetch_{source}"
+
+
+def test_googles_plan_reads_where_it_is_searched_and_its_fetch_pays_for_it(
+    locations: dict[PipelineMode, dg.Definitions],
+) -> None:
+    # Arrange
+    definitions = locations[LIVE]
+    graph = definitions.resolve_asset_graph()
+
+    # Act
+    fetch, plan = graph.get(fetch_of("google_places")), graph.get(plan_of("google_places"))
+    step = definitions.resolve_assets_def(plan_of("google_places"))
+
+    # Assert: one step makes both, the fetch only after the plan, which reads the search areas.
+    assert plan.parent_keys == {SEARCH_AREAS}
+    assert fetch.parent_keys == {plan_of("google_places")}
+    assert graph.get(SEARCH_AREAS).parent_keys == {
+        dg.AssetKey(["live", "staging", "stg_sodra__monthly"]),
+        *(dg.AssetKey(["live", "seeds", seed]) for seed in SHARED["seeds"]),
+    }
+    assert step is definitions.resolve_assets_def(fetch_of("google_places"))
+    assert step.can_subset
+    [budget] = step.check_specs
+    assert (budget.key, budget.blocking) == (
+        dg.AssetCheckKey(plan_of("google_places"), WITHIN_BUDGET),
+        True,
+    )
+    assert fetch.automation_condition is None
+    assert plan.automation_condition is not None
+    assert plan.automation_condition.get_label() == PLAN_ON_CHANGE
+    sensor = definitions.resolve_sensor_def("plan_google_places_automation")
+    assert isinstance(sensor, dg.AutomationConditionSensorDefinition)
+    assert sensor.asset_selection.resolve(graph) == {plan_of("google_places")}
+    assert sensor.run_tags == {"dagster/max_runtime": "10800"}
+    assert sensor.default_status is dg.DefaultSensorStatus.RUNNING
+    dbt = definitions.resolve_sensor_def(TRANSFORM_AUTOMATION)
+    assert plan_of("google_places") not in dbt.asset_selection.resolve(graph)
+
+
+def test_replay_neither_fetches_nor_plans_but_knows_where_google_is_searched(
+    locations: dict[PipelineMode, dg.Definitions],
+) -> None:
+    # Arrange
+    graph = locations[REPLAY].resolve_asset_graph()
+
+    # Act
+    keys = graph.get_all_asset_keys()
+
+    # Assert
+    assert dg.AssetKey(["replay", "intermediate", "int_google_search_areas"]) in keys
+    assert not any(key.path[1] in {"fetch", "plan"} for key in keys)

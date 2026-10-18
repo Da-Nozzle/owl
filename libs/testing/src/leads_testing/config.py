@@ -58,6 +58,18 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "first_daily_changes": "2026-09-01",
         "monthly_register_schedule": "0 6 21 * *",
     },
+    "google_places": {
+        "api_key": {SECRET_STORE_KEY: MEMORY_STORE, SECRET_NAME_KEY: "google_places_api_key"},
+        "search_text_url": "https://places.test/v1/places:searchText",
+        "snapshot_schedule": "0 6 21 * *",
+        "queries": ["kavinė", "kirpykla", "autoservisas"],
+        "language_code": "lt",
+        "region_code": "LT",
+        "max_tile_meters": 1000,
+        "min_tile_meters": 100,
+        "max_paid_requests": 1500,
+        "workers": 4,
+    },
     "transform": {"project_dir": "/workspace/services/transform", "duckdb_memory_limit": "2GB"},
     "dagster": {"webserver": {"host": "0.0.0.0", "port": 3000}},
 }

@@ -55,3 +55,14 @@ def file_record(download: Download) -> dict[str, object]:
         "size": download.size,
         "sha256": download.sha256,
     }
+
+
+def sidecar_record(download: Download) -> dict[str, object]:
+    """A file's fetch as the sidecar beside it records it: its `file_record`, plus the request it
+    answered when a GET of its URL would not ask the same (a search's body). Only the sidecar
+    holds the request: a Places API page's is larger than the rest of its record, and a
+    snapshot's manifest, and Dagster's metadata, list a whole sweep of pages."""
+    record = file_record(download)
+    if download.request is not None:
+        record["request"] = dict(download.request)
+    return record

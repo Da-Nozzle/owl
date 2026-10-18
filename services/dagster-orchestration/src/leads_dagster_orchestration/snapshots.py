@@ -1,4 +1,4 @@
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -9,6 +9,8 @@ from leads_ingest.settings import PipelineMode
 
 # Any time before the first snapshot of any source: where a cadence's calendar starts counting.
 CALENDAR_START = datetime(2000, 1, 1)
+# The run tag run monitoring reads a run's longest runtime from, in seconds.
+MAX_RUNTIME_TAG = "dagster/max_runtime"
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,12 +53,32 @@ class SnapshotCadence:
 
 
 @dataclass(frozen=True, slots=True)
+class FetchPlan:
+    """What a paid source's fetch will pay for, found without paying: its paid requests, the
+    most a fetch may make, a sentence saying so (with money, as the source counts it), the parts
+    it is made of, one row each (Google's search areas), as columns by name, and the payment
+    itself: `pay` pays for exactly this plan, saving it to the archive as the snapshot given,
+    and returns the files by name, failing before it pays for anything over the budget."""
+
+    paid_requests: int
+    max_paid_requests: int
+    summary: str
+    parts: Sequence[Mapping[str, object]]
+    pay: Callable[[str], Mapping[str, Download]]
+
+    @property
+    def within_budget(self) -> bool:
+        return self.paid_requests <= self.max_paid_requests
+
+
+@dataclass(frozen=True, slots=True)
 class ArchivedSource:
     """A source that goes through the raw archive, as the generic layer sees it: its name (its
     archive folder, and its dbt models' folders), when it is fetched, and in the live lake the
-    fetch itself, which saves a snapshot's files to the archive and returns them by name.
-    Everything Dagster does with a source is built from this, so adding one is an
-    `ArchivedSource`, its fetch and its dbt models."""
+    fetch itself, which saves a snapshot's files to the archive and returns them by name; or,
+    for a source billed per request, its plan, which a fetch pays for. Everything Dagster does
+    with a source is built from this, so adding one is an `ArchivedSource`, its fetch (or plan)
+    and its dbt models."""
 
     name: str
     cadence: SnapshotCadence
@@ -68,10 +90,32 @@ class ArchivedSource:
     # Where in its lake's group the source's assets are drawn: its name, unless it is one of
     # several sources of one dataset, drawn together in a group of the dataset's (vmi/...).
     group: str | None = None
+    # How long its fetch job (and its plan's runs, which plan as the fetch does) may run before run
+    # monitoring fails it, for a fetch that takes longer than the instance's
+    # max_runtime_seconds; None keeps the instance's.
+    fetch_max_runtime_seconds: int | None = None
+    # Whether its fetch schedule runs from the start. A source billed per request starts with
+    # it stopped, so that its first fetch is started on purpose, not by a deploy.
+    schedule_running: bool = True
+    # Assets of the lake its fetch reads besides the source, drawn upstream of its fetch, or of
+    # its plan: what Google is searched for is a dbt model.
+    fetch_deps: Sequence[dg.AssetKey] = ()
+    # For a source billed per request, in place of `fetch`: plans its next fetch for free, which
+    # is planned again whenever `fetch_deps` change, and which a fetch pays for.
+    plan: Callable[[], FetchPlan] | None = None
+
+    def __post_init__(self) -> None:
+        if self.fetch is not None and self.plan is not None:
+            raise ValueError(f"Source {self.name!r} has a fetch and a plan; a plan is its fetch")
 
     @property
     def group_path(self) -> str:
         return self.group or self.name
+
+    @property
+    def fetches(self) -> bool:
+        """Whether the live lake fetches the source, by its fetch or by paying its plan."""
+        return self.fetch is not None or self.plan is not None
 
     def fetch_periods(self) -> dg.TimeWindowPartitionsDefinition | None:
         """The periods a source with history can be fetched for, up to the current one."""

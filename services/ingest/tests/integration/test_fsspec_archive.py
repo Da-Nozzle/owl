@@ -38,6 +38,25 @@ def test_a_saved_download_is_kept_byte_for_byte_with_its_fetch_beside_it(
     assert sidecar["sha256"] == download.sha256
 
 
+def test_the_request_a_file_answered_is_kept_beside_it_and_not_in_the_manifest(
+    archive: FsspecRawArchive, tmp_path: Path
+) -> None:
+    # Arrange
+    request = {"field_mask": "places.id", "body": {"textQuery": "kavinė", "pageToken": "t" * 1000}}
+    download = build_download(b'{"places": []}', request=request)
+
+    # Act
+    archive.save("google_places", "2026-09", "places-kavine-r-1.json", download)
+    archive.complete("google_places", "2026-09", {"places-kavine-r-1.json": download}, COMPLETED_AT)
+
+    # Assert
+    path = tmp_path / "google_places" / "2026-09" / "places-kavine-r-1.json.meta.json"
+    assert json.loads(path.read_text()) == {**file_record(download), "request": request}
+    manifest = archive.manifest("google_places", "2026-09")
+    assert manifest.files == {"places-kavine-r-1.json": file_record(download)}
+    assert "request" not in file_record(download)
+
+
 def test_a_snapshot_is_complete_only_once_its_manifest_is_written(
     archive: FsspecRawArchive,
 ) -> None:

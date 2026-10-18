@@ -1,0 +1,72 @@
+version: 2
+
+seeds:
+  - name: municipalities
+    description: >
+      Lithuania's 60 municipalities: the Address Register's code and name (rc/ar Savivaldybe, as
+      fetched on 2026-10-17), the name as Sodra writes it (miesto as m., rajono as r.), and the
+      bounding box of the municipality's boundary in OpenStreetMap (Nominatim, 2026-10-17, the
+      relation in osm_id), rounded outwards to four decimals. Boundaries change rarely; look them
+      up again if one does.
+    columns:
+      - name: municipality_code
+        description: The Address Register's code (sav_kodas); VMI's municipality codes are the same.
+        data_tests:
+          - unique
+          - not_null
+      - name: sodra_municipality
+        description: The name as Sodra's files write it (Vilniaus m. sav.).
+        data_tests:
+          - unique
+          - not_null
+      - name: south
+        data_tests: [not_null]
+      - name: west
+        data_tests: [not_null]
+      - name: north
+        data_tests: [not_null]
+      - name: east
+        data_tests: [not_null]
+
+  - name: activity_categories
+    description: >
+      The leads' categories by economic activity code prefix (four digits), in each EVRK version
+      the sources code in: Sodra in EVRK 2.1 since 2025 (a few rows still in EVRK 2), the VMI
+      register in EVRK 2. EVRK 2.1 split restaurants (56.10 into 56.11 and 56.12) and hair and
+      beauty (96.02 into 96.21 and 96.22), and moved car repair from 45.20 to 95.31.
+    data_tests:
+      - unique:
+          column_name: "classification || ' ' || code_prefix"
+    columns:
+      - name: category
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [cafes_restaurants, hair_beauty, car_repair]
+      - name: classification
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [EVRK 2, EVRK 2.1]
+
+  - name: google_search_scope
+    description: >
+      Where Google is searched: one row per municipality to search, `price` to have the Google
+      price asset plan it for free and show what fetching it would pay for, `fetch` to have the
+      monthly fetch pay for it too. A municipality not listed is not searched. Every change is
+      priced again by itself before anything is paid for it.
+    columns:
+      - name: municipality_code
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('municipalities')
+                field: municipality_code
+      - name: search_mode
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [price, fetch]

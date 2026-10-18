@@ -1,0 +1,61 @@
+municipality_code,municipality,sodra_municipality,south,west,north,east,osm_id
+11,Alytaus miesto sav.,Alytaus m. sav.,54.3635,23.9586,54.4428,24.1024,R1085091
+12,Birštono sav.,Birštono sav.,54.4906,23.8854,54.6475,24.1722,R3855485
+13,Vilniaus miesto sav.,Vilniaus m. sav.,54.5689,25.0245,54.8324,25.4815,R968952
+15,Druskininkų sav.,Druskininkų sav.,53.9239,23.7991,54.1807,24.2048,R1076928
+18,Marijampolės sav.,Marijampolės sav.,54.366,23.1533,54.7072,23.7938,R974204
+19,Kauno miesto sav.,Kauno m. sav.,54.8207,23.7535,54.9596,24.1003,R1067534
+21,Klaipėdos miesto sav.,Klaipėdos m. sav.,55.6127,21.075,55.7966,21.2404,R1014347
+23,Neringos sav.,Neringos sav.,55.2775,20.9537,55.6738,21.1358,R1078733
+25,Palangos miesto sav.,Palangos m. sav.,55.8551,21.049,56.0772,21.139,R1022101
+27,Panevėžio miesto sav.,Panevėžio m. sav.,55.689,24.2356,55.772,24.4301,R968945
+29,Šiaulių miesto sav.,Šiaulių m. sav.,55.8408,23.228,55.9713,23.4291,R968826
+30,Visagino sav.,Visagino sav.,55.5505,26.3867,55.6204,26.6273,R966362
+32,Akmenės rajono sav.,Akmenės r. sav.,56.0693,22.5299,56.4149,23.1281,R1307304
+33,Alytaus rajono sav.,Alytaus r. sav.,54.1662,23.51,54.5635,24.4784,R1085089
+34,Anykščių rajono sav.,Anykščių r. sav.,55.3058,24.653,55.7642,25.5192,R1002204
+36,Biržų rajono sav.,Biržų r. sav.,55.9004,24.4682,56.4505,25.2229,R1111074
+38,Varėnos rajono sav.,Varėnos r. sav.,53.8967,23.9607,54.4478,25.025,R1076929
+39,Vilkaviškio rajono sav.,Vilkaviškio r. sav.,54.3633,22.6805,54.7909,23.3477,R966580
+41,Vilniaus rajono sav.,Vilniaus r. sav.,54.4626,24.8513,55.0464,25.7627,R977316
+42,Elektrėnų sav.,Elektrėnų sav.,54.6393,24.4641,54.8873,24.9966,R968950
+43,Zarasų rajono sav.,Zarasų r. sav.,55.5161,25.6801,55.9446,26.6377,R966544
+45,Ignalinos rajono sav.,Ignalinos r. sav.,55.2094,25.8573,55.6118,26.8356,R966363
+46,Jonavos rajono sav.,Jonavos r. sav.,54.9361,24.0158,55.297,24.6466,R1447848
+47,Joniškio rajono sav.,Joniškio r. sav.,56.0617,23.0728,56.3831,23.9617,R1256235
+48,Kalvarijos sav.,Kalvarijos sav.,54.2533,22.9896,54.4886,23.3997,R974208
+49,Kaišiadorių rajono sav.,Kaišiadorių r. sav.,54.6284,24.082,55.0258,24.8116,R1518453
+52,Kauno rajono sav.,Kauno r. sav.,54.7187,23.3912,55.2021,24.2472,R974219
+53,Kėdainių rajono sav.,Kėdainių r. sav.,55.1121,23.5452,55.564,24.4344,R1518457
+54,Kelmės rajono sav.,Kelmės r. sav.,55.4644,22.4657,55.9084,23.3618,R1307307
+55,Klaipėdos rajono sav.,Klaipėdos r. sav.,55.4661,21.0581,55.8924,21.8823,R1203043
+56,Kretingos rajono sav.,Kretingos r. sav.,55.7857,21.0997,56.1522,21.7002,R1022102
+57,Kupiškio rajono sav.,Kupiškio r. sav.,55.6823,24.6779,56.051,25.366,R1111075
+58,Kazlų Rūdos sav.,Kazlų Rūdos sav.,54.6313,23.2684,54.9486,23.674,R974207
+59,Lazdijų rajono sav.,Lazdijų r. sav.,53.8989,23.3119,54.4222,23.9835,R1082822
+61,Mažeikių rajono sav.,Mažeikių r. sav.,56.0878,21.9321,56.4324,22.647,R1211023
+62,Molėtų rajono sav.,Molėtų r. sav.,55.0308,25.0689,55.426,25.8004,R1002203
+63,Pagėgių sav.,Pagėgių sav.,55.024,21.6499,55.2966,22.3106,R1002044
+65,Pakruojo rajono sav.,Pakruojo r. sav.,55.8157,23.5293,56.3306,24.1824,R1256234
+66,Panevėžio rajono sav.,Panevėžio r. sav.,55.3872,23.8795,55.936,24.7588,R1028505
+67,Pasvalio rajono sav.,Pasvalio r. sav.,55.8402,24.0125,56.3012,24.6823,R1130030
+68,Plungės rajono sav.,Plungės r. sav.,55.7488,21.512,56.159,22.1706,R1360452
+69,Prienų rajono sav.,Prienų r. sav.,54.4546,23.5856,54.8121,24.4883,R1312644
+71,Radviliškio rajono sav.,Radviliškio r. sav.,55.469,23.2143,55.9194,24.0672,R1307306
+72,Raseinių rajono sav.,Raseinių r. sav.,55.1762,22.67,55.5768,23.6405,R1476170
+73,Rokiškio rajono sav.,Rokiškio r. sav.,55.7149,25.0643,56.1923,26.046,R1111073
+74,Rietavo sav.,Rietavo sav.,55.5969,21.7415,55.8507,22.2554,R1129075
+75,Skuodo rajono sav.,Skuodo r. sav.,56.0699,21.2256,56.3852,22.018,R1203042
+77,Tauragės rajono sav.,Tauragės r. sav.,55.1266,21.8804,55.4772,22.7416,R1479204
+78,Telšių rajono sav.,Telšių r. sav.,55.6593,22.0616,56.1637,22.7378,R1360453
+79,Trakų rajono sav.,Trakų r. sav.,54.3883,24.3938,54.7396,25.1696,R1016309
+81,Ukmergės rajono sav.,Ukmergės r. sav.,55.0857,24.3866,55.5178,25.2675,R1027570
+82,Utenos rajono sav.,Utenos r. sav.,55.2785,25.3594,55.7434,26.064,R966642
+84,Šakių rajono sav.,Šakių r. sav.,54.7245,22.5892,55.1052,23.5881,R966581
+85,Šalčininkų rajono sav.,Šalčininkų r. sav.,54.1276,24.7554,54.5072,25.7886,R1016307
+86,Švenčionių rajono sav.,Švenčionių r. sav.,54.8219,25.5261,55.3176,26.7594,R967318
+87,Šilalės rajono sav.,Šilalės r. sav.,55.3617,21.8085,55.6888,22.6502,R1518454
+88,Šilutės rajono sav.,Šilutės r. sav.,55.1805,20.9843,55.5692,22.0248,R1203041
+89,Širvintų rajono sav.,Širvintų r. sav.,54.8594,24.5517,55.1599,25.2358,R1016308
+91,Šiaulių rajono sav.,Šiaulių r. sav.,55.7314,22.5843,56.2146,23.5901,R1256236
+94,Jurbarko rajono sav.,Jurbarko r. sav.,55.0444,22.2605,55.3901,23.5045,R1518458

@@ -1,0 +1,122 @@
+version: 2
+
+models:
+  - name: stg_google__listings
+    description: >
+      One row per Google listing and snapshot: each place a monthly sweep of the Places API found
+      around Vilnius. The sweep searches each query over tiles of at most a kilometre, smaller
+      where a search is capped, but results are ranked by relevance, so a listing a query does
+      not match well can be missing, and a query also finds listings outside its category (a
+      park or a supermarket for "kavinė"); primary_type and types say what the place is. Only
+      operating listings were found. The area is Vilnius city municipality's bounding box, so
+      some listings are in Vilnius district (locality). Google's terms allow only place_id to be
+      stored indefinitely.
+    config:
+      meta:
+        # What identifies a row: leads-dbt-diff matches rows on it.
+        key: [place_id, snapshot_month]
+    data_tests:
+      - unique:
+          column_name: "place_id || '-' || snapshot_month"
+    columns:
+      - name: place_id
+        description: Google's place id, stable across snapshots.
+        data_tests:
+          - not_null
+      - name: name
+        description: The listing's name as Google shows it, in Lithuanian where it has one.
+        data_tests:
+          - not_null
+      - name: primary_type
+        description: The listing's main type (cafe, hair_salon, car_repair, ...), when Google gives one.
+      - name: types
+        description: Every type of the listing, including generic ones (establishment).
+        data_tests:
+          - not_null
+      - name: business_status
+        description: OPERATIONAL, CLOSED_TEMPORARILY or CLOSED_PERMANENTLY.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [OPERATIONAL, CLOSED_TEMPORARILY, CLOSED_PERMANENTLY]
+      - name: formatted_address
+        description: The address as one line (Žolyno g. 6, 10208 Vilnius).
+      - name: street
+        description: >
+          The street in the nominative, written out (Žolyno gatvė), where the Address Register has
+          the name and type apart, in the genitive (Žolyno, g.).
+      - name: house_number
+      - name: postcode
+        description: Without the LT- prefix the Address Register writes.
+      - name: locality
+        description: The city or village (Vilnius, Grigiškės).
+      - name: latitude
+        data_tests:
+          - not_null
+      - name: longitude
+        data_tests:
+          - not_null
+      - name: rating
+        description: The average rating, 1.0 to 5.0; empty for a listing without one.
+      - name: review_count
+        description: How many ratings the average is of; the busy signal.
+      - name: regular_opening_hours
+        description: The weekly opening hours as Google sent them (JSON, with weekday descriptions).
+      - name: weekly_open_hours
+        description: Hours open in a week, from the opening periods; 168 for a place open around the clock.
+      - name: website
+      - name: phone
+        description: The phone number in national format ((0-5) 234 9091).
+      - name: google_maps_uri
+      - name: cid
+        description: >
+          The listing's customer id, from google_maps_uri: the second half of the feature id
+          (0x...:0x<cid>) that Maps pages carry, so a scraped listing matches this one.
+        data_tests:
+          - not_null:
+              config:
+                # Every listing's URI held one on 2026-10-17; a new URI format should not stop the
+                # pipeline, as nothing joins on it yet.
+                severity: warn
+      - name: snapshot_month
+        description: The snapshot (YYYY-MM) whose sweep found the listing.
+        data_tests:
+          - not_null
+      - name: fetched_at
+        description: When the listing was last fetched in the sweep (UTC); what the row is as of.
+        data_tests:
+          - not_null
+
+unit_tests:
+  - name: stg_google__listings_keeps_one_row_per_place_and_snapshot
+    description: >
+      Two searches' pages held the café in snapshot 2026-09, the second a minute later, after a
+      rating was added, so that copy is kept. Snapshot 2026-10 found it again, and keeps its own
+      row.
+    model: stg_google__listings
+    given:
+      - input: ref('raw_google_places__places')
+        rows:
+          - {"id": "p1", "_snapshot_month": "2026-09", "_search_query": "kavinė", "_file_fetched_at": "2026-09-21T03:00:10+00:00", "place": '{"id": "p1", "displayName": {"text": "Kavinė"}, "userRatingCount": 210}'}
+          - {"id": "p1", "_snapshot_month": "2026-09", "_search_query": "cafe", "_file_fetched_at": "2026-09-21T03:01:10+00:00", "place": '{"id": "p1", "displayName": {"text": "Kavinė"}, "userRatingCount": 211}'}
+          - {"id": "p1", "_snapshot_month": "2026-10", "_search_query": "kavinė", "_file_fetched_at": "2026-10-21T03:00:10+00:00", "place": '{"id": "p1", "displayName": {"text": "Kavinė"}, "userRatingCount": 230}'}
+    expect:
+      rows:
+        - {place_id: p1, name: Kavinė, review_count: 211, snapshot_month: "2026-09", fetched_at: "2026-09-21 03:01:10"}
+        - {place_id: p1, name: Kavinė, review_count: 230, snapshot_month: "2026-10", fetched_at: "2026-10-21 03:00:10"}
+
+  - name: stg_google__listings_reads_the_address_hours_and_customer_id
+    description: >
+      The bar opens on Friday and Saturday nights past midnight, Saturday's into Sunday (66 h in
+      all: 7 weekdays of 8 h, and two nights of 5 h); the petrol station is open around the clock.
+    model: stg_google__listings
+    given:
+      - input: ref('raw_google_places__places')
+        rows:
+          - {"id": "bar", "_snapshot_month": "2026-09", "_search_query": "kavinė", "_file_fetched_at": "2026-09-21T03:00:00+00:00", "place": '{"id": "bar", "displayName": {"text": "Baras"}, "rating": 4.6, "googleMapsUri": "https://maps.google.com/?cid=5097618243873113011&g_mp=Cidn", "addressComponents": [{"longText": "6", "types": ["street_number"]}, {"longText": "Žolyno gatvė", "types": ["route"]}, {"longText": "Vilnius", "types": ["locality", "political"]}, {"longText": "10208", "types": ["postal_code"]}], "regularOpeningHours": {"periods": [{"open": {"day": 0, "hour": 10, "minute": 0}, "close": {"day": 0, "hour": 18, "minute": 0}}, {"open": {"day": 1, "hour": 10, "minute": 0}, "close": {"day": 1, "hour": 18, "minute": 0}}, {"open": {"day": 2, "hour": 10, "minute": 0}, "close": {"day": 2, "hour": 18, "minute": 0}}, {"open": {"day": 3, "hour": 10, "minute": 0}, "close": {"day": 3, "hour": 18, "minute": 0}}, {"open": {"day": 4, "hour": 10, "minute": 0}, "close": {"day": 4, "hour": 18, "minute": 0}}, {"open": {"day": 5, "hour": 10, "minute": 0}, "close": {"day": 5, "hour": 18, "minute": 0}}, {"open": {"day": 6, "hour": 10, "minute": 0}, "close": {"day": 6, "hour": 18, "minute": 0}}, {"open": {"day": 5, "hour": 22, "minute": 0}, "close": {"day": 6, "hour": 3, "minute": 0}}, {"open": {"day": 6, "hour": 22, "minute": 0}, "close": {"day": 0, "hour": 3, "minute": 0}}]}}'}
+          - {"id": "fuel", "_snapshot_month": "2026-09", "_search_query": "kavinė", "_file_fetched_at": "2026-09-21T03:00:00+00:00", "place": '{"id": "fuel", "displayName": {"text": "Degalinė"}, "regularOpeningHours": {"periods": [{"open": {"day": 0, "hour": 0, "minute": 0}}]}}'}
+    expect:
+      rows:
+        - {place_id: bar, street: Žolyno gatvė, house_number: "6", postcode: "10208", locality: Vilnius, rating: 4.6, weekly_open_hours: 66, cid: 5097618243873113011}
+        - {place_id: fuel, street: null, house_number: null, postcode: null, locality: null, rating: null, weekly_open_hours: 168, cid: null}
