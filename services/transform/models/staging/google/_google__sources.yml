@@ -32,9 +32,10 @@ models:
         data_tests:
           - not_null
       - name: business_status
-        description: OPERATIONAL, CLOSED_TEMPORARILY or CLOSED_PERMANENTLY.
+        description: >
+          OPERATIONAL, CLOSED_TEMPORARILY or CLOSED_PERMANENTLY; empty for a place that is no
+          business, which a search also finds (a lake, a village, a bare building address).
         data_tests:
-          - not_null
           - accepted_values:
               arguments:
                 values: [OPERATIONAL, CLOSED_TEMPORARILY, CLOSED_PERMANENTLY]
