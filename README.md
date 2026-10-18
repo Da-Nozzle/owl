@@ -44,7 +44,7 @@ docker compose -f .devcontainer/compose.yml exec dev owl-dagster-dev
 | Service | Image | Reached at |
 |---|---|---|
 | `dev` | `python:3.14.7-slim` + uv | container shell; Dagster UI on http://localhost:3000 |
-| `postgres` | `postgres:17-alpine` | `postgres:5432` (databases `dagster`, `ducklake_catalog`, `marquez`, `app`) |
+| `postgres` | `postgres:18-alpine` | `postgres:5432` (databases `dagster`, `ducklake_catalog`, `marquez`, `app`) |
 | `s3mock` | `adobe/s3mock:5.2.3` | `s3mock:9090`, bucket `owl-lake` |
 | `marquez` / `marquez-web` | `marquezproject/marquez(-web):0.51.1` | `marquez:5000`; UI on http://localhost:3001 |
 

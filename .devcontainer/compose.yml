@@ -26,13 +26,13 @@ services:
         condition: service_started
 
   postgres:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     environment:
       POSTGRES_USER: owl
       POSTGRES_DB: dagster
       POSTGRES_PASSWORD: owl # also in config/local/storage.toml
     volumes:
-      - postgres-data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql
       - ./postgres/initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       # Over TCP: the server that runs initdb listens on its socket only, so this waits for initdb.
