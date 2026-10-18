@@ -1,6 +1,6 @@
 import hashlib
 
-from leads_testing.ingest import build_download
+from owl_testing.ingest import build_download
 
 
 def test_a_downloads_size_and_sha256_are_of_its_bytes() -> None:

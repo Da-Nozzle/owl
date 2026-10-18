@@ -3,7 +3,7 @@ from collections.abc import Iterator
 import dagster as dg
 import pytest
 
-from leads_dagster_orchestration.executors import sequential_in_process_executor
+from owl_dagster_orchestration.executors import sequential_in_process_executor
 
 
 @dg.asset

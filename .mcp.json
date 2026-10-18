@@ -1,17 +1,17 @@
 {
     "mcpServers": {
         "dagster": {
-            "command": "leads-mcp-dagster"
+            "command": "owl-mcp-dagster"
         },
         "lake": {
-            "command": "leads-mcp-lake"
+            "command": "owl-mcp-lake"
         },
         "dbt": {
-            "command": "leads-mcp-dbt",
+            "command": "owl-mcp-dbt",
             "args": ["--lake", "replay"]
         },
         "dbt-dev": {
-            "command": "leads-mcp-dbt",
+            "command": "owl-mcp-dbt",
             "args": ["--dev", "--lake", "replay"]
         }
     }

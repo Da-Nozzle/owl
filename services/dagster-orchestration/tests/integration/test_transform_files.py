@@ -6,12 +6,12 @@ import dagster as dg
 import duckdb
 from dagster_dbt import DbtCliInvocation
 
-from leads_dagster_orchestration.dbt.project import ensure_metadata_database, keep_main_state
-from leads_dagster_orchestration.dbt.step_metadata import with_compiled_sql
-from leads_dagster_orchestration.metadata_keys import COMPILED_SQL
+from owl_dagster_orchestration.dbt.project import ensure_metadata_database, keep_main_state
+from owl_dagster_orchestration.dbt.step_metadata import with_compiled_sql
+from owl_dagster_orchestration.metadata_keys import COMPILED_SQL
 
-MODEL = "model.leads_transform.stg_sodra__monthly"
-SEED = "seed.leads_transform.municipalities"
+MODEL = "model.owl_transform.stg_sodra__monthly"
+SEED = "seed.owl_transform.municipalities"
 
 
 @dataclass
@@ -26,12 +26,12 @@ def finished_build(target_path: Path) -> DbtCliInvocation:
     nodes = {
         MODEL: {
             "resource_type": "model",
-            "package_name": "leads_transform",
+            "package_name": "owl_transform",
             "original_file_path": "models/staging/sodra/stg_sodra__monthly.sql",
         },
         SEED: {
             "resource_type": "seed",
-            "package_name": "leads_transform",
+            "package_name": "owl_transform",
             "original_file_path": "seeds/municipalities.csv",
         },
     }
@@ -87,7 +87,7 @@ def test_metadata_database_opens_read_only(tmp_path: Path) -> None:
 
 def test_a_built_model_carries_the_sql_dbt_compiled_for_it(tmp_path: Path) -> None:
     # Arrange
-    compiled = tmp_path / "compiled/leads_transform/models/staging/sodra/stg_sodra__monthly.sql"
+    compiled = tmp_path / "compiled/owl_transform/models/staging/sodra/stg_sodra__monthly.sql"
     compiled.parent.mkdir(parents=True)
     compiled.write_text('select code from "lake"."raw_sodra"."monthly"')
 

@@ -1,4 +1,4 @@
-from leads_dagster_orchestration.executors import is_sequential
+from owl_dagster_orchestration.executors import is_sequential
 
 
 def test_steps_that_wait_for_each_other_are_sequential() -> None:

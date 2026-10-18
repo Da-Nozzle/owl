@@ -1,17 +1,17 @@
 [project]
-name = "leads-testing"
+name = "owl-testing"
 version = "0.1.0"
 description = "Builders and fakes that the other packages' tests share; a dev dependency only"
 requires-python = ">=3.14,<3.15"
-dependencies = ["leads-config", "leads-ingest"]
+dependencies = ["owl-config", "owl-ingest"]
 
 [tool.uv.sources]
-leads-config = { workspace = true }
-leads-ingest = { workspace = true }
+owl-config = { workspace = true }
+owl-ingest = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/leads_testing"]
+packages = ["src/owl_testing"]

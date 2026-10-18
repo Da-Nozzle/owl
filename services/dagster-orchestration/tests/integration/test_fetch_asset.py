@@ -4,19 +4,19 @@ from unittest import mock
 
 import dagster as dg
 
-from leads_dagster_orchestration.archive import assets as archive_assets
-from leads_dagster_orchestration.archive.assets import (
+from owl_dagster_orchestration.archive import assets as archive_assets
+from owl_dagster_orchestration.archive.assets import (
     WITHIN_BUDGET,
     build_fetch_asset,
     build_planned_fetch_asset,
 )
-from leads_dagster_orchestration.archive.metadata import files_metadata
-from leads_dagster_orchestration.snapshots import ArchivedSource, FetchPlan, SnapshotCadence
-from leads_ingest.ports.downloader import Download
-from leads_testing.ingest import InMemoryRawArchive, build_download
+from owl_dagster_orchestration.archive.metadata import files_metadata
+from owl_dagster_orchestration.snapshots import ArchivedSource, FetchPlan, SnapshotCadence
+from owl_ingest.ports.downloader import Download
+from owl_testing.ingest import InMemoryRawArchive, build_download
 
 CADENCE = SnapshotCadence(schedule="0 6 21 * *", key_format="%Y-%m", timezone="Europe/Vilnius")
-LABELS = {"leads/mode": "live", "leads/lake": "ducklake"}
+LABELS = {"owl/mode": "live", "owl/lake": "ducklake"}
 FILES = {
     "monthly-2025.csv.zip": build_download(b"2025", url="https://sodra.test/2025"),
     "monthly-2026.csv.zip": build_download(b"2026", url="https://sodra.test/2026"),
@@ -74,10 +74,10 @@ def test_a_fetch_records_its_snapshot_and_labels_its_run() -> None:
     assert event.metadata["snapshot"] == dg.MetadataValue.text(
         CADENCE.snapshot_at(datetime.now(UTC))
     )
-    assert event.metadata["leads/trigger"] == dg.MetadataValue.text("fetch")
+    assert event.metadata["owl/trigger"] == dg.MetadataValue.text("fetch")
     run = instance.get_run_by_id(result.run_id)
     assert run is not None
-    assert {**LABELS, "leads/trigger": "fetch"}.items() <= run.tags.items()
+    assert {**LABELS, "owl/trigger": "fetch"}.items() <= run.tags.items()
 
 
 def test_a_fetch_of_many_files_records_how_many_and_their_size() -> None:

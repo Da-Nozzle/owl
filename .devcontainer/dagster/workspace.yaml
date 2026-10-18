@@ -2,8 +2,8 @@
 # lake's dbt variables. Production deploys live only.
 load_from:
   - python_module:
-      module_name: leads_dagster_orchestration.entrypoints.live
+      module_name: owl_dagster_orchestration.entrypoints.live
       location_name: live
   - python_module:
-      module_name: leads_dagster_orchestration.entrypoints.replay
+      module_name: owl_dagster_orchestration.entrypoints.replay
       location_name: replay

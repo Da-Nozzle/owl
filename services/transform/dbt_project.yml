@@ -1,7 +1,7 @@
-name: leads_transform
+name: owl_transform
 version: "0.1.0"
 config-version: 2
-profile: leads
+profile: owl
 
 model-paths: ["models"]
 seed-paths: ["seeds"]
@@ -11,7 +11,7 @@ target-path: "target"
 clean-targets: ["target", "dbt_packages"]
 
 models:
-  leads_transform:
+  owl_transform:
     raw:
       sodra:
         +schema: raw_sodra
@@ -33,7 +33,7 @@ models:
       +schema: marts
 
 seeds:
-  leads_transform:
+  owl_transform:
     +schema: seeds
     municipalities:
       +column_types:

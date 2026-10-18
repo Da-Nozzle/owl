@@ -3,16 +3,16 @@ from collections.abc import Iterator
 import duckdb
 import pytest
 
-from leads_ingest.adapters.ducklake.search_areas import (
+from owl_ingest.adapters.ducklake.search_areas import (
     LAKE,
     SEARCH_AREAS_MODEL,
     SEARCH_AREAS_SCHEMA,
     attach_statements,
     query_search_areas,
 )
-from leads_ingest.ports.search_areas import BoundingBox, SearchArea, SearchMode
-from leads_lake.settings import load_lake_settings
-from leads_testing.config import build_config
+from owl_ingest.ports.search_areas import BoundingBox, SearchArea, SearchMode
+from owl_lake.settings import load_lake_settings
+from owl_testing.config import build_config
 
 MODEL = f"{LAKE}.{SEARCH_AREAS_SCHEMA}.{SEARCH_AREAS_MODEL}"
 BOX = (54.5689, 25.0245, 54.8324, 25.4815)
@@ -48,7 +48,7 @@ def test_the_reader_attaches_the_lake_read_only_and_capped() -> None:
     assert parsed[-2:] == ["CREATE", "ATTACH"]
     assert statements[0] == "SET memory_limit = '1GB'"
     assert statements[-1].endswith(
-        " AS lake (DATA_PATH 's3://leads-lake/', METADATA_SCHEMA 'ducklake', READ_ONLY)"
+        " AS lake (DATA_PATH 's3://owl-lake/', METADATA_SCHEMA 'ducklake', READ_ONLY)"
     )
 
 

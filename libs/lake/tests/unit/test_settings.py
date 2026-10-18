@@ -1,7 +1,7 @@
 import pytest
 
-from leads_lake.settings import load_lake_settings
-from leads_testing.config import build_config, secret_reference
+from owl_lake.settings import load_lake_settings
+from owl_testing.config import build_config, secret_reference
 
 
 def test_catalog_lives_in_the_configured_postgres_database_and_schema() -> None:
@@ -45,9 +45,9 @@ def test_replay_lake_has_its_own_catalog_schema_and_data_path() -> None:
     config = build_config(
         {
             "lake.metadata_schema": "ducklake",
-            "lake.data_path": "s3://leads-lake/",
+            "lake.data_path": "s3://owl-lake/",
             "lake.replay.metadata_schema": "ducklake_replay",
-            "lake.replay.data_path": "s3://leads-lake/replay/",
+            "lake.replay.data_path": "s3://owl-lake/replay/",
         }
     )
 
@@ -58,10 +58,10 @@ def test_replay_lake_has_its_own_catalog_schema_and_data_path() -> None:
     # Assert
     assert (live.catalog.metadata_schema, live.storage.data_path) == (
         "ducklake",
-        "s3://leads-lake/",
+        "s3://owl-lake/",
     )
     assert (replay.catalog.metadata_schema, replay.storage.data_path) == (
         "ducklake_replay",
-        "s3://leads-lake/replay/",
+        "s3://owl-lake/replay/",
     )
     assert replay.storage.archive_path == live.storage.archive_path

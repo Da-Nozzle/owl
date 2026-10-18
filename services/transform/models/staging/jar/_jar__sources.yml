@@ -11,7 +11,7 @@ models:
       so entities registered since have none.
     config:
       meta:
-        # leads-dbt-diff matches rows on it.
+        # owl-dbt-diff matches rows on it.
         key: [company_code, snapshot_month]
     data_tests:
       - unique:

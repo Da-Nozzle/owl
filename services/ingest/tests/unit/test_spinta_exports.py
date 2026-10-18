@@ -1,6 +1,6 @@
 import pytest
 
-from leads_ingest.sources.spinta.exports import require_rows_with_ids
+from owl_ingest.sources.spinta.exports import require_rows_with_ids
 
 
 @pytest.mark.parametrize(

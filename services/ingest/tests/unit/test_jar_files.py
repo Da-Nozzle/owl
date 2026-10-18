@@ -1,8 +1,8 @@
 import pytest
 
-from leads_ingest.sources.jar.files import archive_register_files
-from leads_ingest.sources.jar.settings import JarSettings
-from leads_testing.ingest import FakeDownloader, InMemoryRawArchive
+from owl_ingest.sources.jar.files import archive_register_files
+from owl_ingest.sources.jar.settings import JarSettings
+from owl_testing.ingest import FakeDownloader, InMemoryRawArchive
 
 URL_TEMPLATE = "https://jar.test/{dataset}/:format/csv"
 SETTINGS = JarSettings(download_url_template=URL_TEMPLATE, snapshot_schedule="0 6 21 * *")

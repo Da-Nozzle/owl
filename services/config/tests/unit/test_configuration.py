@@ -1,7 +1,7 @@
 import pytest
 
-from leads_config.configuration import Configuration
-from leads_testing.config import InMemorySecretStore
+from owl_config.configuration import Configuration
+from owl_testing.config import InMemorySecretStore
 
 
 def test_plain_setting_is_found_by_dotted_key() -> None:

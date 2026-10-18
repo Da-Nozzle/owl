@@ -1,11 +1,11 @@
 import pytest
 
-from leads_http.settings import (
+from owl_http.settings import (
     HttpClientSettings,
     RetryPolicy,
     load_http_client_settings,
 )
-from leads_testing.config import build_config
+from owl_testing.config import build_config
 
 
 def test_a_sources_client_is_configured_by_its_http_table() -> None:

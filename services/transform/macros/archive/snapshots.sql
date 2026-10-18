@@ -1,13 +1,13 @@
-{# The snapshot key this build is for (YYYY-MM for Sodra), from LEADS_SNAPSHOT, which Dagster sets
+{# The snapshot key this build is for (YYYY-MM for Sodra), from OWL_SNAPSHOT, which Dagster sets
    per partition. Read only at execution: reading it while parsing would make every snapshot's run
    re-parse the project. Only the dev target has a default, so the lake gets no unchosen one. #}
 {% macro snapshot(source) -%}
-    {%- set key = env_var('LEADS_SNAPSHOT', '') if execute else '' -%}
+    {%- set key = env_var('OWL_SNAPSHOT', '') if execute else '' -%}
     {%- if not key and execute and target.name == 'dev' -%}
         {%- set key = complete_snapshots(source) | last -%}
     {%- endif -%}
     {%- if not key and execute -%}
-        {{ exceptions.raise_compiler_error("No snapshot of " ~ source ~ ": set LEADS_SNAPSHOT") }}
+        {{ exceptions.raise_compiler_error("No snapshot of " ~ source ~ ": set OWL_SNAPSHOT") }}
     {%- endif -%}
     {{- key or 'none' -}}
 {%- endmacro %}

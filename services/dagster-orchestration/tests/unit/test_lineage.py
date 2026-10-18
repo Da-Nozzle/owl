@@ -2,9 +2,9 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from leads_dagster_orchestration.lineage.events import nominal_time_facet
-from leads_dagster_orchestration.lineage.settings import load_lineage_settings
-from leads_testing.config import build_config
+from owl_dagster_orchestration.lineage.events import nominal_time_facet
+from owl_dagster_orchestration.lineage.settings import load_lineage_settings
+from owl_testing.config import build_config
 
 VILNIUS = ZoneInfo("Europe/Vilnius")
 
@@ -47,7 +47,7 @@ def test_lineage_settings_come_from_the_lineage_table() -> None:
 
     # Assert
     assert settings.endpoint_url == "http://marquez.test:5000/api/v1/lineage"
-    assert settings.namespace == "leads"
+    assert settings.namespace == "owl"
     assert (settings.sensor_interval_seconds, settings.events_per_tick) == (30, 500)
     assert settings.http.retry.attempts == 3
 

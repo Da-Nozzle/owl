@@ -1,20 +1,20 @@
 import pytest
 
-from leads_config.loading import load_configuration
-from leads_dagster_orchestration.archive.index import load_archive_index_settings
-from leads_dagster_orchestration.dbt.environment import dagster_dbt_environment, dbt_environment
-from leads_dagster_orchestration.dev_tools.dagster_dev import dagster_storage_environment
-from leads_dagster_orchestration.dev_tools.dbt_cli import dbt_dev_environment
-from leads_dagster_orchestration.dev_tools.mcp_servers import load_mcp_settings
-from leads_dagster_orchestration.lineage.settings import load_lineage_settings
-from leads_http.settings import load_http_client_settings
-from leads_ingest.settings import PipelineMode, load_pipeline_settings
-from leads_ingest.sources.address_register.settings import load_address_register_settings
-from leads_ingest.sources.google_places.settings import load_google_places_settings
-from leads_ingest.sources.jar.settings import load_jar_settings
-from leads_ingest.sources.sodra.settings import load_sodra_settings
-from leads_ingest.sources.vmi.settings import load_vmi_settings
-from leads_lake.settings import load_lake_settings
+from owl_config.loading import load_configuration
+from owl_dagster_orchestration.archive.index import load_archive_index_settings
+from owl_dagster_orchestration.dbt.environment import dagster_dbt_environment, dbt_environment
+from owl_dagster_orchestration.dev_tools.dagster_dev import dagster_storage_environment
+from owl_dagster_orchestration.dev_tools.dbt_cli import dbt_dev_environment
+from owl_dagster_orchestration.dev_tools.mcp_servers import load_mcp_settings
+from owl_dagster_orchestration.lineage.settings import load_lineage_settings
+from owl_http.settings import load_http_client_settings
+from owl_ingest.settings import PipelineMode, load_pipeline_settings
+from owl_ingest.sources.address_register.settings import load_address_register_settings
+from owl_ingest.sources.google_places.settings import load_google_places_settings
+from owl_ingest.sources.jar.settings import load_jar_settings
+from owl_ingest.sources.sodra.settings import load_sodra_settings
+from owl_ingest.sources.vmi.settings import load_vmi_settings
+from owl_lake.settings import load_lake_settings
 
 HTTP_TABLES = [
     "sodra.http",

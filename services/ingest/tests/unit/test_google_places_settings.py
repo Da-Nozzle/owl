@@ -1,10 +1,10 @@
 import pytest
 
-from leads_ingest.sources.google_places.settings import (
+from owl_ingest.sources.google_places.settings import (
     GooglePlacesSettings,
     load_google_places_settings,
 )
-from leads_testing.config import build_config
+from owl_testing.config import build_config
 
 
 def test_google_places_settings_are_read_from_config() -> None:

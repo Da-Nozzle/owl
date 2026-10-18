@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 
-from leads_ingest.adapters.archive.fsspec_archive import FsspecRawArchive, open_fsspec_archive
-from leads_ingest.ports.raw_archive import SnapshotManifest, file_record
-from leads_testing.ingest import build_download
+from owl_ingest.adapters.archive.fsspec_archive import FsspecRawArchive, open_fsspec_archive
+from owl_ingest.ports.raw_archive import SnapshotManifest, file_record
+from owl_testing.ingest import build_download
 
 COMPLETED_AT = datetime(2026, 10, 21, 3, 5, tzinfo=UTC)
 

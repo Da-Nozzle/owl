@@ -1,4 +1,4 @@
-# leads-dbt-vscode writes the dbt extension's environment into the machine's VS Code settings, as
+# owl-dbt-vscode writes the dbt extension's environment into the machine's VS Code settings, as
 # it holds the lake's credentials, which the repository's .vscode/settings.json must not.
 [vscode]
 machine_settings = "/home/dev/.vscode-server/data/Machine/settings.json"

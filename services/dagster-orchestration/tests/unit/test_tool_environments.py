@@ -4,20 +4,20 @@ from hypothesis import given
 from hypothesis import strategies as st
 from psycopg2.extensions import parse_dsn
 
-from leads_config.configuration import Configuration
-from leads_dagster_orchestration.dbt.environment import dagster_dbt_environment, dbt_environment
-from leads_dagster_orchestration.dev_tools.dagster_dev import (
+from owl_config.configuration import Configuration
+from owl_dagster_orchestration.dbt.environment import dagster_dbt_environment, dbt_environment
+from owl_dagster_orchestration.dev_tools.dagster_dev import (
     dagster_storage_environment,
     dagster_webserver_url,
 )
-from leads_dagster_orchestration.dev_tools.dbt_cli import (
+from owl_dagster_orchestration.dev_tools.dbt_cli import (
     dbt_dev_environment,
     vscode_dbt_environment,
 )
-from leads_dagster_orchestration.dev_tools.mcp_servers import lake_init_sql
-from leads_ingest.settings import PipelineMode
-from leads_lake.connection import libpq_connection_string
-from leads_testing.config import build_config, secret_reference
+from owl_dagster_orchestration.dev_tools.mcp_servers import lake_init_sql
+from owl_ingest.settings import PipelineMode
+from owl_lake.connection import libpq_connection_string
+from owl_testing.config import build_config, secret_reference
 
 
 def config_with_password(password: str) -> Configuration:
@@ -44,12 +44,11 @@ def test_ducklake_catalog_connection_quotes_awkward_passwords() -> None:
     config = config_with_password("it's a pass")
 
     # Act
-    catalog = dbt_environment(config, PipelineMode.LIVE)["LEADS_DUCKLAKE_CATALOG"]
+    catalog = dbt_environment(config, PipelineMode.LIVE)["OWL_DUCKLAKE_CATALOG"]
 
     # Assert
     assert catalog == (
-        "host='postgres' port='5432' dbname='ducklake_catalog' user='leads' "
-        "password='it\\'s a pass'"
+        "host='postgres' port='5432' dbname='ducklake_catalog' user='owl' password='it\\'s a pass'"
     )
 
 
@@ -76,7 +75,7 @@ def test_dbt_reads_ssl_flag_as_lowercase_text(use_ssl: bool, text: str) -> None:
     environment = dbt_environment(config, PipelineMode.LIVE)
 
     # Assert
-    assert environment["LEADS_S3_USE_SSL"] == text
+    assert environment["OWL_S3_USE_SSL"] == text
 
 
 def test_dbt_reads_the_replay_archive_into_the_replay_lake_in_replay_mode() -> None:
@@ -85,7 +84,7 @@ def test_dbt_reads_the_replay_archive_into_the_replay_lake_in_replay_mode() -> N
         {
             "pipeline.replay_path": "/workspace/replay",
             "lake.replay.metadata_schema": "ducklake_replay",
-            "lake.replay.data_path": "s3://leads-lake/replay/",
+            "lake.replay.data_path": "s3://owl-lake/replay/",
         }
     )
 
@@ -93,18 +92,18 @@ def test_dbt_reads_the_replay_archive_into_the_replay_lake_in_replay_mode() -> N
     environment = dbt_environment(config, PipelineMode.REPLAY)
 
     # Assert
-    assert environment["LEADS_ARCHIVE_PATH"] == "/workspace/replay"
-    assert environment["LEADS_DUCKLAKE_METADATA_SCHEMA"] == "ducklake_replay"
-    assert environment["LEADS_LAKE_DATA_PATH"] == "s3://leads-lake/replay/"
+    assert environment["OWL_ARCHIVE_PATH"] == "/workspace/replay"
+    assert environment["OWL_DUCKLAKE_METADATA_SCHEMA"] == "ducklake_replay"
+    assert environment["OWL_LAKE_DATA_PATH"] == "s3://owl-lake/replay/"
 
 
 def test_dbt_reads_the_lakes_archive_into_the_live_lake_in_live_mode() -> None:
     # Arrange
     config = build_config(
         {
-            "lake.archive_path": "s3://leads-lake/archive/",
+            "lake.archive_path": "s3://owl-lake/archive/",
             "lake.metadata_schema": "ducklake",
-            "lake.data_path": "s3://leads-lake/",
+            "lake.data_path": "s3://owl-lake/",
         }
     )
 
@@ -112,9 +111,9 @@ def test_dbt_reads_the_lakes_archive_into_the_live_lake_in_live_mode() -> None:
     environment = dbt_environment(config, PipelineMode.LIVE)
 
     # Assert
-    assert environment["LEADS_ARCHIVE_PATH"] == "s3://leads-lake/archive/"
-    assert environment["LEADS_DUCKLAKE_METADATA_SCHEMA"] == "ducklake"
-    assert environment["LEADS_LAKE_DATA_PATH"] == "s3://leads-lake/"
+    assert environment["OWL_ARCHIVE_PATH"] == "s3://owl-lake/archive/"
+    assert environment["OWL_DUCKLAKE_METADATA_SCHEMA"] == "ducklake"
+    assert environment["OWL_LAKE_DATA_PATH"] == "s3://owl-lake/"
 
 
 @pytest.mark.parametrize("project_dir", ["/project", "/project/"])
@@ -131,7 +130,7 @@ def test_each_code_location_keeps_dbts_artifacts_in_a_folder_of_its_own(
     # Assert
     assert environment == {
         "DBT_TARGET_PATH": f"/project/target/{mode.value}",
-        "LEADS_DBT_DUCKDB_PATH": f"/project/target/{mode.value}/dagster.duckdb",
+        "OWL_DBT_DUCKDB_PATH": f"/project/target/{mode.value}/dagster.duckdb",
     }
 
 
@@ -149,7 +148,7 @@ def test_dbt_dev_builds_into_its_lakes_own_file_and_defers_to_its_lakes_state(
     assert environment == {
         "DBT_TARGET": "dev",
         "DBT_TARGET_PATH": f"/project/target/{mode.value}/dev",
-        "LEADS_DBT_DEV_PATH": f"/project/target/{mode.value}/dev/dev.duckdb",
+        "OWL_DBT_DEV_PATH": f"/project/target/{mode.value}/dev/dev.duckdb",
         "DBT_DEFER": "true",
         "DBT_STATE": f"/project/target/{mode.value}/main",
     }
@@ -168,7 +167,7 @@ def test_the_vscode_extension_parses_into_a_folder_and_duckdb_file_of_its_own(
     # Assert
     assert environment == {
         "DBT_TARGET_PATH": f"/project/target/{mode.value}/vscode",
-        "LEADS_DBT_DEV_PATH": f"/project/target/{mode.value}/vscode/editor.duckdb",
+        "OWL_DBT_DEV_PATH": f"/project/target/{mode.value}/vscode/editor.duckdb",
     }
 
 
@@ -182,8 +181,8 @@ def test_dbt_caps_duckdbs_memory_and_spills_under_the_projects_target() -> None:
     environment = dbt_environment(config, PipelineMode.LIVE)
 
     # Assert
-    assert environment["LEADS_DUCKDB_MEMORY_LIMIT"] == "1GB"
-    assert environment["LEADS_DUCKDB_TEMP_DIRECTORY"] == "/project/target/duckdb_tmp"
+    assert environment["OWL_DUCKDB_MEMORY_LIMIT"] == "1GB"
+    assert environment["OWL_DUCKDB_TEMP_DIRECTORY"] == "/project/target/duckdb_tmp"
 
 
 def test_dbt_builds_as_many_models_at_once_as_configured() -> None:
@@ -194,7 +193,7 @@ def test_dbt_builds_as_many_models_at_once_as_configured() -> None:
     environment = dbt_environment(config, PipelineMode.LIVE)
 
     # Assert
-    assert environment["LEADS_DBT_THREADS"] == "2"
+    assert environment["OWL_DBT_THREADS"] == "2"
 
 
 def test_dbt_needs_at_least_one_thread() -> None:
@@ -211,9 +210,9 @@ def test_the_lake_mcp_server_attaches_both_lakes_under_their_names() -> None:
     config = build_config(
         {
             "lake.metadata_schema": "ducklake",
-            "lake.data_path": "s3://leads-lake/",
+            "lake.data_path": "s3://owl-lake/",
             "lake.replay.metadata_schema": "ducklake_replay",
-            "lake.replay.data_path": "s3://leads-lake/replay/",
+            "lake.replay.data_path": "s3://owl-lake/replay/",
         }
     )
 
@@ -221,9 +220,9 @@ def test_the_lake_mcp_server_attaches_both_lakes_under_their_names() -> None:
     sql = lake_init_sql(config)
 
     # Assert
-    assert " AS live (DATA_PATH 's3://leads-lake/', METADATA_SCHEMA 'ducklake')" in sql
+    assert " AS live (DATA_PATH 's3://owl-lake/', METADATA_SCHEMA 'ducklake')" in sql
     assert (
-        " AS replay (DATA_PATH 's3://leads-lake/replay/', METADATA_SCHEMA 'ducklake_replay')" in sql
+        " AS replay (DATA_PATH 's3://owl-lake/replay/', METADATA_SCHEMA 'ducklake_replay')" in sql
     )
 
 

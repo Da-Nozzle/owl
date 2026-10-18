@@ -7,7 +7,7 @@ url = "http://marquez:5000"
 # Marquez's OpenLineage endpoint, under url.
 endpoint = "api/v1/lineage"
 # The namespace of every job and dataset sent.
-namespace = "leads"
+namespace = "owl"
 # Seconds between the sensor's ticks.
 sensor_interval_seconds = 30
 # The most events one tick sends: a longer backlog, such as a first tick's whole history, goes

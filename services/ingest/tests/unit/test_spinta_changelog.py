@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from leads_ingest.ports.downloader import Download
-from leads_ingest.sources.spinta.changelog import Changelog
-from leads_testing.ingest import FakeSpinta, change_entry
+from owl_ingest.ports.downloader import Download
+from owl_ingest.sources.spinta.changelog import Changelog
+from owl_testing.ingest import FakeSpinta, change_entry
 
 MODEL = "https://spinta.test/datasets/gov/vmi/mm_registras/MokesciuMoketojas"
 PAGE_SIZE = 10_000

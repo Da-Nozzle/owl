@@ -22,10 +22,10 @@ if ! gh auth status --hostname github.com >/dev/null 2>&1; then
 fi
 
 # VS Code's Dev Containers extension sets REMOTE_CONTAINERS and installs its server under
-# ~/.vscode-server, where leads-dbt-vscode writes the dbt extension's environment.
+# ~/.vscode-server, where owl-dbt-vscode writes the dbt extension's environment.
 if [ "${REMOTE_CONTAINERS:-}" = "true" ] || [ -d "$HOME/.vscode-server" ]; then
-    uv run --frozen --project "$repo_root" leads-dbt-vscode \
-        || echo "leads-dbt-vscode failed for some reason. Run it manually, then 'Developer: Reload Window'" >&2
+    uv run --frozen --project "$repo_root" owl-dbt-vscode \
+        || echo "owl-dbt-vscode failed for some reason. Run it manually, then 'Developer: Reload Window'" >&2
 fi
 
 printf '\n\033[38;5;110m' # CRITICAL feature bellow, everything falls apart without it

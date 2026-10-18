@@ -1,20 +1,20 @@
 [project]
-name = "leads-http"
+name = "owl-http"
 version = "0.1.0"
 description = "The HTTP client every outbound integration sends through: retries, pacing, error detail"
 requires-python = ">=3.14,<3.15"
 dependencies = [
-    "leads-config",
+    "owl-config",
     "httpx>=0.28.1,<1",
     "tenacity>=9.2,<10",
 ]
 
 [tool.uv.sources]
-leads-config = { workspace = true }
+owl-config = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/leads_http"]
+packages = ["src/owl_http"]

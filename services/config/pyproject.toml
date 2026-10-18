@@ -1,5 +1,5 @@
 [project]
-name = "leads-config"
+name = "owl-config"
 version = "0.1.0"
 description = "TOML configuration service with secret references"
 requires-python = ">=3.14,<3.15"
@@ -10,4 +10,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/leads_config"]
+packages = ["src/owl_config"]

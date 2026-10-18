@@ -1,18 +1,18 @@
-leads:
+owl:
   target: local
   outputs:
     local: &lake_target
       type: duckdb
       # dbt's runs (DAGSTER_DBT_CLI) stay in memory, as parallel runs cannot share a DuckDB file.
       # Dagster's own process reads table metadata read-only, which needs a file.
-      path: "{{ ':memory:' if env_var('DAGSTER_DBT_CLI', '') else env_var('LEADS_DBT_DUCKDB_PATH', ':memory:') }}"
+      path: "{{ ':memory:' if env_var('DAGSTER_DBT_CLI', '') else env_var('OWL_DBT_DUCKDB_PATH', ':memory:') }}"
       database: lake
-      threads: "{{ env_var('LEADS_DBT_THREADS') | as_number }}"
+      threads: "{{ env_var('OWL_DBT_THREADS') | as_number }}"
       # Several dbt processes run at once: each is capped (transform.duckdb_memory_limit) and
       # spills into a folder of its own, as DuckDB names its spill files alike in every process.
       settings:
-        memory_limit: "{{ env_var('LEADS_DUCKDB_MEMORY_LIMIT') }}"
-        temp_directory: "{{ env_var('LEADS_DUCKDB_TEMP_DIRECTORY') }}/{{ invocation_id }}"
+        memory_limit: "{{ env_var('OWL_DUCKDB_MEMORY_LIMIT') }}"
+        temp_directory: "{{ env_var('OWL_DUCKDB_TEMP_DIRECTORY') }}/{{ invocation_id }}"
       extensions:
         - httpfs
         - postgres
@@ -21,23 +21,23 @@ leads:
           repo: community
       secrets:
         - type: s3
-          key_id: "{{ env_var('LEADS_S3_KEY_ID') }}"
-          secret: "{{ env_var('LEADS_S3_SECRET') }}"
-          region: "{{ env_var('LEADS_S3_REGION') }}"
-          endpoint: "{{ env_var('LEADS_S3_ENDPOINT') }}"
-          url_style: "{{ env_var('LEADS_S3_URL_STYLE') }}"
-          use_ssl: "{{ env_var('LEADS_S3_USE_SSL') }}"
+          key_id: "{{ env_var('OWL_S3_KEY_ID') }}"
+          secret: "{{ env_var('OWL_S3_SECRET') }}"
+          region: "{{ env_var('OWL_S3_REGION') }}"
+          endpoint: "{{ env_var('OWL_S3_ENDPOINT') }}"
+          url_style: "{{ env_var('OWL_S3_URL_STYLE') }}"
+          use_ssl: "{{ env_var('OWL_S3_USE_SSL') }}"
       attach:
         - &lake_attachment
-          path: "ducklake:postgres:{{ env_var('LEADS_DUCKLAKE_CATALOG') }}"
+          path: "ducklake:postgres:{{ env_var('OWL_DUCKLAKE_CATALOG') }}"
           alias: lake
           options:
-            data_path: "{{ env_var('LEADS_LAKE_DATA_PATH') }}"
-            metadata_schema: "{{ env_var('LEADS_DUCKLAKE_METADATA_SCHEMA') }}"
-    # leads-dbt-dev: builds into a DuckDB file of its own; unbuilt models defer to the lake's.
+            data_path: "{{ env_var('OWL_LAKE_DATA_PATH') }}"
+            metadata_schema: "{{ env_var('OWL_DUCKLAKE_METADATA_SCHEMA') }}"
+    # owl-dbt-dev: builds into a DuckDB file of its own; unbuilt models defer to the lake's.
     dev:
       <<: *lake_target
-      path: "{{ env_var('LEADS_DBT_DEV_PATH') }}"
+      path: "{{ env_var('OWL_DBT_DEV_PATH') }}"
       database: dev
       attach:
         - <<: *lake_attachment

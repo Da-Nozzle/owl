@@ -1,13 +1,13 @@
 [project]
-name = "leads-dagster-orchestration"
+name = "owl-dagster-orchestration"
 version = "0.1.0"
 description = "Dagster definitions and the composition root for pipeline runs"
 requires-python = ">=3.14,<3.15"
 dependencies = [
-    "leads-config",
-    "leads-http",
-    "leads-ingest",
-    "leads-lake",
+    "owl-config",
+    "owl-http",
+    "owl-ingest",
+    "owl-lake",
     "dagster==1.13.26",
     "dagster-webserver==1.13.26",
     "dagster-postgres==0.29.26",
@@ -20,24 +20,24 @@ dependencies = [
 ]
 
 [project.scripts]
-leads-dagster-dev = "leads_dagster_orchestration.dev_tools.dagster_dev:run_dagster_dev"
-leads-dbt = "leads_dagster_orchestration.dev_tools.dbt_cli:run_dbt"
-leads-dbt-dev = "leads_dagster_orchestration.dev_tools.dbt_cli:run_dbt_dev"
-leads-dbt-diff = "leads_dagster_orchestration.dev_tools.dbt_cli:run_dbt_diff"
-leads-dbt-vscode = "leads_dagster_orchestration.dev_tools.dbt_cli:write_vscode_settings"
-leads-mcp-dbt = "leads_dagster_orchestration.dev_tools.mcp_servers:run_dbt_mcp"
-leads-mcp-lake = "leads_dagster_orchestration.dev_tools.mcp_servers:run_lake_mcp"
-leads-mcp-dagster = "leads_dagster_orchestration.dev_tools.mcp_servers:run_dagster_mcp"
+owl-dagster-dev = "owl_dagster_orchestration.dev_tools.dagster_dev:run_dagster_dev"
+owl-dbt = "owl_dagster_orchestration.dev_tools.dbt_cli:run_dbt"
+owl-dbt-dev = "owl_dagster_orchestration.dev_tools.dbt_cli:run_dbt_dev"
+owl-dbt-diff = "owl_dagster_orchestration.dev_tools.dbt_cli:run_dbt_diff"
+owl-dbt-vscode = "owl_dagster_orchestration.dev_tools.dbt_cli:write_vscode_settings"
+owl-mcp-dbt = "owl_dagster_orchestration.dev_tools.mcp_servers:run_dbt_mcp"
+owl-mcp-lake = "owl_dagster_orchestration.dev_tools.mcp_servers:run_lake_mcp"
+owl-mcp-dagster = "owl_dagster_orchestration.dev_tools.mcp_servers:run_dagster_mcp"
 
 [tool.uv.sources]
-leads-config = { workspace = true }
-leads-http = { workspace = true }
-leads-ingest = { workspace = true }
-leads-lake = { workspace = true }
+owl-config = { workspace = true }
+owl-http = { workspace = true }
+owl-ingest = { workspace = true }
+owl-lake = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/leads_dagster_orchestration"]
+packages = ["src/owl_dagster_orchestration"]

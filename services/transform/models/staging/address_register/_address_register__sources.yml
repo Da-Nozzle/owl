@@ -11,7 +11,7 @@ models:
       dataset has not changed since. Coordinates are not published.
     config:
       meta:
-        # leads-dbt-diff matches rows on it.
+        # owl-dbt-diff matches rows on it.
         key: [address_id, snapshot_month]
     data_tests:
       - unique:

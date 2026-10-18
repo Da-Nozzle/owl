@@ -1,16 +1,16 @@
 [project]
-name = "leads-lake"
+name = "owl-lake"
 version = "0.1.0"
 description = "Where the DuckLake lives: its Postgres catalog and S3 storage settings"
 requires-python = ">=3.14,<3.15"
-dependencies = ["leads-config"]
+dependencies = ["owl-config"]
 
 [tool.uv.sources]
-leads-config = { workspace = true }
+owl-config = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/leads_lake"]
+packages = ["src/owl_lake"]

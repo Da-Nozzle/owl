@@ -1,4 +1,4 @@
-{# leads-dbt-diff: each model built on the dev target against the lake's table (attached as `lake`).
+{# owl-dbt-diff: each model built on the dev target against the lake's table (attached as `lake`).
    Rows are matched on the model's meta `key` when it has one, else compared whole. #}
 {% macro diff(models, lake_database='lake', examples=5) %}
     {%- for model in models -%}
@@ -25,7 +25,7 @@
     {%- set dev = adapter.get_relation(target.database, node.schema, node.alias) -%}
     {%- set lake = adapter.get_relation(lake_database, node.schema, node.alias) -%}
     {%- if dev is none -%}
-        {%- do print(name ~ ': not built on the dev target; build it with leads-dbt-dev') -%}
+        {%- do print(name ~ ': not built on the dev target; build it with owl-dbt-dev') -%}
         {{- return(none) -}}
     {%- endif -%}
     {%- if lake is none -%}

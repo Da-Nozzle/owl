@@ -1,8 +1,8 @@
 import pytest
 
-from leads_ingest.sources.address_register.files import archive_register_files
-from leads_ingest.sources.address_register.settings import AddressRegisterSettings
-from leads_testing.ingest import FakeDownloader, InMemoryRawArchive
+from owl_ingest.sources.address_register.files import archive_register_files
+from owl_ingest.sources.address_register.settings import AddressRegisterSettings
+from owl_testing.ingest import FakeDownloader, InMemoryRawArchive
 
 URL_TEMPLATE = "https://ar.test/{dataset}/:format/csv"
 SETTINGS = AddressRegisterSettings(

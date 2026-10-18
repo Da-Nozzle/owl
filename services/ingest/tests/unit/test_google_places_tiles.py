@@ -1,7 +1,7 @@
 import pytest
 
-from leads_ingest.ports.search_areas import BoundingBox
-from leads_ingest.sources.google_places.tiles import Tile
+from owl_ingest.ports.search_areas import BoundingBox
+from owl_ingest.sources.google_places.tiles import Tile
 
 # About 2.2 km north to south and 2.6 km west to east.
 BOX = BoundingBox(south=54.68, west=25.26, north=54.70, east=25.30)

@@ -1,6 +1,6 @@
 import pytest
 
-from leads_ingest.sources.google_places.file_names import query_name
+from owl_ingest.sources.google_places.file_names import query_name
 
 
 @pytest.mark.parametrize(

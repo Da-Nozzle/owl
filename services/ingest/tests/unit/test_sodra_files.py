@@ -3,10 +3,10 @@ import zipfile
 
 import pytest
 
-from leads_ingest.months import Month
-from leads_ingest.sources.sodra.files import archive_yearly_files, window_years
-from leads_ingest.sources.sodra.settings import SodraSettings
-from leads_testing.ingest import FakeDownloader, InMemoryRawArchive
+from owl_ingest.months import Month
+from owl_ingest.sources.sodra.files import archive_yearly_files, window_years
+from owl_ingest.sources.sodra.settings import SodraSettings
+from owl_testing.ingest import FakeDownloader, InMemoryRawArchive
 
 URL_TEMPLATE = "https://sodra.test/{year}/monthly-{year}.csv.zip"
 SETTINGS = SodraSettings(

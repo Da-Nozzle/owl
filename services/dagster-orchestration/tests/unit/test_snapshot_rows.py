@@ -8,10 +8,10 @@ from typing import Any, cast
 import dagster as dg
 from dagster_dbt import DbtCliInvocation
 
-from leads_dagster_orchestration.dbt.step_metadata import snapshot_metadata
+from owl_dagster_orchestration.dbt.step_metadata import snapshot_metadata
 
 RAW_MONTHLY = {
-    "unique_id": "model.leads.raw_sodra__monthly",
+    "unique_id": "model.owl.raw_sodra__monthly",
     "name": "raw_sodra__monthly",
     "relation_name": '"lake"."raw_sodra"."monthly"',
     "meta": {"snapshot_column": "_snapshot_month", "fetched_at_column": "_file_fetched_at"},

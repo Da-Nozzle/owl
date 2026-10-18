@@ -2,18 +2,18 @@ from pathlib import Path
 
 import pytest
 
-from leads_config.secret_stores import FileSecretStore, build_secret_store
+from owl_config.secret_stores import FileSecretStore, build_secret_store
 
 
 def test_a_file_store_reads_from_its_directory() -> None:
     # Arrange
-    values = {"secret_store": {"kind": "file", "directory": "/etc/leads/secrets"}}
+    values = {"secret_store": {"kind": "file", "directory": "/etc/owl/secrets"}}
 
     # Act
     store = build_secret_store(values)
 
     # Assert
-    assert store == FileSecretStore(Path("/etc/leads/secrets"))
+    assert store == FileSecretStore(Path("/etc/owl/secrets"))
 
 
 def test_config_without_a_secret_store_has_none() -> None:

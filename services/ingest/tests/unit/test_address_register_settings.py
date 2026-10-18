@@ -1,8 +1,8 @@
-from leads_ingest.sources.address_register.settings import (
+from owl_ingest.sources.address_register.settings import (
     AddressRegisterSettings,
     load_address_register_settings,
 )
-from leads_testing.config import build_config
+from owl_testing.config import build_config
 
 
 def test_address_register_settings_are_read_from_config() -> None:

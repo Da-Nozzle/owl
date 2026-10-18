@@ -13,7 +13,7 @@ models:
       neighbours, and a city's lies inside its district's.
     config:
       meta:
-        # leads-dbt-diff matches rows on it.
+        # owl-dbt-diff matches rows on it.
         key: [municipality_code]
     columns:
       - name: municipality_code

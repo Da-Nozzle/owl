@@ -13,18 +13,18 @@ from dagster._core.definitions.unresolved_asset_job_definition import (
     UnresolvedAssetJobDefinition,
 )
 
-from leads_dagster_orchestration.archive.assets import WITHIN_BUDGET
-from leads_dagster_orchestration.archive.index import ARCHIVE_INDEX
-from leads_dagster_orchestration.automation import (
+from owl_dagster_orchestration.archive.assets import WITHIN_BUDGET
+from owl_dagster_orchestration.archive.index import ARCHIVE_INDEX
+from owl_dagster_orchestration.automation import (
     BUILD_NEW_SNAPSHOTS,
     PLAN_ON_CHANGE,
     REBUILD_ON_CHANGE,
     TRANSFORM_AUTOMATION,
 )
-from leads_dagster_orchestration.entrypoints.definitions import pipeline_definitions
-from leads_dagster_orchestration.lineage.sensor import LINEAGE
-from leads_ingest.settings import PipelineMode
-from leads_testing.config import build_config
+from owl_dagster_orchestration.entrypoints.definitions import pipeline_definitions
+from owl_dagster_orchestration.lineage.sensor import LINEAGE
+from owl_ingest.settings import PipelineMode
+from owl_testing.config import build_config
 
 LIVE, REPLAY = PipelineMode.LIVE, PipelineMode.REPLAY
 FETCH = dg.AssetKey(["live", "fetch", "fetch_sodra"])

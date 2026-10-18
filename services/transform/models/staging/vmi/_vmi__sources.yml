@@ -9,7 +9,7 @@ models:
       stg_vmi__current_register.
     config:
       meta:
-        # leads-dbt-diff matches rows on it.
+        # owl-dbt-diff matches rows on it.
         key: [change_id]
     columns:
       - name: change_id
@@ -53,7 +53,7 @@ models:
       Activities are resolved in the EVRK 2 classifier, not the EVRK 2.1 Sodra uses.
     config:
       meta:
-        # leads-dbt-diff matches rows on it.
+        # owl-dbt-diff matches rows on it.
         key: [register_row_id]
     columns:
       - name: register_row_id

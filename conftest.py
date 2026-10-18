@@ -9,8 +9,8 @@ from hypothesis import settings
 TEST_KINDS = ("unit", "integration")
 
 # The properties are of pure functions: a slow example is a slow machine, not a failure.
-settings.register_profile("leads", deadline=None)
-settings.load_profile("leads")
+settings.register_profile("owl", deadline=None)
+settings.load_profile("owl")
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:

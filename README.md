@@ -1,4 +1,4 @@
-# Vilnius Shadow-Economy Leads
+# Owl: Off-books Work Locator
 
 Monthly pipeline that ranks Vilnius businesses which look busy on Google but declare little to Sodra.
 Plan and code standards: [Pipeline Plan](https://claude.ai/code/artifact/2803bbda-8626-4a47-ae98-256daea0289b).
@@ -9,7 +9,7 @@ Requirements: Docker with Compose v2 and VS Code with the Dev Containers extensi
 Everything for local work lives in `.devcontainer/`; Compose is not used outside it.
 
 1. Open the repo in VS Code and choose **Reopen in Container**.
-   - On the host, `initializeCommand` builds the dev image `leads-dev:local`.
+   - On the host, `initializeCommand` builds the dev image `owl-dev:local`.
    - Compose starts the dev container with Postgres, s3mock and Marquez.
    - `post-create.sh` runs `uv sync --frozen`, installing the workspace into the container's system
      Python (3.14.7), and links `dagster.yaml` into `$DAGSTER_HOME`. There is no virtual environment.
@@ -19,11 +19,11 @@ Everything for local work lives in `.devcontainer/`; Compose is not used outside
    ```sh
    pytest                      # all tests; -m unit for the in-process ones only (below)
    ruff check . && ruff format --check .
-   leads-dbt --lake replay debug  # dbt on a lake (live or replay), secrets resolved from config
-   leads-dbt-dev build -s state:modified+  # your model changes, in a dev copy (below)
-   leads-dbt-diff              # what those changes did to the tables (below)
-   leads-dbt-vscode            # the dbt VS Code extension's environment, then reload the window
-   leads-dagster-dev           # Dagster webserver and daemon; UI on http://localhost:3000
+   owl-dbt --lake replay debug  # dbt on a lake (live or replay), secrets resolved from config
+   owl-dbt-dev build -s state:modified+  # your model changes, in a dev copy (below)
+   owl-dbt-diff              # what those changes did to the tables (below)
+   owl-dbt-vscode            # the dbt VS Code extension's environment, then reload the window
+   owl-dagster-dev           # Dagster webserver and daemon; UI on http://localhost:3000
    ```
 
 GitHub from the container: `git` over HTTPS uses your host's credentials, which VS Code forwards.
@@ -33,10 +33,10 @@ rebuilds. The `dev` user has passwordless `sudo`.
 Without VS Code:
 
 ```sh
-docker build --tag leads-dev:local .devcontainer
+docker build --tag owl-dev:local .devcontainer
 docker compose -f .devcontainer/compose.yml up -d
 docker compose -f .devcontainer/compose.yml exec dev sh .devcontainer/post-create.sh
-docker compose -f .devcontainer/compose.yml exec dev leads-dagster-dev
+docker compose -f .devcontainer/compose.yml exec dev owl-dagster-dev
 ```
 
 ### What runs where
@@ -45,14 +45,14 @@ docker compose -f .devcontainer/compose.yml exec dev leads-dagster-dev
 |---|---|---|
 | `dev` | `python:3.14.7-slim` + uv | container shell; Dagster UI on http://localhost:3000 |
 | `postgres` | `postgres:17-alpine` | `postgres:5432` (databases `dagster`, `ducklake_catalog`, `marquez`, `app`) |
-| `s3mock` | `adobe/s3mock:5.2.3` | `s3mock:9090`, bucket `leads-lake` |
+| `s3mock` | `adobe/s3mock:5.2.3` | `s3mock:9090`, bucket `owl-lake` |
 | `marquez` / `marquez-web` | `marquezproject/marquez(-web):0.51.1` | `marquez:5000`; UI on http://localhost:3001 |
 
 Only the two UIs are published to the host. Every container reaches the others by service name.
 
 ### Configuration
 
-Config is TOML in `config/<env>/`, mounted read-only at `/etc/leads/` and read by the
+Config is TOML in `config/<env>/`, mounted read-only at `/etc/owl/` and read by the
 configuration service in `services/config/`. Commented blocks in each file show how production
 would differ.
 
@@ -63,18 +63,18 @@ which is git-ignored. Replay needs none. To run live against the Places API, put
 `config/local/secrets/google_places_api_key`; it is read only when a Google fetch sends its first
 request.
 
-Logs go to stderr at INFO and to `logs/leads.log` at DEBUG, rotated at 10 MB across 10 files.
+Logs go to stderr at INFO and to `logs/owl.log` at DEBUG, rotated at 10 MB across 10 files.
 
 Each dbt process's DuckDB takes at most `transform.duckdb_memory_limit` (2 GB locally) and spills
 beyond it into `services/transform/target/duckdb_tmp/<dbt invocation id>/`. Several run at once, one
 per source and lake, and unset each could take 80% of the machine's memory.
 
 Dagster and dbt only accept credentials through environment variables, so they are started through
-`leads-dagster-dev` and `leads-dbt`, which ask the configuration service and set those variables for
+`owl-dagster-dev` and `owl-dbt`, which ask the configuration service and set those variables for
 that one process. Under Dagster, dbt's variables are set by the definitions instead, so
 **Reload definitions** applies a configuration change to dbt too.
 
-`leads-dagster-dev` runs `dagster dev` against the repo, so code changes appear after
+`owl-dagster-dev` runs `dagster dev` against the repo, so code changes appear after
 **Reload definitions** in the Dagster UI.
 
 ### Live and replay
@@ -96,10 +96,10 @@ has a fetch, and the archive is drawn dashed, as nothing can materialize it.
 
 ### Lineage (Marquez)
 
-Marquez's UI is on http://localhost:3001; pick the namespace `leads` at the top. Each code location
+Marquez's UI is on http://localhost:3001; pick the namespace `owl` at the top. Each code location
 has a sensor, `lineage`, running from the start, which sends Marquez every materialization of the
 location's assets as an OpenLineage event, within half a minute of its run's end
-(`leads_dagster_orchestration/lineage.py`). Its first tick sends the instance's history.
+(`owl_dagster_orchestration/lineage.py`). Its first tick sends the instance's history.
 
 - **Graph:** an asset is a job and a dataset of the same name, its key (`live/raw/raw_sodra__monthly`);
   the job reads the asset's parents. So Marquez draws Dagster's graph, fetch → archive → raw →
@@ -172,15 +172,15 @@ raw for the new snapshot, then staging. Sources build side by side, each in its 
 Raw is partitioned by snapshot; staging and later models are one table each, rebuilt whole, so
 their latest materialization is the table's.
 
-Every run and materialization is labelled `leads/trigger`: `schedule` or `fetch` (by hand) on a
+Every run and materialization is labelled `owl/trigger`: `schedule` or `fetch` (by hand) on a
 fetch, `automation` on what Dagster built by itself, `rebuild` on a rebuild by hand. Each raw
 snapshot also shows `archive_fetched_at`, the download it was built from. Filter the runs list by
-`leads/trigger` to see, say, every rebuild.
+`owl/trigger` to see, say, every rebuild.
 
 A new source is one `ArchivedSource`, built in its own module in
-`leads_dagster_orchestration/sources/` and listed in `archived_sources()`
+`owl_dagster_orchestration/sources/` and listed in `archived_sources()`
 (`entrypoints/definitions.py`): its name, its schedule and key format, and its fetch
-(`leads_ingest/sources/<source>/`, with its settings in `config/<env>/pipeline.toml`), plus its
+(`owl_ingest/sources/<source>/`, with its settings in `config/<env>/pipeline.toml`), plus its
 dbt models in `models/raw/<source>/` (schema `raw_<source>` in `dbt_project.yml`) and
 `models/staging/<source>/`. Its partitions, archive,
 fetch job and schedule, rebuild job, automation and group all follow from that. `jar` is the
@@ -221,39 +221,39 @@ directory, DuckDB, a local HTTP server, or a throwaway Dagster instance running 
 needs the compose services). `conftest.py` marks each test by its directory, so `pytest -m unit` or
 `pytest -m integration` runs one kind, and a test in neither directory fails collection.
 
-Tests build settings with `leads_testing` (`libs/testing`, a dev dependency only):
+Tests build settings with `owl_testing` (`libs/testing`, a dev dependency only):
 `build_config({"sodra.history_months": 1})` is a configuration like `config/local` with the dotted keys
-replaced, and `leads_testing.ingest` holds a `Download` builder and in-memory fakes of the ingest
+replaced, and `owl_testing.ingest` holds a `Download` builder and in-memory fakes of the ingest
 ports. dbt's own tests stay in `services/transform/tests/`, where dbt reads them.
 
 ### Iterating on models
 
-Load the sources once through Dagster, then work on the SQL with `leads-dbt-dev`. It runs dbt on the
+Load the sources once through Dagster, then work on the SQL with `owl-dbt-dev`. It runs dbt on the
 `dev` target: models build into a DuckDB file of their own, and a lake is attached read-only, so
 nothing you do there touches the lake or waits for a Dagster run. A model you do not select is read
 from the lake (dbt's `--defer`), as that location's last build left it. `--lake` picks the lake,
 `replay` unless given; each lake has its own dev copy in `services/transform/target/<lake>/dev/`.
 
 ```sh
-leads-dbt-dev build -s state:modified+                # what you changed since Dagster's last build
-leads-dbt-dev build -s stg_sodra__monthly+            # one model and everything after it
-leads-dbt-dev show -s stg_sodra__monthly --limit 20   # look at the result
-leads-dbt-dev build -s raw_sodra__monthly            # raw, read from the archive
-leads-dbt-dev --lake live build -s state:modified+   # the same against the live lake
+owl-dbt-dev build -s state:modified+                # what you changed since Dagster's last build
+owl-dbt-dev build -s stg_sodra__monthly+            # one model and everything after it
+owl-dbt-dev show -s stg_sodra__monthly --limit 20   # look at the result
+owl-dbt-dev build -s raw_sodra__monthly            # raw, read from the archive
+owl-dbt-dev --lake live build -s state:modified+   # the same against the live lake
 ```
 
 The dbt VS Code extension (lineage, hover, compile, preview) runs on the same `dev` target, but it
-cannot resolve the profile's `env_var()`s by itself. `leads-dbt-vscode` (`--lake` as above) writes
+cannot resolve the profile's `env_var()`s by itself. `owl-dbt-vscode` (`--lake` as above) writes
 them into `dbt.environmentVariables` in the machine's VS Code settings, kept out of the repository
 as they hold the lake's credentials; then run **Developer: Reload Window**. Run it again after
 changing the config. The extension parses into `services/transform/target/<lake>/vscode/`, apart
-from `leads-dbt-dev`'s files.
+from `owl-dbt-dev`'s files.
 
-Then `leads-dbt-diff` compares each model the last `leads-dbt-dev` command built with the lake's
+Then `owl-dbt-diff` compares each model the last `owl-dbt-dev` command built with the lake's
 table: rows on one side only, columns added, dropped or retyped, and on a model whose meta names
 its `key` (staging: `insurer_code, declared_month`), how many rows changed in each column, with
 examples. A change should show only what it meant to: adding a column ends in `only columns
-added`; anything else ends in `CHANGED`. `leads-dbt-diff stg_sodra__monthly` names models instead,
+added`; anything else ends in `CHANGED`. `owl-dbt-diff stg_sodra__monthly` names models instead,
 and `--lake` works as above. It compares what is built in dev, so rebuild after editing the SQL.
 
 ```text
@@ -270,8 +270,8 @@ Once merged, **Reload definitions** (a deploy, in production) is all that is lef
 SQL changed get a new code version, and the `transform_automation` sensor rebuilds them and
 everything after them. A new model is built by the next new snapshot, or by hand.
 
-Raw models read the archive folder of a snapshot. On `leads-dbt-dev` that is the source's newest
-complete snapshot unless `LEADS_SNAPSHOT=<key>` names another; `leads-dbt` always needs it, and
+Raw models read the archive folder of a snapshot. On `owl-dbt-dev` that is the source's newest
+complete snapshot unless `OWL_SNAPSHOT=<key>` names another; `owl-dbt` always needs it, and
 Dagster sets it per partition.
 
 Once a model is built in dev, the models after it read the dev copy, not the lake's. To read the
@@ -280,16 +280,16 @@ lake's again, add `--favor-state`, or start over by deleting `target/<lake>/dev/
 ### Agents (MCP servers)
 
 `.mcp.json` gives coding agents (Claude Code, and any MCP client that reads it) four servers. Each
-starts through a launcher that asks the configuration service for its settings, as `leads-dbt`
+starts through a launcher that asks the configuration service for its settings, as `owl-dbt`
 does, and runs a pinned release with `uvx`, outside the project's environment. All of them can
 write: they are for local work only.
 
 | Server | Launcher | Upstream | Gives an agent |
 |---|---|---|---|
-| `dagster` | `leads-mcp-dagster` | [dagster-mcp](https://github.com/fabdendev/dagster-mcp) (community) | runs, their logs and failures, assets, schedules, sensors, backfills; launching, terminating, materializing, reloading a code location. Needs `leads-dagster-dev` running |
-| `lake` | `leads-mcp-lake` | [mcp-server-motherduck](https://github.com/motherduckdb/mcp-server-motherduck) | SQL on DuckDB in memory, with both lakes attached writable as `live` and `replay` (`select * from replay.staging.stg_sodra__monthly`), capped at `transform.duckdb_memory_limit` |
-| `dbt` | `leads-mcp-dbt --lake replay` | [dbt-mcp](https://github.com/dbt-labs/dbt-mcp) (dbt Labs) | `build`, `run`, `test`, `show`, `list`, `compile`, lineage, as `leads-dbt --lake replay`: it writes to the replay lake |
-| `dbt-dev` | `leads-mcp-dbt --dev --lake replay` | dbt-mcp | the same as `leads-dbt-dev`: builds into the dev copy, defers to the lake |
+| `dagster` | `owl-mcp-dagster` | [dagster-mcp](https://github.com/fabdendev/dagster-mcp) (community) | runs, their logs and failures, assets, schedules, sensors, backfills; launching, terminating, materializing, reloading a code location. Needs `owl-dagster-dev` running |
+| `lake` | `owl-mcp-lake` | [mcp-server-motherduck](https://github.com/motherduckdb/mcp-server-motherduck) | SQL on DuckDB in memory, with both lakes attached writable as `live` and `replay` (`select * from replay.staging.stg_sodra__monthly`), capped at `transform.duckdb_memory_limit` |
+| `dbt` | `owl-mcp-dbt --lake replay` | [dbt-mcp](https://github.com/dbt-labs/dbt-mcp) (dbt Labs) | `build`, `run`, `test`, `show`, `list`, `compile`, lineage, as `owl-dbt --lake replay`: it writes to the replay lake |
+| `dbt-dev` | `owl-mcp-dbt --dev --lake replay` | dbt-mcp | the same as `owl-dbt-dev`: builds into the dev copy, defers to the lake |
 
 For the live lake, add a server with `--lake live`. The lake's DuckLake catalog is in Postgres, so
 the `lake` server writes beside Dagster's runs and dbt's without locking them out. Its startup SQL
@@ -303,7 +303,7 @@ Notes:
 - dbt-mcp declares Python below 3.14, which uv does not enforce; it runs on the project's 3.14.
 - dbt-mcp's lineage tools read `services/transform/target/manifest.json`, which the lake target
   writes; on `dbt-dev` they show the same models, from that parse.
-- dbt raw models need `LEADS_SNAPSHOT` on the lake target, which an agent cannot pass: build raw
+- dbt raw models need `OWL_SNAPSHOT` on the lake target, which an agent cannot pass: build raw
   through Dagster, or on `dbt-dev`, which reads the newest snapshot.
 - Each dbt command an agent starts may take up to an hour (`mcp.dbt.command_timeout_seconds` in
   `config/local/mcp.toml`).

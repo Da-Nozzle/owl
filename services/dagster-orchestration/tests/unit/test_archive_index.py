@@ -1,11 +1,11 @@
 import pytest
 
-from leads_dagster_orchestration.archive.index import (
+from owl_dagster_orchestration.archive.index import (
     IndexChanges,
     index_changes,
     load_archive_index_settings,
 )
-from leads_testing.config import build_config
+from owl_testing.config import build_config
 
 
 def test_a_new_snapshot_gets_a_partition_and_is_reported() -> None:

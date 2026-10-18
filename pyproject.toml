@@ -4,17 +4,17 @@ version = "0.1.0"
 description = "Homework"
 requires-python = ">=3.14,<3.15"
 dependencies = [
-    "leads-config",
-    "leads-dagster-orchestration",
-    "leads-http",
-    "leads-ingest",
-    "leads-lake",
+    "owl-config",
+    "owl-dagster-orchestration",
+    "owl-http",
+    "owl-ingest",
+    "owl-lake",
 ]
 
 [dependency-groups]
 dev = [
     "hypothesis>=6.170.0",
-    "leads-testing",
+    "owl-testing",
     "psycopg2-binary>=2.9.13",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
@@ -30,12 +30,12 @@ members = ["services/*", "libs/*"]
 exclude = ["services/transform"]
 
 [tool.uv.sources]
-leads-config = { workspace = true }
-leads-dagster-orchestration = { workspace = true }
-leads-http = { workspace = true }
-leads-ingest = { workspace = true }
-leads-lake = { workspace = true }
-leads-testing = { workspace = true }
+owl-config = { workspace = true }
+owl-dagster-orchestration = { workspace = true }
+owl-http = { workspace = true }
+owl-ingest = { workspace = true }
+owl-lake = { workspace = true }
+owl-testing = { workspace = true }
 
 [[tool.uv.dependency-metadata]]
 name = "dagster-dbt"
@@ -79,7 +79,7 @@ select = [
 ]
 
 [tool.ruff.lint.isort]
-known-first-party = ["leads_*"]
+known-first-party = ["owl_*"]
 
 [tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
@@ -90,7 +90,7 @@ ban-relative-imports = "all"
 "os.getenv".msg = "Read config from TOML."
 
 [tool.ruff.lint.per-file-ignores]
-"services/dagster-orchestration/src/leads_dagster_orchestration/dev_tools/launch.py" = [
+"services/dagster-orchestration/src/owl_dagster_orchestration/dev_tools/launch.py" = [
     "TID251",
 ]
 

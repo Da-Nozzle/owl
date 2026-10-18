@@ -4,7 +4,7 @@
     "service": "dev",
     "workspaceFolder": "/workspace",
     "shutdownAction": "stopCompose",
-    "initializeCommand": "docker build --tag leads-dev:local .devcontainer",
+    "initializeCommand": "docker build --tag owl-dev:local .devcontainer",
     "postCreateCommand": "sh .devcontainer/post-create.sh",
     "remoteUser": "dev",
     "updateRemoteUserUID": true,

@@ -2,7 +2,7 @@ import time
 
 import pytest
 
-from leads_ingest.parallel import expand_in_parallel, in_parallel
+from owl_ingest.parallel import expand_in_parallel, in_parallel
 
 
 def test_results_come_in_the_items_order_whichever_ends_first() -> None:

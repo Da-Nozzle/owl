@@ -11,7 +11,7 @@ models:
       only place_id to be stored indefinitely.
     config:
       meta:
-        # leads-dbt-diff matches rows on it.
+        # owl-dbt-diff matches rows on it.
         key: [place_id, snapshot_month]
     data_tests:
       - unique:

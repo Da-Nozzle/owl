@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
-from leads_http.client import Pacer, build_http_client, retry_after_seconds
-from leads_http.settings import HttpClientSettings, RetryPolicy
+from owl_http.client import Pacer, build_http_client, retry_after_seconds
+from owl_http.settings import HttpClientSettings, RetryPolicy
 
 URL = "https://source.test/file.csv"
 SETTINGS = HttpClientSettings(
@@ -62,7 +62,7 @@ def answering(
 def client_with(
     transport: httpx.MockTransport, waits: list[float], settings: HttpClientSettings = SETTINGS
 ) -> httpx.Client:
-    return build_http_client("leads-test/1.0", settings, transport=transport, sleep=waits.append)
+    return build_http_client("owl-test/1.0", settings, transport=transport, sleep=waits.append)
 
 
 def test_a_server_error_is_retried_after_a_doubling_wait() -> None:
@@ -202,7 +202,7 @@ def test_requests_name_the_pipeline_as_their_user_agent() -> None:
     client_with(transport, []).get(URL)
 
     # Assert
-    assert sent[0].headers["User-Agent"] == "leads-test/1.0"
+    assert sent[0].headers["User-Agent"] == "owl-test/1.0"
 
 
 def test_a_spaced_client_spaces_its_retries_too() -> None:

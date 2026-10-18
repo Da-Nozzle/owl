@@ -2,10 +2,10 @@ import httpx
 import pytest
 from pytest_httpserver import HTTPServer
 
-from leads_http.client import build_http_client
-from leads_http.settings import load_http_client_settings
-from leads_ingest.adapters.http.downloader import HttpDownloader
-from leads_testing.config import build_config
+from owl_http.client import build_http_client
+from owl_http.settings import load_http_client_settings
+from owl_ingest.adapters.http.downloader import HttpDownloader
+from owl_testing.config import build_config
 
 # Answers match on path only, as an unexpected request gets a 500, retried with backoff, which
 # would fail slowly. Headers are checked from the server's log instead.
@@ -13,7 +13,7 @@ from leads_testing.config import build_config
 
 def downloader() -> HttpDownloader:
     settings = load_http_client_settings(build_config(), "sodra.http")
-    return HttpDownloader(build_http_client("leads-test/1.0", settings))
+    return HttpDownloader(build_http_client("owl-test/1.0", settings))
 
 
 def test_a_download_is_the_files_bytes_and_its_version(httpserver: HTTPServer) -> None:
@@ -45,7 +45,7 @@ def test_a_download_names_the_pipeline_as_its_user_agent(httpserver: HTTPServer)
 
     # Assert
     [(request, _)] = httpserver.log
-    assert request.headers["User-Agent"] == "leads-test/1.0"
+    assert request.headers["User-Agent"] == "owl-test/1.0"
 
 
 def test_a_file_served_without_a_version_has_none(httpserver: HTTPServer) -> None:

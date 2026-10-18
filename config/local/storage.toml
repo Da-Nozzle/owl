@@ -1,11 +1,11 @@
 [postgres]
 host = "postgres"
 port = 5432
-user = "leads"
-password = "leads" # local only; also in .devcontainer/compose.yml
+user = "owl"
+password = "owl" # local only; also in .devcontainer/compose.yml
 # Production example:
-# host = "leads.abc123.eu-central-1.rds.amazonaws.com"
-# password = { secret_name = "leads/postgres-password" }
+# host = "owl.abc123.eu-central-1.rds.amazonaws.com"
+# password = { secret_name = "owl/postgres-password" }
 # TODO on RDS, use IAM auth tokens instead of a password. A token expires after 15 minutes, while
 # Configuration caches each resolved secret and dbt is handed the password once.
 
@@ -17,14 +17,14 @@ marquez = "marquez"
 app = "app"
 
 [lake]
-data_path = "s3://leads-lake/"
-# data_path = "s3://leads-lake-prod/" # production
+data_path = "s3://owl-lake/"
+# data_path = "s3://owl-lake-prod/" # production
 # Raw source downloads, kept so any month can be reloaded without calling the sources again.
-archive_path = "s3://leads-lake/archive/"
+archive_path = "s3://owl-lake/archive/"
 # Postgres schema in ducklake_catalog that holds the lake's metadata.
 metadata_schema = "ducklake"
 # TODO give the archive and lake.replay's data_path versioned buckets of their own (e.g.
-# s3://leads-archive/): under data_path, DuckLake's orphan-file cleanup could delete them. Needs a
+# s3://owl-archive/): under data_path, DuckLake's orphan-file cleanup could delete them. Needs a
 # data migration, and locally s3mock's buckets created with PutBucketVersioning. A rerun then
 # overwrites the current object and S3 keeps the old one as a version, so the archive needs no
 # write-once logic. A file's .meta.json sidecar is a separate object whose versions are not tied
@@ -35,7 +35,7 @@ metadata_schema = "ducklake"
 # the same Postgres database and bucket, a schema and prefix apart.
 [lake.replay]
 metadata_schema = "ducklake_replay"
-data_path = "s3://leads-lake/replay/"
+data_path = "s3://owl-lake/replay/"
 
 [lake.s3]
 endpoint = "s3mock:9090"
@@ -45,9 +45,9 @@ use_ssl = false
 key_id = "s3mock"
 secret = "s3mock"
 # Production example (AWS S3). Keys, not an instance role: a role needs the dbt profile's
-# credential_chain provider, which the LEADS_S3_* variables cannot express yet.
+# credential_chain provider, which the OWL_S3_* variables cannot express yet.
 # endpoint = "s3.eu-central-1.amazonaws.com"
 # url_style = "vhost"
 # use_ssl = true
-# key_id = { secret_name = "leads/lake-s3-key-id" }
-# secret = { secret_name = "leads/lake-s3-secret" }
+# key_id = { secret_name = "owl/lake-s3-key-id" }
+# secret = { secret_name = "owl/lake-s3-secret" }

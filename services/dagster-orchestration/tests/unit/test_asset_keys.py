@@ -1,7 +1,7 @@
 import dagster as dg
 import pytest
 
-from leads_dagster_orchestration.asset_keys import (
+from owl_dagster_orchestration.asset_keys import (
     archive_key,
     dbt_resource_key,
     fetch_key,
@@ -9,8 +9,8 @@ from leads_dagster_orchestration.asset_keys import (
     lake_group,
     source_group,
 )
-from leads_ingest.settings import PipelineMode
-from leads_ingest.sources.sodra.files import SOURCE_NAME
+from owl_ingest.settings import PipelineMode
+from owl_ingest.sources.sodra.files import SOURCE_NAME
 
 LIVE = PipelineMode.LIVE
 REPLAY = PipelineMode.REPLAY

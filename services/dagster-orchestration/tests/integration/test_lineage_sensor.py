@@ -6,10 +6,10 @@ import dagster as dg
 import httpx
 import pytest
 
-from leads_dagster_orchestration.lineage.sensor import LINEAGE, build_lineage_sensor, unsent
-from leads_dagster_orchestration.lineage.settings import LineageSettings
-from leads_dagster_orchestration.metadata_keys import COMPILED_SQL
-from leads_http.settings import HttpClientSettings, RetryPolicy
+from owl_dagster_orchestration.lineage.sensor import LINEAGE, build_lineage_sensor, unsent
+from owl_dagster_orchestration.lineage.settings import LineageSettings
+from owl_dagster_orchestration.metadata_keys import COMPILED_SQL
+from owl_http.settings import HttpClientSettings, RetryPolicy
 
 ARCHIVE = dg.AssetKey(["live", "archive", "archive_sodra"])
 RAW = dg.AssetKey(["live", "raw", "raw_sodra__monthly"])
@@ -18,7 +18,7 @@ SNAPSHOTS = dg.StaticPartitionsDefinition(["2026-09"])
 SETTINGS = LineageSettings(
     url="http://marquez.test:5000",
     endpoint="api/v1/lineage",
-    namespace="leads",
+    namespace="owl",
     sensor_interval_seconds=30,
     events_per_tick=500,
     # One attempt, so a failing Marquez fails at once.
@@ -123,7 +123,7 @@ def marquez() -> FakeMarquez:
 
 def build_definitions(marquez: FakeMarquez) -> dg.Definitions:
     sensor = build_lineage_sensor(
-        SETTINGS, "leads-test", "Europe/Vilnius", transport=httpx.MockTransport(marquez.handle)
+        SETTINGS, "owl-test", "Europe/Vilnius", transport=httpx.MockTransport(marquez.handle)
     )
     return dg.Definitions(
         assets=[archive, raw, staging], asset_checks=STAGING_CHECKS, sensors=[sensor]
@@ -172,9 +172,9 @@ def test_each_materialization_is_a_completed_run_of_its_assets_job_from_its_pare
     assert {event["eventType"] for event in marquez.events} == {"COMPLETE"}
     archived, built, staged = marquez.events
     assert archived["inputs"] == []
-    assert built["job"]["namespace"] == "leads"
+    assert built["job"]["namespace"] == "owl"
     assert [(d["namespace"], d["name"]) for d in built["inputs"]] == [
-        ("leads", "live/archive/archive_sodra")
+        ("owl", "live/archive/archive_sodra")
     ]
     assert [d["name"] for d in built["outputs"]] == ["live/raw/raw_sodra__monthly"]
     assert [d["name"] for d in staged["inputs"]] == ["live/raw/raw_sodra__monthly"]
@@ -226,10 +226,10 @@ def test_column_lineage_names_each_column_as_its_table_has_it(
     _, built, staged = marquez.events
     assert input_columns(built) == {
         # The archive is files, with no columns Dagster knows of: named as dagster-dbt has it
-        "Draudėjo kodas (code)": [("leads", "live/archive/archive_sodra", "kodas")]
+        "Draudėjo kodas (code)": [("owl", "live/archive/archive_sodra", "kodas")]
     }
     assert input_columns(staged) == {
-        "insurer_code": [("leads", "live/raw/raw_sodra__monthly", "Draudėjo kodas (code)")]
+        "insurer_code": [("owl", "live/raw/raw_sodra__monthly", "Draudėjo kodas (code)")]
     }
 
 

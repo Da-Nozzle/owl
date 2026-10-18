@@ -1,12 +1,12 @@
 [project]
-name = "leads-ingest"
+name = "owl-ingest"
 version = "0.1.0"
 description = "Source fetches, the raw archive they write to, and the adapters they reach sources and the lake through"
 requires-python = ">=3.14,<3.15"
 dependencies = [
-    "leads-config",
-    "leads-http",
-    "leads-lake",
+    "owl-config",
+    "owl-http",
+    "owl-lake",
     "duckdb==1.5.6",
     "fsspec>=2026.9",
     "httpx>=0.28.1,<1",
@@ -14,13 +14,13 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-leads-config = { workspace = true }
-leads-http = { workspace = true }
-leads-lake = { workspace = true }
+owl-config = { workspace = true }
+owl-http = { workspace = true }
+owl-lake = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/leads_ingest"]
+packages = ["src/owl_ingest"]

@@ -1,7 +1,7 @@
 import pytest
 
-from leads_ingest.sources.sodra.settings import SodraSettings, load_sodra_settings
-from leads_testing.config import build_config
+from owl_ingest.sources.sodra.settings import SodraSettings, load_sodra_settings
+from owl_testing.config import build_config
 
 
 def test_sodra_settings_are_read_from_config() -> None:

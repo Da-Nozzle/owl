@@ -3,16 +3,16 @@ from datetime import UTC, datetime
 
 import pytest
 
-from leads_ingest.sources.spinta.changelog import Changelog
-from leads_ingest.sources.vmi.daily_changes import archive_changes
-from leads_ingest.sources.vmi.monthly_register import (
+from owl_ingest.sources.spinta.changelog import Changelog
+from owl_ingest.sources.vmi.daily_changes import archive_changes
+from owl_ingest.sources.vmi.monthly_register import (
     ACTIVITIES_FILE,
     LAST_CHANGE_FILE,
     REGISTER_FILE,
     archive_register,
 )
-from leads_ingest.sources.vmi.settings import VmiSettings
-from leads_testing.ingest import FakeSpinta, InMemoryRawArchive, build_download, change_entry
+from owl_ingest.sources.vmi.settings import VmiSettings
+from owl_testing.ingest import FakeSpinta, InMemoryRawArchive, build_download, change_entry
 
 REGISTER = "https://vmi.test/MokesciuMoketojas"
 ACTIVITIES = "https://vmi.test/EkonominesVeiklosRusis"

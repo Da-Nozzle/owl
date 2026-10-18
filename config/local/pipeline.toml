@@ -7,7 +7,7 @@
 [pipeline]
 # The timezone of every source's snapshot_schedule (cron).
 timezone = "Europe/Vilnius"
-user_agent = "vmi-leads-pipeline/0.1"
+user_agent = "owl-pipeline/0.1"
 # The committed sample the replay code location reads instead of calling the sources.
 replay_path = "/workspace/replay"
 

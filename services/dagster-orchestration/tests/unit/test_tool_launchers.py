@@ -5,11 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from leads_dagster_orchestration.dev_tools.dbt_cli import built_models, with_setting
-from leads_dagster_orchestration.dev_tools.launch import launch_environment, split_lake_option
-from leads_dagster_orchestration.dev_tools.mcp_servers import dbt_mcp_environment, load_mcp_settings
-from leads_ingest.settings import PipelineMode
-from leads_testing.config import build_config
+from owl_dagster_orchestration.dev_tools.dbt_cli import built_models, with_setting
+from owl_dagster_orchestration.dev_tools.launch import launch_environment, split_lake_option
+from owl_dagster_orchestration.dev_tools.mcp_servers import dbt_mcp_environment, load_mcp_settings
+from owl_ingest.settings import PipelineMode
+from owl_testing.config import build_config
 
 
 def test_project_scripts_come_before_other_installs_on_path(
@@ -19,7 +19,7 @@ def test_project_scripts_come_before_other_installs_on_path(
     monkeypatch.setenv("PATH", os.pathsep.join(["/home/dev/.local/bin", "/usr/bin"]))
 
     # Act
-    environment = launch_environment({"LEADS_S3_REGION": "eu-central-1"})
+    environment = launch_environment({"OWL_S3_REGION": "eu-central-1"})
 
     # Assert
     assert environment["PATH"].split(os.pathsep) == [
@@ -27,7 +27,7 @@ def test_project_scripts_come_before_other_installs_on_path(
         "/home/dev/.local/bin",
         "/usr/bin",
     ]
-    assert environment["LEADS_S3_REGION"] == "eu-central-1"
+    assert environment["OWL_S3_REGION"] == "eu-central-1"
 
 
 @pytest.mark.parametrize(
@@ -68,10 +68,10 @@ def test_the_models_to_diff_are_those_the_last_dev_command_built(tmp_path: Path)
         json.dumps(
             {
                 "results": [
-                    {"unique_id": "model.leads.stg_sodra__monthly", "status": "success"},
-                    {"unique_id": "test.leads.not_null_stg_x.abc", "status": "pass"},
-                    {"unique_id": "model.leads.fct_leads", "status": "error"},
-                    {"unique_id": "model.leads.int_scores.v2", "status": "success"},
+                    {"unique_id": "model.owl.stg_sodra__monthly", "status": "success"},
+                    {"unique_id": "test.owl.not_null_stg_x.abc", "status": "pass"},
+                    {"unique_id": "model.owl.fct_leads", "status": "error"},
+                    {"unique_id": "model.owl.int_scores.v2", "status": "success"},
                 ]
             }
         )
@@ -81,7 +81,7 @@ def test_the_models_to_diff_are_those_the_last_dev_command_built(tmp_path: Path)
     models = built_models(run_results)
 
     # Assert
-    assert models == ["model.leads.stg_sodra__monthly", "model.leads.int_scores.v2"]
+    assert models == ["model.owl.stg_sodra__monthly", "model.owl.int_scores.v2"]
 
 
 def test_no_dev_command_yet_means_no_models_to_diff(tmp_path: Path) -> None:
@@ -103,10 +103,10 @@ def test_the_dbt_mcp_server_waits_on_dbt_as_long_as_configured() -> None:
 @pytest.mark.parametrize("text", ["", "{}"])
 def test_a_setting_is_written_into_empty_vscode_settings(text: str) -> None:
     # Act
-    updated = with_setting(text, "dbt.environmentVariables", {"LEADS_DBT_THREADS": "4"})
+    updated = with_setting(text, "dbt.environmentVariables", {"OWL_DBT_THREADS": "4"})
 
     # Assert
-    assert json.loads(updated) == {"dbt.environmentVariables": {"LEADS_DBT_THREADS": "4"}}
+    assert json.loads(updated) == {"dbt.environmentVariables": {"OWL_DBT_THREADS": "4"}}
 
 
 def test_writing_a_vscode_setting_keeps_the_others_and_replaces_its_old_value() -> None:

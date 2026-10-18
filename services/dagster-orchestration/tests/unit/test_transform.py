@@ -8,11 +8,11 @@ from dagster._core.definitions.definitions_load_context import (
 )
 from dagster_dbt import DbtProject
 
-from leads_dagster_orchestration.dbt.assets import has_shared_models, pool_name, source_layers
-from leads_dagster_orchestration.dbt.environment import environment_variable, set_dbt_environment
-from leads_dagster_orchestration.dbt.project import prepare_on_initial_load
-from leads_dagster_orchestration.dbt.step_metadata import snapshot_query
-from leads_ingest.settings import PipelineMode
+from owl_dagster_orchestration.dbt.assets import has_shared_models, pool_name, source_layers
+from owl_dagster_orchestration.dbt.environment import environment_variable, set_dbt_environment
+from owl_dagster_orchestration.dbt.project import prepare_on_initial_load
+from owl_dagster_orchestration.dbt.step_metadata import snapshot_query
+from owl_ingest.settings import PipelineMode
 
 
 def manifest_of(*nodes: tuple[str, list[str]]) -> dict[str, object]:
@@ -31,10 +31,10 @@ def manifest_of(*nodes: tuple[str, list[str]]) -> dict[str, object]:
 def test_each_source_folder_is_a_step_and_tests_are_not() -> None:
     # Arrange
     manifest = manifest_of(
-        ("model", ["leads", "raw", "sodra", "raw_sodra__monthly"]),
-        ("model", ["leads", "staging", "sodra", "stg_sodra__monthly"]),
-        ("model", ["leads", "staging", "jar", "stg_jar__entities"]),
-        ("test", ["leads", "sodra_no_column_dropped"]),
+        ("model", ["owl", "raw", "sodra", "raw_sodra__monthly"]),
+        ("model", ["owl", "staging", "sodra", "stg_sodra__monthly"]),
+        ("model", ["owl", "staging", "jar", "stg_jar__entities"]),
+        ("test", ["owl", "sodra_no_column_dropped"]),
     )
 
     # Act
@@ -47,9 +47,9 @@ def test_each_source_folder_is_a_step_and_tests_are_not() -> None:
 def test_each_source_has_a_step_for_each_layer_holding_its_models() -> None:
     # Arrange
     manifest = manifest_of(
-        ("model", ["leads", "raw", "sodra", "raw_sodra__monthly"]),
-        ("model", ["leads", "staging", "sodra", "stg_sodra__monthly"]),
-        ("model", ["leads", "raw", "jar", "raw_jar__entities"]),
+        ("model", ["owl", "raw", "sodra", "raw_sodra__monthly"]),
+        ("model", ["owl", "staging", "sodra", "stg_sodra__monthly"]),
+        ("model", ["owl", "raw", "jar", "raw_jar__entities"]),
     )
 
     # Act
@@ -67,7 +67,7 @@ def test_each_lakes_pools_are_its_own() -> None:
 
 def test_a_staging_model_outside_a_source_folder_is_rejected() -> None:
     # Arrange
-    manifest = manifest_of(("model", ["leads", "staging", "stg_sodra__monthly"]))
+    manifest = manifest_of(("model", ["owl", "staging", "stg_sodra__monthly"]))
 
     # Act / Assert
     with pytest.raises(ValueError, match="models/staging/<source>/"):
@@ -77,11 +77,11 @@ def test_a_staging_model_outside_a_source_folder_is_rejected() -> None:
 def test_shared_step_exists_only_for_models_outside_the_source_layers() -> None:
     # Arrange
     sources_only = manifest_of(
-        ("model", ["leads", "raw", "sodra", "raw_sodra__monthly"]),
-        ("test", ["leads", "sodra_no_column_dropped"]),
+        ("model", ["owl", "raw", "sodra", "raw_sodra__monthly"]),
+        ("test", ["owl", "sodra_no_column_dropped"]),
     )
-    with_mart = manifest_of(("model", ["leads", "marts", "fct_leads"]))
-    with_seed = manifest_of(("seed", ["leads", "scoring_rules"]))
+    with_mart = manifest_of(("model", ["owl", "marts", "fct_leads"]))
+    with_seed = manifest_of(("seed", ["owl", "scoring_rules"]))
 
     # Act / Assert
     assert not has_shared_models(sources_only)
@@ -93,32 +93,32 @@ def test_an_environment_variable_is_set_only_within_its_block(
     environ: MutableMapping[str, str],
 ) -> None:
     # Arrange
-    environ["LEADS_TEST_KEPT"] = "before"
-    environ.pop("LEADS_TEST_ADDED", None)
+    environ["OWL_TEST_KEPT"] = "before"
+    environ.pop("OWL_TEST_ADDED", None)
 
     # Act
-    with environment_variable("LEADS_TEST_KEPT", "2026-09"):
-        kept_within = environ["LEADS_TEST_KEPT"]
-    with environment_variable("LEADS_TEST_ADDED", "2026-09"):
-        added_within = environ["LEADS_TEST_ADDED"]
+    with environment_variable("OWL_TEST_KEPT", "2026-09"):
+        kept_within = environ["OWL_TEST_KEPT"]
+    with environment_variable("OWL_TEST_ADDED", "2026-09"):
+        added_within = environ["OWL_TEST_ADDED"]
 
     # Assert
-    assert (kept_within, environ["LEADS_TEST_KEPT"]) == ("2026-09", "before")
+    assert (kept_within, environ["OWL_TEST_KEPT"]) == ("2026-09", "before")
     assert added_within == "2026-09"
-    assert "LEADS_TEST_ADDED" not in environ
+    assert "OWL_TEST_ADDED" not in environ
 
 
 def test_dbt_environment_is_set_in_this_process(environ: MutableMapping[str, str]) -> None:
     # Arrange
-    environ["LEADS_ARCHIVE_PATH"] = "/workspace/replay"
-    environ.pop("LEADS_TEST_ADDED", None)
+    environ["OWL_ARCHIVE_PATH"] = "/workspace/replay"
+    environ.pop("OWL_TEST_ADDED", None)
 
     # Act
-    set_dbt_environment({"LEADS_ARCHIVE_PATH": "s3://leads-lake/archive", "LEADS_TEST_ADDED": "13"})
+    set_dbt_environment({"OWL_ARCHIVE_PATH": "s3://owl-lake/archive", "OWL_TEST_ADDED": "13"})
 
     # Assert
-    assert environ["LEADS_ARCHIVE_PATH"] == "s3://leads-lake/archive"
-    assert environ["LEADS_TEST_ADDED"] == "13"
+    assert environ["OWL_ARCHIVE_PATH"] == "s3://owl-lake/archive"
+    assert environ["OWL_TEST_ADDED"] == "13"
 
 
 def test_a_model_with_a_snapshot_column_counts_the_snapshots_rows() -> None:

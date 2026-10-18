@@ -1,5 +1,5 @@
-from leads_ingest.sources.jar.settings import JarSettings, load_jar_settings
-from leads_testing.config import build_config
+from owl_ingest.sources.jar.settings import JarSettings, load_jar_settings
+from owl_testing.config import build_config
 
 
 def test_jar_settings_are_read_from_config() -> None:

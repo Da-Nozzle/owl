@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from leads_ingest.months import Month
+from owl_ingest.months import Month
 
 MONTHS = st.builds(Month, year=st.integers(1000, 9000), month=st.integers(1, 12))
 MONTH_COUNTS = st.integers(-1200, 1200)

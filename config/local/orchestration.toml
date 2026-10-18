@@ -1,4 +1,4 @@
-# Read by the dev tools only (leads-dagster-dev, leads-mcp-dagster). In production the webserver is
+# Read by the dev tools only (owl-dagster-dev, owl-mcp-dagster). In production the webserver is
 # deployed on its own.
 [dagster]
 # The code locations, live and replay, side by side. Production deploys live only.

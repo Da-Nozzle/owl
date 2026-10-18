@@ -1,8 +1,8 @@
 import pytest
 
-from leads_ingest.adapters.s3.configuration import endpoint_url, s3fs_options
-from leads_lake.settings import load_lake_settings
-from leads_testing.config import build_config
+from owl_ingest.adapters.s3.configuration import endpoint_url, s3fs_options
+from owl_lake.settings import load_lake_settings
+from owl_testing.config import build_config
 
 
 @pytest.mark.parametrize(("use_ssl", "scheme"), [(False, "http"), (True, "https")])

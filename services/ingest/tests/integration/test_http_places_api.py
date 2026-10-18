@@ -4,10 +4,10 @@ import httpx
 import pytest
 from pytest_httpserver import HTTPServer
 
-from leads_http.client import build_http_client
-from leads_http.settings import load_http_client_settings
-from leads_ingest.adapters.http.places_api import HttpPlacesApi
-from leads_testing.config import build_config
+from owl_http.client import build_http_client
+from owl_http.settings import load_http_client_settings
+from owl_ingest.adapters.http.places_api import HttpPlacesApi
+from owl_testing.config import build_config
 
 # Answers are matched on path only (see test_http_downloader.py); what was sent is checked from
 # the server's log.
@@ -19,7 +19,7 @@ def search(httpserver: HTTPServer, waits: list[float] | None = None) -> HttpPlac
     """The API at `httpserver`, recording its retries' waits in `waits` instead of waiting."""
     recorded = [] if waits is None else waits
     settings = load_http_client_settings(build_config(), "google_places.http")
-    client = build_http_client("leads-test/1.0", settings, sleep=recorded.append)
+    client = build_http_client("owl-test/1.0", settings, sleep=recorded.append)
     return HttpPlacesApi(
         client=client,
         api_key="key-123",
@@ -40,7 +40,7 @@ def test_a_search_posts_its_body_with_the_key_and_field_mask(httpserver: HTTPSer
     assert json.loads(request.data) == REQUEST
     assert request.headers["X-Goog-Api-Key"] == "key-123"
     assert request.headers["X-Goog-FieldMask"] == "places.id,nextPageToken"
-    assert request.headers["User-Agent"] == "leads-test/1.0"
+    assert request.headers["User-Agent"] == "owl-test/1.0"
 
 
 def test_a_page_is_kept_as_sent_with_the_request_it_answered_but_not_the_key(

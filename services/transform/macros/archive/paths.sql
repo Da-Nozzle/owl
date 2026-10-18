@@ -1,5 +1,5 @@
 {% macro archive_root() -%}
-    {{ env_var('LEADS_ARCHIVE_PATH').rstrip('/') }}
+    {{ env_var('OWL_ARCHIVE_PATH').rstrip('/') }}
 {%- endmacro %}
 
 {# <archive>/<source>/<snapshot>/<name> for each snapshot; `name` may be a glob. #}

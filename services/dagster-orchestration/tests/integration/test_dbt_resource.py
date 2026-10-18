@@ -5,7 +5,7 @@ import dagster_dbt.core.resource
 import pytest
 from dagster_dbt import DbtProject
 
-from leads_dagster_orchestration.dbt.resource import (
+from owl_dagster_orchestration.dbt.resource import (
     DBT_CORE_PACKAGE,
     dbt_core_executable,
     dbt_core_resource,

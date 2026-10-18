@@ -2,12 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from leads_config.loading import (
+from owl_config.loading import (
     create_log_file_directories,
     load_configuration,
     read_config_directory,
 )
-from leads_config.secret_stores import FileSecretStore
+from owl_config.secret_stores import FileSecretStore
 
 
 def test_files_in_one_directory_merge_into_one_tree(tmp_path: Path) -> None:
@@ -72,7 +72,7 @@ def test_an_empty_secret_file_is_rejected(tmp_path: Path) -> None:
 
 def test_log_file_directory_is_created_before_logging_starts(tmp_path: Path) -> None:
     # Arrange
-    log_file = tmp_path / "logs" / "leads.log"
+    log_file = tmp_path / "logs" / "owl.log"
     settings = {"handlers": {"file": {"filename": str(log_file)}, "console": {}}}
 
     # Act

@@ -4,12 +4,12 @@ from zoneinfo import ZoneInfo
 import pytest
 from dagster._core.definitions.partitions.context import partition_loading_context
 
-from leads_dagster_orchestration.snapshots import (
+from owl_dagster_orchestration.snapshots import (
     ArchivedSource,
     SnapshotCadence,
     snapshot_partitions,
 )
-from leads_ingest.settings import PipelineMode
+from owl_ingest.settings import PipelineMode
 
 VILNIUS = ZoneInfo("Europe/Vilnius")
 MONTHLY = SnapshotCadence(schedule="0 6 21 * *", key_format="%Y-%m", timezone="Europe/Vilnius")

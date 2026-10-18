@@ -9,7 +9,7 @@ models:
       with 3 or fewer insured.
     config:
       meta:
-        # leads-dbt-diff matches rows on it.
+        # owl-dbt-diff matches rows on it.
         key: [insurer_code, declared_month]
     data_tests:
       - unique:

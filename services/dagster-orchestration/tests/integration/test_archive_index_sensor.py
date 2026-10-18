@@ -4,14 +4,14 @@ from datetime import UTC, datetime
 import dagster as dg
 import pytest
 
-from leads_dagster_orchestration.archive.index import ArchiveIndexSettings, build_archive_index
-from leads_dagster_orchestration.snapshots import (
+from owl_dagster_orchestration.archive.index import ArchiveIndexSettings, build_archive_index
+from owl_dagster_orchestration.snapshots import (
     ArchivedSource,
     SnapshotCadence,
     snapshot_partitions,
 )
-from leads_ingest.settings import PipelineMode
-from leads_testing.ingest import InMemoryRawArchive, build_download
+from owl_ingest.settings import PipelineMode
+from owl_testing.ingest import InMemoryRawArchive, build_download
 
 LAKE = PipelineMode.LIVE
 SOURCE = ArchivedSource(
@@ -19,7 +19,7 @@ SOURCE = ArchivedSource(
     cadence=SnapshotCadence(schedule="0 6 21 * *", key_format="%Y-%m", timezone="Europe/Vilnius"),
 )
 PARTITIONS = snapshot_partitions("sodra", LAKE)
-LABELS = {"leads/mode": "live", "leads/lake": "ducklake"}
+LABELS = {"owl/mode": "live", "owl/lake": "ducklake"}
 ARCHIVE = dg.AssetKey(["live", "archive", "archive_sodra"])
 COMPLETED_AT = datetime(2026, 10, 21, 3, 5, tzinfo=UTC)
 
@@ -69,7 +69,7 @@ def test_a_complete_snapshot_becomes_a_partition_and_an_archive_materialization(
     assert isinstance(event, dg.AssetMaterialization)
     assert (event.asset_key, event.partition) == (ARCHIVE, "2026-09")
     assert event.metadata["completed_at"] == dg.MetadataValue.text(COMPLETED_AT.isoformat())
-    assert event.metadata["leads/lake"] == dg.MetadataValue.text("ducklake")
+    assert event.metadata["owl/lake"] == dg.MetadataValue.text("ducklake")
 
 
 def test_an_unfinished_snapshot_is_not_indexed(instance: dg.DagsterInstance) -> None:
