@@ -68,7 +68,7 @@ found: 81 pages kept byte for byte as the API sent them, each sidecar with the r
 holding 803 listings (one search has a page more than its plan, from before the fetch stopped at
 the planned pages). The pages were renamed the same day with their search area's code
 (`places-13-...`, Vilnius), as pages are named since areas were added; the manifest's names with them. Google's terms allow only place ids to be stored indefinitely, so this sample is
-not to be published as it is (see DECISIONS.md, Google Places source).
+not to be published as it is.
 
 ## vmi_tax_arrears/2024-11 to vmi_tax_arrears/2026-09
 
