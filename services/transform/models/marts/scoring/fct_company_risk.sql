@@ -1,9 +1,9 @@
--- Every company and month a model judged (about 0.8 M with one model), on two threads keeping no
--- insertion order, to stay within a dbt process's memory.
+-- Every company and month a model judged (about 0.8 M with one model), keeping no insertion
+-- order, to stay within a dbt process's memory.
 {{ config(
     materialized='table',
-    pre_hook=["set preserve_insertion_order = false", "set threads = 2"],
-    post_hook=["reset preserve_insertion_order", "reset threads"]
+    pre_hook=["set preserve_insertion_order = false"],
+    post_hook=["reset preserve_insertion_order"]
 ) }}
 
 {%- set min_sodra_months = var('risk_min_sodra_months') %}

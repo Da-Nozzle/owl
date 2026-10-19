@@ -1,8 +1,8 @@
 {# A table, so a value that does not parse fails the build. #}
 {{ config(
     materialized='table',
-    pre_hook=["set preserve_insertion_order = false", "set threads = 2"],
-    post_hook=["reset preserve_insertion_order", "reset threads"]
+    pre_hook=["set preserve_insertion_order = false"],
+    post_hook=["reset preserve_insertion_order"]
 ) }}
 
 {#- 3.1 M changes, 1.1 GB of JSON: read once, and with raw's settings (see its model), as JSON

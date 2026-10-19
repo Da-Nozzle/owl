@@ -9,19 +9,17 @@
     pre_hook=[
         "set disabled_optimizers = 'build_side_probe_side'",
         "set preserve_insertion_order = false",
-        "set threads = 2",
     ],
     post_hook=[
         "reset disabled_optimizers",
         "reset preserve_insertion_order",
-        "reset threads",
     ]
 ) }}
 
 {#- A month's snapshot is one or two loads, each about 13 pages. Built from nothing, raw reads
     every snapshot in one query, so it reads as vmi_tax_arrears' raw does: the join keeps its
-    sides as written (DuckDB builds its hash table on the pages otherwise), two threads, and no
-    insertion order kept. #}
+    sides as written (DuckDB builds its hash table on the pages otherwise), and no insertion
+    order kept. #}
 
 with entries as (
     {#- A page of 20,000 changes is about 10 MB: a load's inserts carry every field. #}

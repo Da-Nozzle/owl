@@ -1,7 +1,7 @@
 {{ config(
     materialized='table',
-    pre_hook=["set preserve_insertion_order = false", "set threads = 2"],
-    post_hook=["reset preserve_insertion_order", "reset threads"]
+    pre_hook=["set preserve_insertion_order = false"],
+    post_hook=["reset preserve_insertion_order"]
 ) }}  -- a table, so a value that does not parse fails the build
 
 {%- set fields = ['id', 'mm_kodas', 'pavadinimas', 'tipas', 'savivaldybe', 'metai', 'menuo', 'suma', 'atnaujinta'] %}

@@ -1,9 +1,9 @@
--- A table, so a value that does not parse fails the build; 1.7 M vacancies a snapshot, on two
--- threads keeping no insertion order, to stay within a dbt process's memory.
+-- A table, so a value that does not parse fails the build; 1.7 M vacancies a snapshot, keeping
+-- no insertion order, to stay within a dbt process's memory.
 {{ config(
     materialized='table',
-    pre_hook=["set preserve_insertion_order = false", "set threads = 2"],
-    post_hook=["reset preserve_insertion_order", "reset threads"]
+    pre_hook=["set preserve_insertion_order = false"],
+    post_hook=["reset preserve_insertion_order"]
 ) }}
 
 -- Lithuania joined the euro on 2015-01-01 at this fixed rate: a few vacancies posted in early

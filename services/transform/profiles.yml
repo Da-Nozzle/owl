@@ -14,8 +14,12 @@ owl:
         memory_limit: "{{ env_var('OWL_DUCKDB_MEMORY_LIMIT') }}"
       # Set once, as the database opens: dbt-duckdb applies `settings` again on every cursor, and
       # once DuckDB has spilled it refuses to set its temp directory, even to the same folder.
+      # DuckDB's threads are the whole database's, not a connection's: a model that changed them in
+      # a hook while another model's query ran deadlocked both, so they are set here once. Four
+      # keep JSON parsing, whose memory grows with the threads reading, within the memory limit.
       config_options:
         temp_directory: "{{ env_var('OWL_DUCKDB_TEMP_DIRECTORY') }}/{{ invocation_id }}"
+        threads: 4
       extensions:
         - httpfs
         - postgres

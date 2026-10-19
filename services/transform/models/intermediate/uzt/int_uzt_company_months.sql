@@ -1,9 +1,9 @@
--- 1.7 M vacancies spread over their months, on two threads keeping no insertion order, to stay
+-- 1.7 M vacancies spread over their months, keeping no insertion order, to stay
 -- within a dbt process's memory.
 {{ config(
     materialized='table',
-    pre_hook=["set preserve_insertion_order = false", "set threads = 2"],
-    post_hook=["reset preserve_insertion_order", "reset threads"]
+    pre_hook=["set preserve_insertion_order = false"],
+    post_hook=["reset preserve_insertion_order"]
 ) }}
 
 -- The newest snapshot: each holds every vacancy as it stands, history included.

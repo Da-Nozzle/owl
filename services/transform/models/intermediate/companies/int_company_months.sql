@@ -1,9 +1,9 @@
--- Every company in the country by month (about 4.7 M rows), on two threads keeping no insertion
--- order, to stay within a dbt process's memory.
+-- Every company in the country by month (about 4.7 M rows), keeping no insertion order,
+-- to stay within a dbt process's memory.
 {{ config(
     materialized='table',
-    pre_hook=["set preserve_insertion_order = false", "set threads = 2"],
-    post_hook=["reset preserve_insertion_order", "reset threads"]
+    pre_hook=["set preserve_insertion_order = false"],
+    post_hook=["reset preserve_insertion_order"]
 ) }}
 
 -- A company with several insurer codes in a month (rare) is one employer: its headcount summed,

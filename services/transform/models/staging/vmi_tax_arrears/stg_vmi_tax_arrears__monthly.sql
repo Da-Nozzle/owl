@@ -1,9 +1,9 @@
 {# A table, so a value that does not parse fails the build. Its windows over a million list rows
-   take memory beyond DuckDB's limit at eight threads, as the changes' JSON does. #}
+   take memory beyond DuckDB's limit at many threads, as the changes' JSON does. #}
 {{ config(
     materialized='table',
-    pre_hook=["set preserve_insertion_order = false", "set threads = 2"],
-    post_hook=["reset preserve_insertion_order", "reset threads"]
+    pre_hook=["set preserve_insertion_order = false"],
+    post_hook=["reset preserve_insertion_order"]
 ) }}
 
 {%- set columns = vmi_tax_arrears_columns() %}
