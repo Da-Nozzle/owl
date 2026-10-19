@@ -74,10 +74,14 @@ solution should scale well vertically.
 | `concurrency.runs.max_concurrent_runs` | [.devcontainer/dagster/dagster.yaml:29](.devcontainer/dagster/dagster.yaml#L29) | `1` | Dagster runs at once; the rest wait in the queue. At 1, when both lakes need rebuilding, they rebuild one after the other. |
 | `google_places.workers` | [config/local/pipeline.toml:46](config/local/pipeline.toml#L46) | `16` | Google searches in flight at once. Google's per-minute quota limits this more than the machine does. |
 
-Within one run, each source's dbt step runs in a process of its own, side by side (Dagster's
-multiprocess executor, up to one process per CPU). So the memory to plan for is about
-`max_concurrent_runs` × the dbt steps running side by side × `duckdb_memory_limit`, plus what
-Postgres, Marquez and Dagster itself take.
+Production deploys `live` only. Nothing switches between them: each lake is one box in the lineage
+view (its group), holding a box per source (a group nested in the lake's, as Dagster reads `/` in a
+group name), fetch → archive → raw → staging left to right inside; models that combine sources go in
+a box of their folder's (`companies`, the company-month profile; `scoring`, the marts), each risk
+model in a box of its own inside `risk` (`live/risk/wage_floor`). Each lake is also one folder in
+the asset catalog, with its own history and pools. Node names say the layer (`fetch_`, `archive_`,
+`raw_`, `stg_`); only live has a fetch, and the archive is drawn dashed, as nothing can materialize
+it.
 
 Leave `concurrency.pools.default_limit` ([dagster.yaml:27](.devcontainer/dagster/dagster.yaml#L27))
 at 1. It is not a performance setting: it stops two runs from writing the same table at once,
@@ -189,6 +193,90 @@ areas and `plan_google_places` rebuild by themselves (the plan alone, in a run o
 plan's metadata shows each area's places and paid requests, and the next fetch's in USD against
 `google_places.max_paid_requests`, having paid for nothing. Change it to `19,fetch` to have the next
 fetch pay for it. A rebuild of any source's archive never fetches or plans.
+
+### Adding a risk model
+
+Every suspicion is a **risk model**: a named, versioned detector that states one hypothesis of
+undeclared work or income, with the legitimate explanations for the same numbers written down.
+Risk models run over every company in Lithuania, by month, on official data;
+`fct_company_risk` combines them into tiers. `rm_wage_floor` (`models/risk/wage_floor/`) is the
+worked example: copy it. Why it is built this way is in DECISIONS.md, Risk models.
+
+**Files.** A model `<id>` (lowercase, `wage_floor`) is one folder, `models/risk/<id>/`, drawn in
+Dagster as `<lake>/risk/<id>`:
+
+| File | What |
+|---|---|
+| `_<id>.yml` | the dbt group `<id>`; every model's docs and tests; the unit tests |
+| `rm_<id>__<step>.sql` | each intermediate step: `group: <id>`, `access: private`, so nothing outside the model reads it |
+| `rm_<id>_v1.sql` | the output, `rm_<id>` version 1: `access: public`, `latest_version: 1`, the contract enforced |
+
+Plus a row in `seeds/risk_models.csv`, and the model's thresholds as vars named `rm_<id>_*` in
+`dbt_project.yml` (none in the SQL). Nothing else changes: `fct_score_components` reads the
+registry, and Dagster's groups and asset keys follow from the folder.
+
+**Inputs.** Read `int_company_months`, the company-month profile (JAR status and dates, legal
+form, activity code and class with its EVRK version, leads' category, municipality, Sodra
+headcount and months of history), for the peers' activity and municipality, and staging or
+intermediate models for the data. Leave eligibility (registered, six months in Sodra, not wound
+down) to the scoring: a model judges every company it has data for.
+
+**The contract.** One row per `company_code` and `period_month` (the month judged, its first day,
+on data up to and including it), with these columns and types, in this order:
+
+| Column | Type | Holds |
+|---|---|---|
+| `company_code` | bigint | JAR code |
+| `period_month` | date | the month judged |
+| `risk_model`, `risk_model_version` | varchar, integer | `'<id>'`, the version, as literals |
+| `raw_value` | double | the model's own measure, never empty |
+| `peer_group`, `peer_count`, `peer_percentile` | varchar, integer, double | from the `peer_percentile` macro |
+| `fired` | boolean | the model's own threshold met, never empty |
+| `evidence` | json | `json_object(...)` of the few numbers an analyst needs |
+| `explanation` | varchar | one sentence: the numbers, the months, the peers (see rm_wage_floor's) |
+| `source_as_of` | map(varchar, date) | `map {'sodra': ..., 'jar': ...}`: when each source's row was published |
+
+A company the model cannot judge (no data) gets **no row**; one it can judge but with too few
+peers gets a row with an empty percentile, and still fires on its own threshold. A model on
+yearly data (financial statements) writes a row for each month, from the latest year filed by
+then. Copy the YAML's `columns:` block from `_wage_floor.yml` and change the descriptions.
+
+**Peers.** End the output's SQL with a CTE holding the profile's `activity_classification`,
+`activity_class`, `municipality_code` and `municipality`, and rank it:
+
+```sql
+ranked as (
+    {{ peer_percentile('measured', 'raw_value', suspicious='higher') }}
+)
+```
+
+`suspicious='lower'` when a lower value is worse; `by_municipality=false` for a measure that does
+not vary by place. Peers are the same EVRK class (four digits) and month in the municipality,
+else in the country, with at least `var('risk_min_peers')` (20) companies; the percentile, 0 to
+100, is the share of the other peers less suspicious, ties sharing the lowest rank.
+
+**The registry row.** `id,version,family,weight,hypothesis,legitimate_explanations,sources,enabled`:
+`family` one of staffing, wages, revenue_tax, compliance, financial_health, history (tier A needs
+fired models in two families); `weight` 1.0 unless agreed otherwise; the hypothesis and the
+legitimate explanations in plain sentences a non-accountant can review; `enabled` true. dbt reads
+the enabled rows while it parses, through `OWL_RISK_MODELS`, which every launcher (`owl-dbt`,
+`owl-dbt-dev`, Dagster, the MCP servers, `owl-dbt-vscode`) sets from the CSV: plain `dbt` without
+it fails to parse. In Dagster, **Reload definitions** after editing the CSV.
+
+**Tests.** The generic tests of the example (unique company and month, not null) on every model;
+dbt unit tests with fixed inputs for each step with logic, and for the output: who fires, who does
+not, the percentile at its edges (override `risk_min_peers` to a small number), the explanation
+text. `risk_models_match_registry` fails when enabled registry rows and `rm_*` models differ in
+id or version, or a model is not public, contracted and in its own group. Build and test on the
+replay dev target (`owl-dbt-dev build -s rm_<id>__<first step>+ int_company_months+`), then on
+live (`--lake live`).
+
+**Versions.** To change a model's logic, add `rm_<id>_v2.sql` and `- v: 2` under `versions:`,
+leaving `latest_version: 1`, and a registry row `<id>,2,...,true`. Both versions build (assets
+`rm_<id>_v1` and `rm_<id>_v2`) and both are in `fct_score_components`; only the latest version
+is scored (`is_scored`), so v2 can be compared with v1 row by row for a month. Then set
+`latest_version: 2`; once settled, set v1's row to `enabled` false and delete `rm_<id>_v1.sql`
+and its `- v: 1`.
 
 ### Tests
 

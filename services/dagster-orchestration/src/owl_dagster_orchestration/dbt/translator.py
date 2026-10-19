@@ -12,13 +12,17 @@ from owl_dagster_orchestration.asset_keys import (
 from owl_dagster_orchestration.automation import build_static_data
 from owl_ingest.settings import PipelineMode
 
+# Layers whose every folder is a box of its own inside one box of the layer's: the risk models,
+# one dbt group each (`models/risk/wage_floor/` is drawn in `live/risk/wage_floor`).
+NESTED_LAYERS = ("risk",)
+
 
 class LakeDbtTranslator(DagsterDbtTranslator):
     """Keys dbt resources into the lake's graph, joined to the archive. A step's models get its
     group and automation condition; seeds, the lake's static data group and a condition of their
     own. With `group_by_folder`, a model in a folder of its layer (`models/intermediate/google/`)
     is drawn in that folder's group within the lake's, as a staging folder of no source's name
-    is."""
+    is, and one in a folder of a nested layer in the layer's group (`risk/wage_floor`)."""
 
     def __init__(
         self,
@@ -50,7 +54,9 @@ class LakeDbtTranslator(DagsterDbtTranslator):
             return static_data_group(self._lake)
         fqn = props["fqn"]  # [project, layer, folder..., model]
         if self._group_by_folder and len(fqn) >= 4:
-            return source_group(fqn[2], self._lake)
+            layer, folder = fqn[1], fqn[2]
+            nested = f"{layer}/{folder}" if layer in NESTED_LAYERS else folder
+            return source_group(nested, self._lake)
         return self._group
 
     def get_automation_condition(

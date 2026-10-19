@@ -37,6 +37,9 @@ models:
       +schema: staging
     intermediate:
       +schema: intermediate
+    # One folder and dbt group per risk model (README, Adding a risk model).
+    risk:
+      +schema: risk
     marts:
       +schema: marts
 
@@ -65,3 +68,37 @@ seeds:
         line_type_id: varchar
         line_name: varchar
         measure: varchar
+    risk_models:
+      +column_types:
+        id: varchar
+        version: integer
+        family: varchar
+        weight: double
+        enabled: boolean
+    minimum_wages:
+      +column_types:
+        valid_from: date
+        monthly_eur: decimal(10, 2)
+
+# The risk models' thresholds, shared and per model (DECISIONS.md, Risk models). A unit test
+# overrides them to test a rule at its edge.
+vars:
+  # Peers: a percentile needs at least this many companies in its group (the company included).
+  risk_min_peers: 20
+  # Eligibility: JAR's legal statuses of an entity being wound down (liquidation, bankruptcy).
+  risk_wind_down_status_codes: [5, 6, 7, 9, 11, 13, 26]
+  # Eligibility: declared months in Sodra up to the period.
+  risk_min_sodra_months: 6
+  # Evidence: a company fewer models have a row for (data to judge it) is insufficient_evidence.
+  risk_min_models_with_data: 2
+  # Tier A: families with a fired model.
+  risk_tier_a_min_families: 2
+  # rm_wage_floor: the months judged and those needed; the band around the minimum wage (an
+  # employer paying everyone the minimum averages 1.00 to 1.02 of it, a part-month or part-timer
+  # lowers that a little, mostly part-time staff a lot); how far up its peers a company must be
+  # to fire.
+  rm_wage_floor_window_months: 6
+  rm_wage_floor_min_months: 3
+  rm_wage_floor_band_low: 0.95
+  rm_wage_floor_band_high: 1.05
+  rm_wage_floor_fired_min_percentile: 75

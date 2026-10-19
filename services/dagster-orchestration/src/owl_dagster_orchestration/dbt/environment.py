@@ -1,3 +1,4 @@
+import csv
 import os
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
@@ -10,6 +11,9 @@ from owl_lake.settings import load_lake_settings
 
 # Read by the project's snapshot() macro.
 SNAPSHOT_VARIABLE = "OWL_SNAPSHOT"
+# Read by the project's risk_model_registry() macro.
+RISK_MODELS_VARIABLE = "OWL_RISK_MODELS"
+RISK_MODELS_SEED = "seeds/risk_models.csv"
 
 
 def dbt_environment(config: Configuration, mode: PipelineMode) -> dict[str, str]:
@@ -17,10 +21,12 @@ def dbt_environment(config: Configuration, mode: PipelineMode) -> dict[str, str]
     temp directory: DuckDB names its spill files the same in every process."""
     pipeline = load_pipeline_settings(config)
     lake = load_lake_settings(config, replay=mode is PipelineMode.REPLAY)
+    project_dir = config.get_str("transform.project_dir")
     return {
+        **risk_model_environment(Path(project_dir)),
         "OWL_ARCHIVE_PATH": raw_archive_path(mode, pipeline, lake.storage),
-        "DBT_PROJECT_DIR": config.get_str("transform.project_dir"),
-        "DBT_PROFILES_DIR": config.get_str("transform.project_dir"),
+        "DBT_PROJECT_DIR": project_dir,
+        "DBT_PROFILES_DIR": project_dir,
         "OWL_DUCKDB_MEMORY_LIMIT": config.get_str("transform.duckdb_memory_limit"),
         "OWL_DBT_THREADS": str(dbt_threads(config)),
         "OWL_DUCKDB_TEMP_DIRECTORY": f"{dbt_target_dir(config)}/duckdb_tmp",
@@ -34,6 +40,23 @@ def dbt_environment(config: Configuration, mode: PipelineMode) -> dict[str, str]
         "OWL_S3_KEY_ID": lake.storage.key_id,
         "OWL_S3_SECRET": lake.storage.secret,
     }
+
+
+def risk_model_environment(project_dir: Path) -> dict[str, str]:
+    """The risk_models seed's enabled rows, as `wage_floor:1,...`. fct_score_components refs each
+    of them, and dbt must know a model's refs while it parses, before any seed can be read, so the
+    registry reaches it as a variable. Unset without the seed (a project that is not this one), so
+    the macro fails rather than read an empty registry."""
+    seed = project_dir / RISK_MODELS_SEED
+    if not seed.exists():
+        return {}
+    with seed.open(newline="", encoding="utf-8") as rows:
+        enabled = [
+            f"{row['id']}:{row['version']}"
+            for row in csv.DictReader(rows)
+            if row["enabled"].strip().lower() == "true"
+        ]
+    return {RISK_MODELS_VARIABLE: ",".join(enabled)}
 
 
 def ensure_temp_directory(environment: Mapping[str, str]) -> None:

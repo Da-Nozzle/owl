@@ -1,0 +1,270 @@
+version: 2
+
+groups:
+  - name: wage_floor
+    owner:
+      name: Owl risk models
+    description: >
+      rm_wage_floor's steps and output. Its hypothesis, legitimate explanations and weight are
+      its row in the risk_models seed.
+
+models:
+  - name: rm_wage_floor__months
+    description: >
+      Each employer's declared average wage by month against that month's minimum wage
+      (minimum_wages): one row per company (JAR code) and month Sodra publishes its average
+      wage, which it does only for employers with more than 3 insured.
+    group: wage_floor
+    access: private
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [company_code, month]
+    data_tests:
+      - unique:
+          column_name: "company_code || '-' || month"
+    columns:
+      - name: company_code
+        data_tests:
+          - not_null
+      - name: month
+        data_tests:
+          - not_null
+      - name: avg_wage
+        description: >
+          Sodra's average gross wage of the insured, in euros (by headcount across a company's
+          insurer codes).
+        data_tests:
+          - not_null
+      - name: insured_count
+      - name: minimum_wage
+        description: The gross minimum monthly wage in force in the month (MMA), in euros.
+        data_tests:
+          - not_null
+      - name: wage_to_minimum
+        description: avg_wage as a multiple of minimum_wage (1.01 is 1% above it).
+      - name: is_at_floor
+        description: >
+          Within the band around the minimum wage, var('rm_wage_floor_band_low') to
+          var('rm_wage_floor_band_high') times it (0.95 to 1.05): where an employer paying its
+          staff the minimum lands, a part-month hire or a part-timer included.
+      - name: is_below_minimum
+        description: >
+          Below the minimum wage, which a full-time wage may not be: part-time staff, or staff
+          paid for part of the month.
+      - name: sodra_as_of
+        description: When Sodra wrote the file version the month is from.
+
+  - name: rm_wage_floor__windows
+    description: >
+      Each employer at each month it has a published wage, judged on the window of
+      var('rm_wage_floor_window_months') months ending there (6: this month and the five
+      before), if at least var('rm_wage_floor_min_months') of them (3) have a published wage.
+    group: wage_floor
+    access: private
+    config:
+      meta:
+        key: [company_code, period_month]
+    data_tests:
+      - unique:
+          column_name: "company_code || '-' || period_month"
+    columns:
+      - name: company_code
+        data_tests:
+          - not_null
+      - name: period_month
+        data_tests:
+          - not_null
+      - name: months_with_wage
+        description: Months of the window with a published average wage.
+      - name: months_at_floor
+        description: Of those, the months within the band around the minimum wage (is_at_floor).
+      - name: months_below_minimum
+        description: Of those, the months below the minimum wage.
+      - name: median_wage_to_minimum
+        description: The median of the window's wage_to_minimum.
+      - name: avg_wage
+        description: >
+          The period month's own average wage; minimum_wage, wage_to_minimum and insured_count
+          are the period month's too.
+
+  - name: rm_wage_floor
+    description: >
+      Risk model wage_floor (family wages): envelope wages. It looks for companies whose
+      declared average wage stays at the minimum wage month after month while most companies of
+      the same activity class in the same municipality do not; see its row in risk_models for
+      the hypothesis and the legitimate explanations. One row per company and month with a
+      published average wage in that month and in at least 3 of the 6 months to it (Sodra
+      publishes it only for employers with more than 3 insured, so smaller employers get no
+      row). raw_value is how far the median of those months' wages is from the minimum wage,
+      either way, as a multiple of it (|median / minimum - 1|): lower is more suspicious, so its
+      percentile is the share of peers further from the minimum. Not the wage itself: averages
+      far below the minimum are part-time staff, the first legitimate explanation, and ranked by
+      wage they would top every peer group (half of the employers at or below 1.05 times the
+      minimum in all of 2026-03 to 2026-08 had a median under 0.8). Nor the share of months at
+      the minimum, 0 for 81% of companies in 2026-08, so that a single month there ranked a
+      company above 76% of its peers. It fires when the wage was within 0.95 to 1.05 times the
+      minimum in all 6 months and at least 75% of its peers are further from it, so a sector
+      where most pay the minimum does not fire.
+    group: wage_floor
+    access: public
+    latest_version: 1
+    config:
+      contract:
+        enforced: true
+      meta:
+        key: [company_code, period_month]
+    data_tests:
+      - unique:
+          column_name: "company_code || '-' || period_month"
+    columns:
+      - name: company_code
+        description: JAR code (int_company_months.company_code).
+        data_type: bigint
+        data_tests:
+          - not_null
+      - name: period_month
+        description: The month judged (its first day), with data up to and including it.
+        data_type: date
+        data_tests:
+          - not_null
+      - name: risk_model
+        description: The model's id in risk_models, wage_floor.
+        data_type: varchar
+      - name: risk_model_version
+        data_type: integer
+      - name: raw_value
+        description: >
+          |median_wage_to_minimum - 1|: how far the window's median wage is from the minimum
+          wage, as a multiple of it (0.01 is 1% above or below).
+        data_type: double
+        data_tests:
+          - not_null
+      - name: peer_group
+        description: >
+          The activity class and municipality (or Lithuania) the company is compared within.
+        data_type: varchar
+      - name: peer_count
+        description: The companies in peer_group, itself included.
+        data_type: integer
+      - name: peer_percentile
+        description: >
+          0 to 100: the share of the other peers further from the minimum wage (a higher
+          raw_value). Empty with fewer than var('risk_min_peers') peers.
+        data_type: double
+      - name: fired
+        data_type: boolean
+        data_tests:
+          - not_null
+      - name: evidence
+        description: >
+          The period month's avg_wage_eur, minimum_wage_eur, wage_to_minimum and insured_count,
+          and the window's median_wage_to_minimum, months_with_wage, months_at_floor,
+          months_below_minimum and window_months.
+        data_type: json
+      - name: explanation
+        data_type: varchar
+        data_tests:
+          - not_null
+      - name: source_as_of
+        description: When Sodra wrote the period month's file version, and JAR's entities.
+        data_type: map(varchar, date)
+    versions:
+      - v: 1
+
+unit_tests:
+  - name: rm_wage_floor__months_compares_with_the_minimum_wage_in_force
+    description: >
+      December 2025 is judged against 2025's 1,038 EUR and January 2026 against 2026's 1,153: the
+      same 1,100 EUR is just above the band in 2025 (1.06 times) and in it in 2026 (0.95 times,
+      below the minimum). 1,000 EUR in February is below the band. A company with two insurer
+      codes is one employer, its wage averaged by headcount; an employer of 3 or fewer, with no
+      published wage, has no row.
+    model: rm_wage_floor__months
+    given:
+      - input: ref('stg_sodra__monthly')
+        rows:
+          - {insurer_code: 1, company_code: 10, declared_month: "2025-12-01", insured_count: 5, avg_wage: 1100, file_published_at: "2026-01-20 10:00:00"}
+          - {insurer_code: 1, company_code: 10, declared_month: "2026-01-01", insured_count: 5, avg_wage: 1100, file_published_at: "2026-02-20 10:00:00"}
+          - {insurer_code: 1, company_code: 10, declared_month: "2026-02-01", insured_count: 5, avg_wage: 1000, file_published_at: "2026-03-20 10:00:00"}
+          - {insurer_code: 2, company_code: 20, declared_month: "2026-01-01", insured_count: 4, avg_wage: 1000, file_published_at: "2026-02-20 10:00:00"}
+          - {insurer_code: 3, company_code: 20, declared_month: "2026-01-01", insured_count: 12, avg_wage: 2000, file_published_at: "2026-02-21 10:00:00"}
+          - {insurer_code: 4, company_code: 30, declared_month: "2026-01-01", insured_count: 3, avg_wage: null, file_published_at: "2026-02-20 10:00:00"}
+      - input: ref('minimum_wages')
+        rows:
+          - {valid_from: "2025-01-01", monthly_eur: 1038}
+          - {valid_from: "2026-01-01", monthly_eur: 1153}
+    expect:
+      rows:
+        - {company_code: 10, month: "2025-12-01", avg_wage: 1100, insured_count: 5, minimum_wage: 1038, wage_to_minimum: 1.0597, is_at_floor: false, is_below_minimum: false, sodra_as_of: "2026-01-20"}
+        - {company_code: 10, month: "2026-01-01", avg_wage: 1100, insured_count: 5, minimum_wage: 1153, wage_to_minimum: 0.954, is_at_floor: true, is_below_minimum: true, sodra_as_of: "2026-02-20"}
+        - {company_code: 10, month: "2026-02-01", avg_wage: 1000, insured_count: 5, minimum_wage: 1153, wage_to_minimum: 0.8673, is_at_floor: false, is_below_minimum: true, sodra_as_of: "2026-03-20"}
+        - {company_code: 20, month: "2026-01-01", avg_wage: 1750, insured_count: 16, minimum_wage: 1153, wage_to_minimum: 1.5178, is_at_floor: false, is_below_minimum: false, sodra_as_of: "2026-02-21"}
+
+  - name: rm_wage_floor__windows_judges_each_month_on_the_six_months_to_it
+    description: >
+      Seven months declared, March missing: August's window is March to August, five months,
+      two of them at the minimum (April and August) and one below it (June); January's and
+      February's windows have fewer than three months and are dropped. The median is of the
+      window's months only (January's 2.0 is outside August's).
+    model: rm_wage_floor__windows
+    given:
+      - input: ref('rm_wage_floor__months')
+        rows:
+          - {company_code: 1, month: "2026-01-01", avg_wage: 2306, insured_count: 5, minimum_wage: 1153, wage_to_minimum: 2.0, is_at_floor: false, is_below_minimum: false, sodra_as_of: "2026-02-20"}
+          - {company_code: 1, month: "2026-02-01", avg_wage: 1153, insured_count: 5, minimum_wage: 1153, wage_to_minimum: 1.0, is_at_floor: true, is_below_minimum: false, sodra_as_of: "2026-03-20"}
+          - {company_code: 1, month: "2026-04-01", avg_wage: 1153, insured_count: 5, minimum_wage: 1153, wage_to_minimum: 1.0, is_at_floor: true, is_below_minimum: false, sodra_as_of: "2026-05-20"}
+          - {company_code: 1, month: "2026-05-01", avg_wage: 1729.5, insured_count: 5, minimum_wage: 1153, wage_to_minimum: 1.5, is_at_floor: false, is_below_minimum: false, sodra_as_of: "2026-06-20"}
+          - {company_code: 1, month: "2026-06-01", avg_wage: 1000, insured_count: 5, minimum_wage: 1153, wage_to_minimum: 0.8673, is_at_floor: false, is_below_minimum: true, sodra_as_of: "2026-07-20"}
+          - {company_code: 1, month: "2026-07-01", avg_wage: 1729.5, insured_count: 5, minimum_wage: 1153, wage_to_minimum: 1.5, is_at_floor: false, is_below_minimum: false, sodra_as_of: "2026-08-20"}
+          - {company_code: 1, month: "2026-08-01", avg_wage: 1200, insured_count: 6, minimum_wage: 1153, wage_to_minimum: 1.0408, is_at_floor: true, is_below_minimum: false, sodra_as_of: "2026-09-20"}
+    expect:
+      rows:
+        - {company_code: 1, period_month: "2026-04-01", months_with_wage: 3, months_at_floor: 2, months_below_minimum: 0, median_wage_to_minimum: 1.0}
+        - {company_code: 1, period_month: "2026-05-01", months_with_wage: 4, months_at_floor: 2, months_below_minimum: 0, median_wage_to_minimum: 1.25}
+        - {company_code: 1, period_month: "2026-06-01", months_with_wage: 5, months_at_floor: 2, months_below_minimum: 1, median_wage_to_minimum: 1.0}
+        - {company_code: 1, period_month: "2026-07-01", months_with_wage: 5, months_at_floor: 2, months_below_minimum: 1, median_wage_to_minimum: 1.0}
+        - {company_code: 1, period_month: "2026-08-01", months_with_wage: 5, months_at_floor: 2, months_below_minimum: 1, median_wage_to_minimum: 1.0408}
+
+  - name: rm_wage_floor_fires_at_the_minimum_all_six_months_while_peers_are_further
+    description: >
+      Five Vilnius restaurants in August 2026 (the peers' minimum lowered to 5 here). The first
+      two have a median wage 1.01 times the minimum, closer than the other three, and tie at
+      percentile 75; the first was in the band all six months and fires, the second in five and
+      does not. A restaurant paying twice the minimum is percentile 0, and one paying half of it
+      (part-time staff) 50: further than its peers is not more suspicious. A Kaunas restaurant
+      has too few peers in Kaunas, so it is compared with the class in all of Lithuania, six
+      restaurants, where it is closest to the minimum: percentile 100, fired. A company with no
+      activity code has no peers and no percentile, so it cannot fire.
+    model: rm_wage_floor
+    overrides:
+      vars:
+        risk_min_peers: 5
+    given:
+      - input: ref('rm_wage_floor__windows')
+        rows:
+          - {company_code: 1, period_month: "2026-08-01", months_with_wage: 6, months_at_floor: 6, months_below_minimum: 0, median_wage_to_minimum: 1.01, avg_wage: 1160, minimum_wage: 1153, wage_to_minimum: 1.0061, insured_count: 8, sodra_as_of: "2026-09-29"}
+          - {company_code: 2, period_month: "2026-08-01", months_with_wage: 6, months_at_floor: 5, months_below_minimum: 0, median_wage_to_minimum: 1.01, avg_wage: 1160, minimum_wage: 1153, wage_to_minimum: 1.0061, insured_count: 8, sodra_as_of: "2026-09-29"}
+          - {company_code: 3, period_month: "2026-08-01", months_with_wage: 6, months_at_floor: 0, months_below_minimum: 0, median_wage_to_minimum: 2.0, avg_wage: 2306, minimum_wage: 1153, wage_to_minimum: 2.0, insured_count: 8, sodra_as_of: "2026-09-29"}
+          - {company_code: 4, period_month: "2026-08-01", months_with_wage: 6, months_at_floor: 0, months_below_minimum: 6, median_wage_to_minimum: 0.5, avg_wage: 577, minimum_wage: 1153, wage_to_minimum: 0.5, insured_count: 8, sodra_as_of: "2026-09-29"}
+          - {company_code: 5, period_month: "2026-08-01", months_with_wage: 4, months_at_floor: 0, months_below_minimum: 0, median_wage_to_minimum: 1.6, avg_wage: 1845, minimum_wage: 1153, wage_to_minimum: 1.6, insured_count: 8, sodra_as_of: "2026-09-29"}
+          - {company_code: 6, period_month: "2026-08-01", months_with_wage: 6, months_at_floor: 6, months_below_minimum: 3, median_wage_to_minimum: 1.0, avg_wage: 1100, minimum_wage: 1153, wage_to_minimum: 0.954, insured_count: 4, sodra_as_of: "2026-09-29"}
+          - {company_code: 7, period_month: "2026-08-01", months_with_wage: 6, months_at_floor: 6, months_below_minimum: 0, median_wage_to_minimum: 1.0, avg_wage: 1153, minimum_wage: 1153, wage_to_minimum: 1.0, insured_count: 4, sodra_as_of: "2026-09-29"}
+      - input: ref('int_company_months')
+        rows:
+          - {company_code: 1, month: "2026-08-01", activity_classification: "EVRK 2.1", activity_class: "5611", municipality_code: 13, municipality: "Vilniaus miesto sav.", jar_as_of: "2026-09-21"}
+          - {company_code: 2, month: "2026-08-01", activity_classification: "EVRK 2.1", activity_class: "5611", municipality_code: 13, municipality: "Vilniaus miesto sav.", jar_as_of: "2026-09-21"}
+          - {company_code: 3, month: "2026-08-01", activity_classification: "EVRK 2.1", activity_class: "5611", municipality_code: 13, municipality: "Vilniaus miesto sav.", jar_as_of: "2026-09-21"}
+          - {company_code: 4, month: "2026-08-01", activity_classification: "EVRK 2.1", activity_class: "5611", municipality_code: 13, municipality: "Vilniaus miesto sav.", jar_as_of: "2026-09-21"}
+          - {company_code: 5, month: "2026-08-01", activity_classification: "EVRK 2.1", activity_class: "5611", municipality_code: 13, municipality: "Vilniaus miesto sav.", jar_as_of: "2026-09-21"}
+          - {company_code: 6, month: "2026-08-01", activity_classification: "EVRK 2.1", activity_class: "5611", municipality_code: 19, municipality: "Kauno miesto sav.", jar_as_of: "2026-09-21"}
+          - {company_code: 7, month: "2026-08-01", activity_classification: null, activity_class: null, municipality_code: 13, municipality: "Vilniaus miesto sav.", jar_as_of: "2026-09-21"}
+    expect:
+      rows:
+        - {company_code: 1, raw_value: 0.01, peer_group: "EVRK 2.1 56.11 in Vilniaus miesto sav.", peer_count: 5, peer_percentile: 75.0, fired: true, explanation: "Declared average wage EUR 1,160 in 2026-08, 1.01× the minimum wage; 0.95–1.05× it in 6 of the last 6 months; 75% of peers (EVRK 2.1 56.11 in Vilniaus miesto sav., 5 companies) are further from it."}
+        - {company_code: 2, raw_value: 0.01, peer_group: "EVRK 2.1 56.11 in Vilniaus miesto sav.", peer_count: 5, peer_percentile: 75.0, fired: false, explanation: "Declared average wage EUR 1,160 in 2026-08, 1.01× the minimum wage; 0.95–1.05× it in 5 of the last 6 months; 75% of peers (EVRK 2.1 56.11 in Vilniaus miesto sav., 5 companies) are further from it."}
+        - {company_code: 3, raw_value: 1.0, peer_group: "EVRK 2.1 56.11 in Vilniaus miesto sav.", peer_count: 5, peer_percentile: 0.0, fired: false, explanation: "Declared average wage EUR 2,306 in 2026-08, 2.00× the minimum wage; 0.95–1.05× it in 0 of the last 6 months; 0% of peers (EVRK 2.1 56.11 in Vilniaus miesto sav., 5 companies) are further from it."}
+        - {company_code: 4, raw_value: 0.5, peer_group: "EVRK 2.1 56.11 in Vilniaus miesto sav.", peer_count: 5, peer_percentile: 50.0, fired: false, explanation: "Declared average wage EUR 577 in 2026-08, 0.50× the minimum wage; 0.95–1.05× it in 0 of the last 6 months; 50% of peers (EVRK 2.1 56.11 in Vilniaus miesto sav., 5 companies) are further from it."}
+        - {company_code: 5, raw_value: 0.6, peer_group: "EVRK 2.1 56.11 in Vilniaus miesto sav.", peer_count: 5, peer_percentile: 25.0, fired: false, explanation: "Declared average wage EUR 1,845 in 2026-08, 1.60× the minimum wage; 0.95–1.05× it in 0 of 4 months published in the last 6; 25% of peers (EVRK 2.1 56.11 in Vilniaus miesto sav., 5 companies) are further from it."}
+        - {company_code: 6, raw_value: 0.0, peer_group: "EVRK 2.1 56.11 in Lithuania", peer_count: 6, peer_percentile: 100.0, fired: true, explanation: "Declared average wage EUR 1,100 in 2026-08, 0.95× the minimum wage; 0.95–1.05× it in 6 of the last 6 months; 100% of peers (EVRK 2.1 56.11 in Lithuania, 6 companies) are further from it."}
+        - {company_code: 7, raw_value: 0.0, peer_group: null, peer_count: null, peer_percentile: null, fired: false, explanation: "Declared average wage EUR 1,153 in 2026-08, 1.00× the minimum wage; 0.95–1.05× it in 6 of the last 6 months; no activity code to compare peers by."}

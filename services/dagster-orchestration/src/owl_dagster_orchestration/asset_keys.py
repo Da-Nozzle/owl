@@ -54,8 +54,12 @@ def is_archive(key: dg.AssetKey) -> bool:
 
 def dbt_resource_key(dbt_resource_props: Mapping[str, object], lake: PipelineMode) -> dg.AssetKey:
     """A model's layer is its schema, every raw_<source> schema being the raw layer. The only dbt
-    source is the archive: nothing but dbt writes to the lake."""
+    source is the archive: nothing but dbt writes to the lake. A versioned model's versions are
+    one asset each, named as their tables (rm_wage_floor_v1), so two can run side by side."""
     name = str(dbt_resource_props["name"])
+    version = dbt_resource_props.get("version")
+    if version is not None:
+        name = f"{name}_v{version}"
     if dbt_resource_props["resource_type"] == "source":
         source_name = str(dbt_resource_props["source_name"])
         if source_name != ARCHIVE_LAYER:

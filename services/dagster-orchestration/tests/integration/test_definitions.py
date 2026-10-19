@@ -110,11 +110,14 @@ WITH_HISTORY = {"vmi_daily_changes", "vmi_tax_arrears", "vmi_taxes_paid"}
 # The sources billed per request: their schedules start stopped, and each has a plan.
 PAID = {"google_places"}
 # Models of no source, in one step: the seeds, where Google is searched, and each company's
-# vacancies by month, financial years and filing record.
+# vacancies by month, financial years and filing record; the company-month profile, the risk
+# models (each version its own asset) and the scoring marts.
 FINANCIAL_YEARS = {
     "int_jar_financial_statements__company_years",
     "int_jar_financial_statements__filing_compliance",
 }
+WAGE_FLOOR = {"rm_wage_floor__months", "rm_wage_floor__windows", "rm_wage_floor_v1"}
+SCORING = {"fct_score_components", "fct_company_risk"}
 SHARED = {
     "seeds": {
         "municipalities",
@@ -122,15 +125,31 @@ SHARED = {
         "google_search_scope",
         "profession_categories",
         "financial_statement_measures",
+        "minimum_wages",
+        "risk_models",
     },
-    "intermediate": {"int_google_search_areas", "int_uzt_company_months", *FINANCIAL_YEARS},
+    "intermediate": {
+        "int_google_search_areas",
+        "int_uzt_company_months",
+        *FINANCIAL_YEARS,
+        "int_company_months",
+    },
+    "risk": WAGE_FLOOR,
+    "marts": SCORING,
 }
-# Each intermediate model is drawn in its folder's group, beside the source it is about.
-INTERMEDIATE_GROUPS = {
+# Each model in a folder of its layer is drawn in its folder's group, beside the source it is
+# about; each risk model in a group of its own within the lake's risk group.
+FOLDER_GROUPS = {
     "int_google_search_areas": "google",
     "int_uzt_company_months": "uzt",
     **dict.fromkeys(FINANCIAL_YEARS, "jar_financial_statements"),
+    "int_company_months": "companies",
+    **dict.fromkeys(WAGE_FLOOR, "risk/wage_floor"),
+    **dict.fromkeys(SCORING, "scoring"),
 }
+# Sources the company-month profile reads, so their rebuilds rebuild it, the risk models and the
+# scoring too.
+PROFILED = {"sodra", "jar", "address_register", "vmi_daily_changes", "vmi_monthly_register"}
 SEARCH_AREAS = dg.AssetKey(["live", "intermediate", "int_google_search_areas"])
 
 
@@ -215,11 +234,11 @@ def test_each_sources_assets_are_a_group_within_their_lakes(
                 for folder in COMBINED
                 for key in combined(lake, folder)
             },
-            # In models/intermediate/<folder>/: Google's search areas beside Google's source,
-            # whose plan reads them.
+            # In models/<layer>/<folder>/: Google's search areas beside Google's source, whose
+            # plan reads them; risk models in risk/<folder>.
             **{
-                key: f"{lake.value}/{INTERMEDIATE_GROUPS[key.path[-1]]}"
-                for key in shared(lake, "intermediate")
+                key: f"{lake.value}/{FOLDER_GROUPS[key.path[-1]]}"
+                for key in shared(lake, "intermediate", "risk", "marts")
             },
             **dict.fromkeys(shared(lake, "seeds"), f"{lake.value}/static_data"),
             **(
@@ -440,7 +459,8 @@ def test_a_model_of_two_snapshot_sources_waits_until_both_have_one(
 def rebuilt(lake: PipelineMode, source: str) -> set[dg.AssetKey]:
     """The source's models, its dataset's combined staging, for Sodra the search areas and for
     UZT's vacancies each company's months, for JAR and its statements each company's financial
-    years, but never Google's plan or fetch."""
+    years, for the sources the profile reads the profile, the risk models and the scoring (all
+    of rm_wage_floor's steps for Sodra, its only data), but never Google's plan or fetch."""
     built = models(lake, source, "raw") | models(lake, source, "staging")
     if source in GROUPS:
         built |= combined(lake, GROUPS[source].split("/")[0])
@@ -452,6 +472,14 @@ def rebuilt(lake: PipelineMode, source: str) -> set[dg.AssetKey]:
         built |= {dg.AssetKey([lake.value, "intermediate", "int_uzt_company_months"])}
     if source in {"jar", "jar_financial_statements"}:
         built |= {dg.AssetKey([lake.value, "intermediate", model]) for model in FINANCIAL_YEARS}
+    if source in PROFILED:
+        built |= {
+            dg.AssetKey([lake.value, "intermediate", "int_company_months"]),
+            dg.AssetKey([lake.value, "risk", "rm_wage_floor_v1"]),
+            *shared(lake, "marts"),
+        }
+    if source == "sodra":
+        built |= shared(lake, "risk")
     return built
 
 
@@ -598,7 +626,13 @@ def test_googles_plan_reads_where_it_is_searched_and_its_fetch_pays_for_it(
         dg.AssetKey(["live", "staging", "stg_sodra__monthly"]),
         *(
             dg.AssetKey(["live", "seeds", seed])
-            for seed in SHARED["seeds"] - {"profession_categories", "financial_statement_measures"}
+            for seed in SHARED["seeds"]
+            - {
+                "profession_categories",
+                "financial_statement_measures",
+                "minimum_wages",
+                "risk_models",
+            }
         ),
     }
     assert step is definitions.resolve_assets_def(fetch_of("google_places"))

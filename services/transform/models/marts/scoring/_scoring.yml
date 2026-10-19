@@ -1,0 +1,235 @@
+version: 2
+
+models:
+  - name: fct_score_components
+    description: >
+      Every enabled risk model's rows, one model and version under the other: the enabled rows
+      of the risk_models seed, each read from rm_<id> at its version by the macro
+      risk_model_components, so a new model joins by its registry row alone. Each row keeps its
+      model's contract (rm_wage_floor's columns) and adds the model's family and weight from the
+      registry and whether its version is the one scored.
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [company_code, period_month, risk_model, risk_model_version]
+    data_tests:
+      - unique:
+          column_name: >-
+            company_code || '-' || period_month || '-' || risk_model || '@' || risk_model_version
+    columns:
+      - name: company_code
+        data_tests:
+          - not_null
+      - name: period_month
+        data_tests:
+          - not_null
+      - name: risk_model
+        description: The model's id in risk_models (wage_floor).
+        data_tests:
+          - not_null
+      - name: risk_model_version
+        data_tests:
+          - not_null
+      - name: peer_percentile
+        description: 0 to 100, higher more suspicious; empty with too few peers.
+      - name: family
+        description: >
+          The model's family in risk_models; empty if the model writes an id or version the
+          registry does not enable.
+        data_tests:
+          - not_null
+      - name: weight
+        data_tests:
+          - not_null
+      - name: is_scored
+        description: >
+          Whether the version is its model's latest_version, the one fct_company_risk scores. A
+          newer version runs beside it here, compared row by row, until its YAML makes it the
+          latest.
+        data_tests:
+          - not_null
+
+  - name: fct_company_risk
+    description: >
+      The national pre-screen: one row per company and month any scored risk model judged it
+      in, with its tier, score and why. Eligibility gates come first, each failure kept in
+      exclusion_reasons (not registered in JAR at the month's end, fewer than
+      var('risk_min_sodra_months') months declared to Sodra, in liquidation or bankruptcy), and
+      an ineligible company is tier excluded whatever it scored. A company fewer than
+      var('risk_min_models_with_data') models had the data to judge is insufficient_evidence
+      and never a lead. Then tier A needs fired models in var('risk_tier_a_min_families')
+      families (2), B one family, C none. The score is the registry-weighted mean of the models'
+      peer percentiles, 0 to 100, among those that have one. Every row is stamped with the
+      registry's scored versions.
+    config:
+      meta:
+        key: [company_code, period_month]
+    data_tests:
+      - unique:
+          column_name: "company_code || '-' || period_month"
+    columns:
+      - name: company_code
+        data_tests:
+          - not_null
+      - name: period_month
+        description: The month judged (its first day).
+        data_tests:
+          - not_null
+      - name: company_name
+        description: >
+          The company, and its activity, municipality and headcount as int_company_months has
+          them that month.
+      - name: tier
+        description: >
+          excluded (an eligibility gate failed), insufficient_evidence (too few models with data),
+          or A (fired in two families or more), B (one family), C (none).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [A, B, C, insufficient_evidence, excluded]
+      - name: score
+        description: >
+          The weighted mean of the peer percentiles of the models with one (weights from
+          risk_models), 0 to 100; empty if none has one. It ranks companies within a tier.
+      - name: exclusion_reasons
+        description: >
+          The gates failed: not_active_in_jar, under_6_months_in_sodra,
+          in_liquidation_or_bankruptcy. Empty for an eligible company.
+        data_tests:
+          - not_null
+      - name: models_with_data
+        description: >
+          Scored models with a row for the company and month: those that had the data to judge
+          it.
+      - name: models_with_percentile
+        description: Of those, the ones with enough peers for a percentile, which make the score.
+      - name: fired_families
+        description: The families of the models that fired, each once.
+      - name: fired_models
+      - name: explanation
+        description: >
+          The explanations of the two models that add most to the score, a fired one first among
+          equals.
+      - name: risk_model_versions
+        description: The registry's scored versions when the row was built (wage_floor@1,...).
+        data_tests:
+          - not_null
+
+unit_tests:
+  - name: fct_score_components_adds_family_weight_and_whether_scored
+    description: >
+      rm_wage_floor's rows, with its registry row's family and weight; v1 is its latest version,
+      so it is scored.
+    model: fct_score_components
+    given:
+      - input: ref('rm_wage_floor', v=1)
+        rows:
+          - {company_code: 1, period_month: "2026-08-01", risk_model: wage_floor, risk_model_version: 1, raw_value: 1.01, peer_percentile: 80, fired: true}
+      - input: ref('risk_models')
+        rows:
+          - {id: wage_floor, version: 1, family: wages, weight: 1.5, enabled: true}
+          - {id: wage_floor, version: 0, family: wages, weight: 9, enabled: false}
+    expect:
+      rows:
+        - {company_code: 1, period_month: "2026-08-01", risk_model: wage_floor, risk_model_version: 1, peer_percentile: 80, fired: true, family: wages, weight: 1.5, is_scored: true}
+
+  - name: fct_company_risk_one_fired_family_is_not_tier_a
+    description: >
+      Two models fire, both wages: one family, tier B. A third model has a row but has not fired.
+    model: fct_company_risk
+    given:
+      - input: ref('fct_score_components')
+        rows:
+          - {company_code: 1, period_month: "2026-08-01", risk_model: wage_floor, peer_percentile: 90, fired: true, explanation: "Low wage.", family: wages, weight: 1, is_scored: true}
+          - {company_code: 1, period_month: "2026-08-01", risk_model: job_ad_wage_gap, peer_percentile: 80, fired: true, explanation: "Ads pay more.", family: wages, weight: 1, is_scored: true}
+          - {company_code: 1, period_month: "2026-08-01", risk_model: arrears, peer_percentile: 10, fired: false, explanation: "Little owed.", family: compliance, weight: 1, is_scored: true}
+      - input: ref('int_company_months')
+        rows:
+          - {company_code: 1, month: "2026-08-01", is_registered: true, sodra_months_to_date: 20, is_winding_down: false}
+    expect:
+      rows:
+        - {company_code: 1, period_month: "2026-08-01", tier: B, score: 60.0, fired_families: [wages], fired_models: [job_ad_wage_gap, wage_floor], models_with_data: 3, explanation: "Low wage. Ads pay more."}
+
+  - name: fct_company_risk_two_fired_families_are_tier_a
+    description: >
+      wage_floor (wages) and arrears (compliance) fire: tier A. The fired arrears model has too
+      few peers for a percentile, so it counts for the tier but not for the score, and its
+      explanation comes after the one with a percentile. A newer, unscored version is left out.
+    model: fct_company_risk
+    given:
+      - input: ref('fct_score_components')
+        rows:
+          - {company_code: 1, period_month: "2026-08-01", risk_model: wage_floor, risk_model_version: 1, peer_percentile: 90, fired: true, explanation: "Low wage.", family: wages, weight: 1, is_scored: true}
+          - {company_code: 1, period_month: "2026-08-01", risk_model: wage_floor, risk_model_version: 2, peer_percentile: 10, fired: false, explanation: "v2.", family: wages, weight: 1, is_scored: false}
+          - {company_code: 1, period_month: "2026-08-01", risk_model: arrears, risk_model_version: 1, peer_percentile: null, fired: true, explanation: "Owes much.", family: compliance, weight: 1, is_scored: true}
+      - input: ref('int_company_months')
+        rows:
+          - {company_code: 1, month: "2026-08-01", is_registered: true, sodra_months_to_date: 6, is_winding_down: false}
+    expect:
+      rows:
+        - {company_code: 1, tier: A, score: 90.0, fired_families: [compliance, wages], models_with_data: 2, models_with_percentile: 1, explanation: "Low wage. Owes much."}
+
+  - name: fct_company_risk_excludes_an_ineligible_company_with_its_reasons
+    description: >
+      Both models fire in two families, but the first company is in liquidation and has declared
+      to Sodra for five months only, the second was deregistered and the third is not in the
+      profile at all (no JAR entity, no Sodra history): each is excluded with every gate it fails.
+      The fourth passes every gate, at exactly six months.
+    model: fct_company_risk
+    given:
+      - input: ref('fct_score_components')
+        rows:
+          - {company_code: 1, period_month: "2026-08-01", risk_model: wage_floor, peer_percentile: 90, fired: true, family: wages, weight: 1, is_scored: true}
+          - {company_code: 1, period_month: "2026-08-01", risk_model: arrears, peer_percentile: 90, fired: true, family: compliance, weight: 1, is_scored: true}
+          - {company_code: 2, period_month: "2026-08-01", risk_model: wage_floor, peer_percentile: 90, fired: true, family: wages, weight: 1, is_scored: true}
+          - {company_code: 2, period_month: "2026-08-01", risk_model: arrears, peer_percentile: 90, fired: true, family: compliance, weight: 1, is_scored: true}
+          - {company_code: 3, period_month: "2026-08-01", risk_model: wage_floor, peer_percentile: 90, fired: true, family: wages, weight: 1, is_scored: true}
+          - {company_code: 3, period_month: "2026-08-01", risk_model: arrears, peer_percentile: 90, fired: true, family: compliance, weight: 1, is_scored: true}
+          - {company_code: 4, period_month: "2026-08-01", risk_model: wage_floor, peer_percentile: 90, fired: true, family: wages, weight: 1, is_scored: true}
+          - {company_code: 4, period_month: "2026-08-01", risk_model: arrears, peer_percentile: 90, fired: true, family: compliance, weight: 1, is_scored: true}
+      - input: ref('int_company_months')
+        rows:
+          - {company_code: 1, month: "2026-08-01", is_registered: true, sodra_months_to_date: 5, is_winding_down: true}
+          - {company_code: 2, month: "2026-08-01", is_registered: false, sodra_months_to_date: 20, is_winding_down: false}
+          - {company_code: 4, month: "2026-08-01", is_registered: true, sodra_months_to_date: 6, is_winding_down: false}
+    expect:
+      rows:
+        - {company_code: 1, tier: excluded, score: 90.0, exclusion_reasons: [under_6_months_in_sodra, in_liquidation_or_bankruptcy]}
+        - {company_code: 2, tier: excluded, score: 90.0, exclusion_reasons: [not_active_in_jar]}
+        - {company_code: 3, tier: excluded, score: 90.0, exclusion_reasons: [not_active_in_jar, under_6_months_in_sodra]}
+        - {company_code: 4, tier: A, score: 90.0, exclusion_reasons: []}
+
+  - name: fct_company_risk_weights_the_percentiles
+    description: >
+      A model of weight 3 at percentile 80 and one of weight 1 at percentile 40 score
+      (3 × 80 + 40) / 4 = 70, not their plain mean of 60; the heavier model's explanation comes
+      first.
+    model: fct_company_risk
+    given:
+      - input: ref('fct_score_components')
+        rows:
+          - {company_code: 1, period_month: "2026-08-01", risk_model: arrears, peer_percentile: 40, fired: false, explanation: "Owes a little.", family: compliance, weight: 1, is_scored: true}
+          - {company_code: 1, period_month: "2026-08-01", risk_model: wage_floor, peer_percentile: 80, fired: false, explanation: "Low wage.", family: wages, weight: 3, is_scored: true}
+      - input: ref('int_company_months')
+        rows:
+          - {company_code: 1, month: "2026-08-01", is_registered: true, sodra_months_to_date: 12, is_winding_down: false}
+    expect:
+      rows:
+        - {company_code: 1, tier: C, score: 70.0, explanation: "Low wage. Owes a little."}
+
+  - name: fct_company_risk_needs_enough_models_with_data
+    description: >
+      Only one model had the data to judge the company, and it fired at percentile 99: too
+      little evidence for any tier, so never a lead.
+    model: fct_company_risk
+    given:
+      - input: ref('fct_score_components')
+        rows:
+          - {company_code: 1, period_month: "2026-08-01", risk_model: wage_floor, peer_percentile: 99, fired: true, explanation: "Low wage.", family: wages, weight: 1, is_scored: true}
+      - input: ref('int_company_months')
+        rows:
+          - {company_code: 1, month: "2026-08-01", is_registered: true, sodra_months_to_date: 12, is_winding_down: false}
+    expect:
+      rows:
+        - {company_code: 1, tier: insufficient_evidence, score: 99.0, models_with_data: 1, fired_families: [wages]}

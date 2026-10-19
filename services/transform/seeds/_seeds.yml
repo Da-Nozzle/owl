@@ -138,3 +138,77 @@ seeds:
                   - total_assets
                   - equity
                   - liabilities
+
+  - name: minimum_wages
+    description: >
+      Lithuania's minimum monthly wage (minimalioji mėnesinė alga, MMA), gross, as the
+      Government sets it for each calendar year under the Labour Code's article 141: one row per
+      change, in force from valid_from until the next row. 2022 to 2025 as the Visuotinė
+      lietuvių enciklopedija lists them (https://www.vle.lt/Straipsnis/alga, read 2026-10-19:
+      730, 840, 924 and 1,038 EUR); 2026 from the Government's resolution "Dėl 2026 metais
+      taikomo minimaliojo darbo užmokesčio", 1,153 EUR and 7.05 EUR an hour (the draft
+      TAP-25-1227 of 2025-10-15, https://lrv.lt/media/viesa/saugykla/2025/10/EKYvBrfYSz0.pdf;
+      news reports say it was adopted unchanged; the adopted act in e-TAR was not checked). Add
+      each new year's when the Government adopts it, usually in the autumn before: a month past
+      the last row keeps the last row's wage.
+    columns:
+      - name: valid_from
+        data_tests:
+          - unique
+          - not_null
+      - name: monthly_eur
+        description: The gross minimum monthly wage, in euros, for full-time work.
+        data_tests:
+          - not_null
+
+  - name: risk_models
+    description: >
+      The registry of risk models: one row per risk model and version, each a stated hypothesis
+      of undeclared work or income, with the legitimate explanations that would produce the same
+      numbers. An enabled row is built as models/risk/<id>/ (rm_<id>, that version) and joins
+      fct_score_components, which reads the enabled rows through OWL_RISK_MODELS (README, Adding
+      a risk model); the test risk_models_match_registry fails when enabled rows and rm_* models
+      differ. Which version is scored is the model's latest_version in its YAML.
+    data_tests:
+      - unique:
+          column_name: "id || '@' || version"
+    columns:
+      - name: id
+        description: The model's name without rm_ (wage_floor is rm_wage_floor), and its folder.
+        data_tests:
+          - not_null
+      - name: version
+        description: The rm_<id> version this row describes (dbt's model version, v).
+        data_tests:
+          - not_null
+      - name: family
+        description: >
+          What kind of evidence it is: staffing (busy against headcount), wages, revenue_tax
+          (declared revenue and taxes against activity), compliance (arrears, filings),
+          financial_health (persistent losses, negative equity), history (phoenix patterns).
+          Tier A needs fired models of two families, so two models of one kind never make a lead.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [staffing, wages, revenue_tax, compliance, financial_health, history]
+      - name: weight
+        description: >
+          The model's weight in the score, a weighted mean of percentiles; 1.0 is the default.
+          Positive (risk_models_match_registry).
+        data_tests:
+          - not_null
+      - name: hypothesis
+        description: What the model suspects, in a sentence a non-accountant can review.
+        data_tests:
+          - not_null
+      - name: legitimate_explanations
+        description: The innocent reasons for the same numbers, which an analyst rules out first.
+        data_tests:
+          - not_null
+      - name: sources
+        description: The models and seeds it reads.
+      - name: enabled
+        description: Whether the version is built and scored; a disabled row is kept as the record.
+        data_tests:
+          - not_null

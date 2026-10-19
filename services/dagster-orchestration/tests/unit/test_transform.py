@@ -1,4 +1,5 @@
 from collections.abc import MutableMapping
+from pathlib import Path
 from typing import cast
 
 import pytest
@@ -9,7 +10,11 @@ from dagster._core.definitions.definitions_load_context import (
 from dagster_dbt import DbtProject
 
 from owl_dagster_orchestration.dbt.assets import has_shared_models, pool_name, source_layers
-from owl_dagster_orchestration.dbt.environment import environment_variable, set_dbt_environment
+from owl_dagster_orchestration.dbt.environment import (
+    environment_variable,
+    risk_model_environment,
+    set_dbt_environment,
+)
 from owl_dagster_orchestration.dbt.project import prepare_on_initial_load
 from owl_dagster_orchestration.dbt.step_metadata import snapshot_query
 from owl_ingest.settings import PipelineMode
@@ -168,3 +173,26 @@ def test_the_code_servers_load_prepares_the_dbt_project() -> None:
 def test_a_run_rebuilding_the_definitions_does_not_prepare_the_dbt_project() -> None:
     # Act / Assert
     assert preparations_when_loaded_as(DefinitionsLoadType.RECONSTRUCTION) == 0
+
+
+def test_dbt_reads_the_enabled_risk_models_from_the_registry(tmp_path: Path) -> None:
+    # Arrange
+    (tmp_path / "seeds").mkdir()
+    (tmp_path / "seeds" / "risk_models.csv").write_text(
+        "id,version,family,weight,hypothesis,legitimate_explanations,sources,enabled\n"
+        'wage_floor,1,wages,1.0,"Envelope wages, as said.",Part-time.,stg_sodra__monthly,true\n'
+        "wage_floor,2,wages,1.0,A second look.,Part-time staff.,stg_sodra__monthly,True\n"
+        "arrears,1,compliance,1.0,Owes VMI.,A dispute.,stg_vmi_tax_arrears__monthly,false\n",
+        encoding="utf-8",
+    )
+
+    # Act
+    environment = risk_model_environment(tmp_path)
+
+    # Assert
+    assert environment == {"OWL_RISK_MODELS": "wage_floor:1,wage_floor:2"}
+
+
+def test_without_a_registry_dbt_gets_no_risk_models_variable(tmp_path: Path) -> None:
+    # Act / Assert: the project's macro then fails, rather than read an empty registry.
+    assert risk_model_environment(tmp_path) == {}

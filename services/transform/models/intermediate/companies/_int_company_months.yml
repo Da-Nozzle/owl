@@ -1,0 +1,154 @@
+version: 2
+
+models:
+  - name: int_company_months
+    description: >
+      Every company in the country by month, as the risk models see it: one row per company (JAR
+      code) and month Sodra has declared, for each month an entity of the register's newest
+      snapshot was registered on any day of, and each Sodra employer JAR does not hold. Its legal
+      form, dates and status from JAR; its activity from Sodra (EVRK 2.1, the latest Sodra
+      declared up to the month) or else the VMI register's main activity (EVRK 2, the latest one
+      started, as VMI ended most at the switch to EVRK 2.1), the version kept; the leads'
+      category where activity_categories has the activity; its municipality from Sodra or else
+      JAR's seat; its headcount and months of history in Sodra. Risk models take their peers
+      (activity class, municipality) from it and fct_company_risk its eligibility gates. JAR
+      publishes only its current state, so a status before status_since is unknown (empty), and
+      registration dates place each entity in time.
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [company_code, month]
+    data_tests:
+      - unique:
+          column_name: "company_code || '-' || month"
+    columns:
+      - name: company_code
+        description: JAR code (stg_jar__entities.company_code); Sodra's jarCode.
+        data_tests:
+          - not_null
+      - name: month
+        description: The first day of the month.
+        data_tests:
+          - not_null
+      - name: company_name
+        description: JAR's name; empty for a Sodra employer JAR does not hold.
+      - name: legal_form_code
+        description: JAR's legal form (310 is a UAB, 810 an individual enterprise).
+      - name: legal_form
+      - name: registered_on
+      - name: deregistered_on
+      - name: age_months
+        description: Whole months from registration to the month's end.
+      - name: is_registered
+        description: Registered in JAR at the month's end; false for a company JAR does not hold.
+        data_tests:
+          - not_null
+      - name: jar_status_code
+        description: >
+          JAR's legal status (stg_jar__entities.status_code) if it held it by the month's end;
+          empty before status_since, as the register keeps no earlier status.
+      - name: jar_status
+      - name: is_winding_down
+        description: >
+          In liquidation or bankruptcy at the month's end: a status of
+          var('risk_wind_down_status_codes') held by then (5 and 13 bankrupting, 6 bankrupt, 7
+          and 26 in liquidation, 9 liquidation initiated, 11 liquidated).
+        data_tests:
+          - not_null
+      - name: activity_code
+        description: EVRK code, 2 to 6 digits, in activity_classification's version.
+      - name: activity_classification
+        description: EVRK 2.1 (Sodra) or EVRK 2 (the VMI register); the same code means different things in each.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [EVRK 2, EVRK 2.1]
+      - name: activity_source
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [sodra, vmi_register]
+      - name: activity_class
+        description: >
+          The activity's class, its first four digits (5611 is restaurants in EVRK 2.1): the
+          level peers are compared at (peer_percentile). Empty for a coarser code.
+      - name: leads_category
+        description: The leads' category (activity_categories) the activity is in, if any.
+      - name: municipality_code
+        description: Where Sodra registers the employer, or else JAR's seat (13 is Vilnius city).
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('municipalities')
+                field: municipality_code
+      - name: municipality
+        description: The municipality's name, as the Address Register writes it.
+      - name: municipality_source
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [sodra, jar_seat]
+      - name: insured_count
+        description: Sodra's insured in the month; empty when the company declared none.
+      - name: sodra_months_to_date
+        description: >
+          Months the company declared to Sodra up to and including this one, since the first
+          month the archive holds (so at most the profile's months so far).
+        data_tests:
+          - not_null
+      - name: jar_as_of
+        description: When JAR last changed the entities dataset the row is from.
+      - name: sodra_as_of
+        description: When Sodra wrote the file version of the month's declaration; empty without one.
+
+unit_tests:
+  - name: int_company_months_profiles_each_company_in_each_month
+    description: >
+      Sodra declares January to March. A café in Vilnius declares January and February, so
+      March keeps its activity and municipality but no headcount. A car repairer Sodra never
+      declares takes the VMI register's EVRK 2 activity that ended at the switch to EVRK 2.1
+      over an earlier one, and its seat's municipality; it went into liquidation on 10 February,
+      so its status is unknown in January. An entity deregistered on 15 February is in January
+      and February, registered only at January's end. A Sodra employer JAR does not hold is in
+      March only.
+    model: int_company_months
+    given:
+      - input: ref('stg_sodra__monthly')
+        rows:
+          - {insurer_code: 1, company_code: 111, declared_month: "2026-01-01", insured_count: 5, activity_code: "561110", municipality: "Vilniaus m. sav.", file_published_at: "2026-02-20 10:00:00"}
+          - {insurer_code: 1, company_code: 111, declared_month: "2026-02-01", insured_count: 6, activity_code: "561110", municipality: "Vilniaus m. sav.", file_published_at: "2026-03-20 10:00:00"}
+          - {insurer_code: 4, company_code: 444, declared_month: "2026-03-01", insured_count: 2, activity_code: "4711", municipality: "Nenustatyta", file_published_at: "2026-04-20 10:00:00"}
+      - input: ref('stg_jar__entities')
+        rows:
+          - {company_code: 111, company_name: "UAB Kava", legal_form_code: 310, status_code: 0, status: "Teisinis statusas neįregistruotas", registered_on: "2020-05-04", deregistered_on: null, status_since: "2020-05-04", registered_address_id: "a1", snapshot_month: "2026-09", file_published_at: "2026-09-21 06:00:00"}
+          - {company_code: 222, company_name: "UAB Ratai", legal_form_code: 310, status_code: 7, status: "Likviduojamas", registered_on: "2015-01-10", deregistered_on: null, status_since: "2026-02-10", registered_address_id: "a2", snapshot_month: "2026-09", file_published_at: "2026-09-21 06:00:00"}
+          - {company_code: 333, company_name: "MB Buvusi", legal_form_code: 960, status_code: 10, status: "Išregistruotas", registered_on: "2019-03-01", deregistered_on: "2026-02-15", status_since: "2026-02-15", registered_address_id: null, snapshot_month: "2026-09", file_published_at: "2026-09-21 06:00:00"}
+          - {company_code: 111, company_name: "UAB Kava", legal_form_code: 310, status_code: 0, registered_on: "2020-05-04", status_since: "2020-05-04", snapshot_month: "2026-08", file_published_at: "2026-08-21 06:00:00"}
+      - input: ref('stg_address_register__addresses')
+        rows:
+          - {address_id: "a1", municipality_code: 13, snapshot_month: "2026-09"}
+          - {address_id: "a2", municipality_code: 19, snapshot_month: "2026-09"}
+      - input: ref('stg_vmi__current_register')
+        rows:
+          - {company_code: 222, is_main_activity: true, activity_code: "502000", activity_from: "2004-05-01", activity_annulled_on: null}
+          - {company_code: 222, is_main_activity: true, activity_code: "452000", activity_from: "2010-01-01", activity_annulled_on: null}
+          - {company_code: 222, is_main_activity: false, activity_code: "471100", activity_from: "2020-01-01", activity_annulled_on: null}
+      - input: ref('municipalities')
+        rows:
+          - {municipality_code: 13, municipality: "Vilniaus miesto sav.", sodra_municipality: "Vilniaus m. sav."}
+          - {municipality_code: 19, municipality: "Kauno miesto sav.", sodra_municipality: "Kauno m. sav."}
+      - input: ref('activity_categories')
+        rows:
+          - {category: cafes_restaurants, classification: "EVRK 2.1", code_prefix: "5611"}
+          - {category: car_repair, classification: "EVRK 2", code_prefix: "4520"}
+    expect:
+      rows:
+        - {company_code: 111, month: "2026-01-01", is_registered: true, jar_status_code: 0, is_winding_down: false, activity_code: "561110", activity_classification: "EVRK 2.1", activity_source: sodra, activity_class: "5611", leads_category: cafes_restaurants, municipality_code: 13, municipality_source: sodra, insured_count: 5, sodra_months_to_date: 1, sodra_as_of: "2026-02-20"}
+        - {company_code: 111, month: "2026-02-01", is_registered: true, jar_status_code: 0, is_winding_down: false, activity_code: "561110", activity_classification: "EVRK 2.1", activity_source: sodra, activity_class: "5611", leads_category: cafes_restaurants, municipality_code: 13, municipality_source: sodra, insured_count: 6, sodra_months_to_date: 2, sodra_as_of: "2026-03-20"}
+        - {company_code: 111, month: "2026-03-01", is_registered: true, jar_status_code: 0, is_winding_down: false, activity_code: "561110", activity_classification: "EVRK 2.1", activity_source: sodra, activity_class: "5611", leads_category: cafes_restaurants, municipality_code: 13, municipality_source: sodra, insured_count: null, sodra_months_to_date: 2, sodra_as_of: null}
+        - {company_code: 222, month: "2026-01-01", is_registered: true, jar_status_code: null, is_winding_down: false, activity_code: "452000", activity_classification: "EVRK 2", activity_source: vmi_register, activity_class: "4520", leads_category: car_repair, municipality_code: 19, municipality_source: jar_seat, insured_count: null, sodra_months_to_date: 0, sodra_as_of: null}
+        - {company_code: 222, month: "2026-02-01", is_registered: true, jar_status_code: 7, is_winding_down: true, activity_code: "452000", activity_classification: "EVRK 2", activity_source: vmi_register, activity_class: "4520", leads_category: car_repair, municipality_code: 19, municipality_source: jar_seat, insured_count: null, sodra_months_to_date: 0, sodra_as_of: null}
+        - {company_code: 222, month: "2026-03-01", is_registered: true, jar_status_code: 7, is_winding_down: true, activity_code: "452000", activity_classification: "EVRK 2", activity_source: vmi_register, activity_class: "4520", leads_category: car_repair, municipality_code: 19, municipality_source: jar_seat, insured_count: null, sodra_months_to_date: 0, sodra_as_of: null}
+        - {company_code: 333, month: "2026-01-01", is_registered: true, jar_status_code: null, is_winding_down: false, activity_code: null, activity_classification: null, activity_source: null, activity_class: null, leads_category: null, municipality_code: null, municipality_source: null, insured_count: null, sodra_months_to_date: 0, sodra_as_of: null}
+        - {company_code: 333, month: "2026-02-01", is_registered: false, jar_status_code: 10, is_winding_down: false, activity_code: null, activity_classification: null, activity_source: null, activity_class: null, leads_category: null, municipality_code: null, municipality_source: null, insured_count: null, sodra_months_to_date: 0, sodra_as_of: null}
+        - {company_code: 444, month: "2026-03-01", is_registered: false, jar_status_code: null, is_winding_down: false, activity_code: "4711", activity_classification: "EVRK 2.1", activity_source: sodra, activity_class: "4711", leads_category: null, municipality_code: null, municipality_source: null, insured_count: 2, sodra_months_to_date: 1, sodra_as_of: "2026-04-20"}

@@ -7,6 +7,7 @@ from pathlib import Path
 import duckdb
 import pytest
 
+from owl_dagster_orchestration.dbt.environment import risk_model_environment
 from owl_dagster_orchestration.dbt.resource import dbt_core_executable
 from owl_ingest.adapters.archive.fsspec_archive import FsspecRawArchive, open_fsspec_archive
 from owl_ingest.ports.downloader import OpenedDownload, StreamedDownload
@@ -39,6 +40,8 @@ def build(
     project = pytestconfig.rootpath / "services" / "transform"
     (tmp_path / "profiles.yml").write_text(PROFILE.format(path=tmp_path / "raw.duckdb"))
     environ["OWL_ARCHIVE_PATH"] = str(tmp_path / "archive")
+    # Read while dbt parses, as every launcher sets it.
+    environ.update(risk_model_environment(project))
 
     def built_rows(model: str) -> list[tuple[str, ...]]:
         result = subprocess.run(

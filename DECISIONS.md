@@ -1992,3 +1992,148 @@ written once per archive adapter; the leftovers are at most an earlier fetch's s
 period, and nothing reads them. Left: a fetch made again writes over a complete snapshot's files
 before its new manifest, so raw built during that fetch reads some of each; the manifest's SHA-256s
 would tell, but are not checked.
+
+## Risk models (2026-10-19)
+
+**A suspicion is a risk model: a named, versioned detector stating one hypothesis, with its
+legitimate explanations written down.** The name is the user's old workplace's for a business
+calculation made of many stored procedures. Each is one folder and one dbt group,
+`models/risk/<id>/`: private steps `rm_<id>__<step>` (`access: private`, so nothing outside the
+group reads them) and one public output `rm_<id>` with an enforced contract. Its hypothesis,
+legitimate explanations, family, weight and sources are a row of the registry seed
+`risk_models.csv`, so the logic can be reviewed without knowing accounting, and its thresholds
+are vars `rm_<id>_*` in `dbt_project.yml`, never literals. They run nationally, every company in
+Lithuania by month, on official data; matching Google's listings in Vilnius comes later. README,
+Adding a risk model, is the guide for adding one.
+
+**Every output has one contract, one row per company and month.** `company_code`,
+`period_month`, `risk_model`, `risk_model_version`, `raw_value`, `peer_group`, `peer_count`,
+`peer_percentile` (0 to 100, higher more suspicious), `fired`, `evidence` (JSON, as each model's
+numbers differ and the union needs one type), `explanation` and `source_as_of`
+(`map(varchar, date)`, when each source's row was published). The period is a month, as a
+`date`, its first day, judged on data up to and including it: Sodra, the backbone, declares by
+month, the leads are monthly and every source's snapshot is at most monthly. A model on yearly
+data repeats the latest year filed by each month. A month, not a snapshot, so the same month
+rebuilt from a later snapshot is the same row.
+
+**A company a model cannot judge gets no row; one it can judge but not compare gets a row with an
+empty percentile.** Without data there is no measure, and a row of nulls would only be filtered
+out again; so "the models with data" for a company is the rows it has. With the measure but
+fewer than 20 peers, the value and the model's own threshold still say something, and the
+analyst sees the value: such a row counts for the tier when it fires but adds nothing to the
+score. In 2026-08, 2,505 of rm_wage_floor's 39,836 rows have no percentile.
+
+**dbt reads the registry through a variable, `OWL_RISK_MODELS`, set by the launchers from the
+CSV.** `fct_score_components` must `ref()` every enabled model, and dbt records a model's refs
+while it parses: a ref made only at run time fails (`RefBadContextError`), and while parsing dbt
+can neither read a seed nor see the graph (`graph` is filled after the whole project is loaded,
+`manifest.build_flat_graph()`). So `dbt_environment()` reads the seed's enabled rows into
+`wage_floor:1,...` beside the project's other variables, for every way dbt starts here (`owl-dbt`,
+`owl-dbt-dev`, Dagster, the MCP servers, `owl-dbt-vscode`), and the macro `risk_model_components`
+refs each. Editing the CSV changes the variable, and dbt parses again. Rejected: a list in the
+union model or in `dbt_project.yml` (a second place every step-3 branch edits and conflicts in),
+and a union found at run time without refs (no lineage, no build order, no defer to the lake).
+The cost: plain `dbt` without it fails to parse, loudly, rather than score nothing; the archive
+readers' test, which runs dbt by hand, sets it as the launchers do. A registry row naming no
+model fails the parse; `risk_models_match_registry` catches the other way, a model with no enabled
+row, and a model that is not public, contracted and in its own group, or a weight not positive.
+
+**Versions run side by side, and the model's `latest_version` is scored.** A v2 is
+`rm_<id>_v2.sql` and `- v: 2` in the YAML, with a registry row of its own: both versions build
+(tables and Dagster assets `rm_wage_floor_v1`, `_v2`: the asset key now carries a model's version,
+or two versions would be one key) and both are in `fct_score_components`, where `is_scored` is
+true for the latest version only, so v2's rows can be compared with v1's for a month before its
+YAML makes it the latest. dbt's own notion, not a registry column: `ref('rm_<id>')` follows it
+too. A unit test has no graph, so there every version counts as scored.
+
+**Risk models are drawn in a `risk` box, each in a box of its own.** The shared step draws a model
+in a folder of its layer in its folder's group (`intermediate/google/` beside Google's source);
+the translator nests the `risk` layer's folders one level more (`NESTED_LAYERS`), so
+`models/risk/wage_floor/` is `live/risk/wage_floor`. The profile is in `live/companies` and the
+marts in `live/scoring`. Rebuilding any source the profile reads (Sodra, JAR, the Address
+Register, both VMI sources) rebuilds the profile, the risk models and the scoring after it.
+
+**The company-month profile, `int_company_months`, is every company in the country by month.**
+4,534,368 rows, 260,162 companies, Sodra's 20 months (2025-01 to 2026-08): each entity of JAR's
+newest snapshot in every month it was registered on any day of, and the 53 Sodra employers JAR
+does not hold. JAR publishes only its current state: a status counts from `status_since` and is
+unknown before; registration dates place entities in time. In liquidation or bankruptcy is
+statuses 5, 6, 7, 9, 11, 13 and 26 (`risk_wind_down_status_codes`): 4,057 companies in 2026-08.
+The activity is Sodra's (EVRK 2.1), carried through months it declares nothing in, for 114,735
+of 2026-08's 232,647 companies; else the VMI register's main activity (EVRK 2, the latest
+started, as VMI ended most at the switch to EVRK 2.1) for 80,985; none for 36,927. The version is
+kept, as one code means different things in each. The municipality is Sodra's for 116,558, else
+JAR's seat's for 95,352, none for 20,737.
+
+**Peers are the same activity class and month, in the municipality if it has 20, else in the
+country.** The class (four digits of one EVRK version: 56.11 restaurants) is the finest level that
+keeps most groups big enough: in 2026-08, 94% of Sodra's employers with a published wage were in a
+class of at least 20 nationally, 85% of Vilnius's in one of at least 20 in Vilnius. A division (two
+digits) would compare cafés with hotels. Wages differ by place, so the municipality comes first.
+`peer_percentile` (the macro) is `percent_rank`: the share of the other peers strictly less
+suspicious, ties sharing the lowest rank, so a value most peers share is never high; a direction
+says which way is suspicious. In 2026-08 rm_wage_floor compared 18,343 companies within their
+municipality and 21,224 in the country (2,236 of those with too few peers even there); 269 had
+no activity class.
+
+**The score is gated, weighted and tiered.** Gates come first, each failure kept in
+`exclusion_reasons`: not registered in JAR at the month's end, fewer than six months declared to
+Sodra, in liquidation or bankruptcy. Then a company fewer than two models had data for is
+`insufficient_evidence`, never a lead; with one model so far, every eligible company is. Tier A
+needs fired models in two families, B one, C none (B and C are this framework's; the plan says A).
+The score is the registry-weighted mean of the percentiles there are, 0 to 100; the explanation
+joins the two models adding most to it; every row carries the scored versions (`wage_floor@1`).
+Thresholds are vars (`risk_min_peers`, `risk_min_sodra_months`, `risk_min_models_with_data`,
+`risk_tier_a_min_families`, `risk_wind_down_status_codes`). Nationally the six-month gate excludes
+most of 2025-03 to 2025-05, as the archive's Sodra starts in 2025-01: 121,146 excluded rows of
+713,357; in 2026-08, 183 (170 under six months, 13 being wound down). The lists per company were
+ordered aggregates first, which ran out of 700 MB on 713 k one-row groups (each keeps a sort);
+a window rank and sorted unordered lists fit.
+
+**rm_wage_floor, the worked example, looks for wages declared at the minimum while peers pay
+more.** The minimum wage seed (`minimum_wages`: 730, 840, 924, 1,038 and 1,153 EUR for 2022 to
+2026; the Visuotinė lietuvių enciklopedija for 2022 to 2025, the Government's draft resolution
+TAP-25-1227 for 2026, reported adopted unchanged) prices each month. Sodra's average wage is
+published for employers with more than 3 insured. In 2026-08, 26% of those averaged below the
+minimum (part-time staff, which a full-time wage cannot be), and averages bunch just above it
+(854 employers at 1.00 to 1.02 times, against about 600 in each neighbouring 0.02). Of 44,265
+employers with a wage in 2026-03 to 2026-08, 7,993 were at most 1.05 times the minimum in all six
+months, but half of those had a median under 0.8: part-timers, the first legitimate explanation.
+So the model counts months in a band, 0.95 to 1.05 times the minimum (an employer paying the
+minimum, a part-month hire or a part-timer included): 401 in all six. Its measure, `raw_value`, is
+how far the six months' median wage is from the minimum, either way (|median / minimum - 1|),
+lower more suspicious. The share of months in the band was tried first: 0 for 81% of companies,
+so one month in it ranked a company above 76% of its peers. It fires on all six months in the
+band and a percentile of at least 75, so a sector where most pay the minimum does not fire. It
+needs three published months of the six for a row.
+
+**Nationally it fired for 216 to 376 companies a month in 2026 (376 of 39,836 in 2026-08).** Of the
+401 in the band all six months, 376 fired; the other 25 had too few peers. Months from 2025-06 fire
+(the first with six months behind it); 2026-01 to 2026-05 fire less (216 to 242, against 296 to
+376): the minimum rose 11% in January, and a window spanning the change holds months in the band
+under each year's minimum only if the wage rose with it. In Vilnius in 2026-08: cafés and
+restaurants 545 rows, 6 fired, median wage 1.04 times the minimum; car repair 268, 7 fired, 1.15;
+hair and beauty 69, 2 fired, 0.79 (mostly part-time; and 185 of Vilnius's 257 hair and beauty
+employers have 3 insured or fewer, so no published wage at all). All are compared within Vilnius but
+2 cafés, which have too few peers in their class.
+
+**A national build takes about 45 s.** On the live dev target, sources prebuilt, the profile,
+rm_wage_floor's three models and both marts built in 43.2 s of dbt work (58 s wall with dbt's
+start and the lake's attach), at a 700 MB DuckDB limit, the dbt process peaking at 1.4 GB RSS:
+the profile 29.4 s (4.53 M rows), rm_wage_floor__months 2.1 s (817,028), __windows 3.1 s
+(713,357), rm_wage_floor 5.4 s (713,357), fct_score_components 1.4 s and fct_company_risk 5.8 s
+(713,357 each). Their 62 tests take 20 s. The timings come from dbt's `run_results.json`
+(`execution_time` per node). To keep them, an `on-run-end` hook could insert dbt's `results`
+(unique id, status, execution time, rows affected, invocation id) into `audit.dbt_node_runs` in
+the lake, or the Dagster step could read `run_results.json` after each build and write it, as
+it already copies the manifest (`keep_main_state`); the second keeps dbt's runs free of audit
+writes that two steps could conflict on. Not done.
+
+**Left open.** The B and C tiers, the weights (all 1.0) and the minimum of two models are this
+framework's choices to confirm. The band (0.95 to 1.05) and the 75th percentile for
+rm_wage_floor are calibrated on one month of data, and the percentile has not yet held a company
+back (in 2026-08 every company in the band all six months with peers was at the 78th percentile
+or above). Sodra's history in the archive starts in 2025-01, so the first five months are excluded
+by the six-month gate. JAR's status before its current one is unknown, so a company wound down
+in 2026-08 counts as eligible in earlier months. The 2026 minimum wage is from the draft
+resolution; the adopted act in e-TAR was not checked.

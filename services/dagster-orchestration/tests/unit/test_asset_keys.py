@@ -102,3 +102,25 @@ def test_an_archive_is_known_by_its_layer_in_either_lake() -> None:
 def test_a_sources_fetch_is_in_the_fetch_layer() -> None:
     # Act / Assert
     assert fetch_key(SOURCE_NAME, LIVE) == dg.AssetKey(["live", "fetch", "fetch_sodra"])
+
+
+def test_each_version_of_a_dbt_model_is_an_asset_named_as_its_table() -> None:
+    # Arrange
+    versions = [
+        {
+            "resource_type": "model",
+            "name": "rm_wage_floor",
+            "version": version,
+            "config": {"schema": "risk"},
+        }
+        for version in (1, 2)
+    ]
+
+    # Act
+    keys = [dbt_resource_key(props, LIVE) for props in versions]
+
+    # Assert
+    assert keys == [
+        dg.AssetKey(["live", "risk", "rm_wage_floor_v1"]),
+        dg.AssetKey(["live", "risk", "rm_wage_floor_v2"]),
+    ]
