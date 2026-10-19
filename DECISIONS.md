@@ -285,10 +285,8 @@ I'm not an accountant and don't know much about detecting financial crime. So wh
 framework for suspicion that someone like me can at least read, plus one worked example. It was
 written by Claude; I set the shape and the naming, not the domain logic.
 
-The naming comes from a previous job, where complex business logic lived entirely in T-SQL and
-each calculation, however many stored procedures it took, was called a model. Here each suspicion
-is a **risk model**: one hypothesis, stated in a sentence, with its legitimate explanations
-written next to it, so a reader who isn't an accountant can judge whether a flag makes sense.
+Here each suspicion is a **risk model**: one hypothesis, stated in a sentence, with its legitimate explanations
+written next to it.
 
 - **Each risk model is a dbt group** (`models/risk/<id>/`): private steps, and one public output
   with an enforced contract and a version, so a v2 can run beside v1. Every output has the same
@@ -336,8 +334,16 @@ the same category's margins, it narrows to 92 companies with three such years an
 
 **CI/CD**, specifically a build-validation step that runs [Recce](https://github.com/DataRecce/recce)
 to produce schema and data diffs on each pull request, so reviewers can see how a change to the
-domain logic plays out, even across complex data structures. That is the release process I wish
-we had at work: see the effect in the PR rather than wait a month in pre-prod.
+domain logic plays out, even across complex data structures. Also that is why currnet git history is so unprofessional. The idea was to have tag based releases, but never got to that point.
+
+**Matching Google Places listings to companies.** The Google side works: the search areas are
+planned, the listings fetched, archived and cleaned into `stg_google__listings` (name, address,
+coordinates, rating, reviews, opening hours). But I didn't have time to find a way to map a listing
+to a company code consistently. Listings carry brand names, not legal names, and a company's
+registered address is often not where it trades: "INVENTA", a bar company registered at
+Kalvarijų g. 125 in Vilnius, has no listing under its name, and that address has 12 listings,
+three of them a café, a bar and a restaurant. So for now the Google data can't say anything about
+a company.
 
 **The rest of the risk models.** The sources for them are in, but the models aren't:
 - overdue tax arrears that keep growing;
@@ -346,8 +352,7 @@ we had at work: see the effect in the PR rather than wait a month in pre-prod.
 - a busy company not registered for VAT;
 - persistent losses against peers;
 - job ads offering more than the declared wage;
-- the Google side, which needs listings matched to companies, and the matching isn't built either.
+- the Google side, which waits on the matching above.
 
 I also wouldn't know how to check whether their results are valid. So this project is more a
-showcase of a somewhat impractical data platform (lake, lakehouse, whatever the right word is)
-than a finished tax-fraud detector.
+showcase of a somewhat impractical, but hopefully technically interesting data platform (lake, lakehouse, whatever the right word is) than a finished tax-fraud detector.

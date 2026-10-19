@@ -11,8 +11,7 @@ archive. The month is August 2026, the newest one Sodra had published.
 **These are prompts to look closer, not accusations.** The thresholds were calibrated on one
 month of data and were never checked against anything real. All the data is open data.
 
-**The companies are redacted, because I did not want to be sued.** Flagging a named business for
-envelope wages on the strength of an unvalidated model is how you end up in court, so every
+**The companies are redacted, because I did not want to be sued.** Every
 company code and name is `<REDACTED>`. So are the figures that would find a company again in
 Sodra's own open data: its headcount (`insured_count`), and its average wage for the month and
 that wage as a multiple of the minimum, in `explanation` and `evidence`. Everything else is as the
