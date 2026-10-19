@@ -1,0 +1,235 @@
+version: 2
+
+models:
+  - name: stg_vmi_tax_arrears__changes
+    description: >
+      One row per change made to VMI's list of companies with tax arrears, from the changelog's
+      first load (2024-11-18) on: when (UTC), how, to which list row, the fields it set, typed,
+      and the company the row belongs to. A field the change did not set is empty; changed_fields
+      tells it from one set empty. stg_vmi_tax_arrears__monthly folds them into the list as it
+      stood at each snapshot's tick.
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [change_id]
+    columns:
+      - name: change_id
+        description: The change's id in the changelog; ids grow with time, with gaps.
+        data_tests:
+          - unique
+          - not_null
+      - name: changed_at
+        description: When the change was made, in UTC.
+        data_tests:
+          - not_null
+      - name: operation
+        description: >
+          insert (every field), upsert (every field for a row new to the list, only those it set
+          for a row the list holds), patch (only the fields it set) or delete (none).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [insert, upsert, patch, delete]
+      - name: arrears_row_id
+        description: >
+          The list row changed (Spinta's _id). A row is one company's arrears while the list holds
+          it; the reloads of November 2024 to March 2025 deleted every row and inserted it again
+          under a new id, so a company's row id is not stable across them.
+        data_tests:
+          - not_null
+      - name: company_code
+        description: >
+          The company of the row changed (ja_kodas): a JAR code (9 digits), or VMI's own code for
+          a foreign company (10 digits), which JAR does not hold. From the change itself or from
+          the row's insert, which the changelog holds for every row. Empty for the 11 rows of
+          the first loads (2024-11-18 to 11-26) whose code was published encrypted or hashed.
+        data_tests:
+          # The snapshots hold the changelog from its first change, so every row's insert.
+          - not_null:
+              config:
+                where: "changed_at >= '2024-11-27'"
+      - name: changed_fields
+        description: The list's fields the change set, as published (empty for a delete).
+      - name: record_number
+        description: VMI's id of the arrears record (id), set by the change.
+      - name: record_created_on
+        description: When VMI created the arrears record (sukurta), set by the change.
+      - name: record_updated_on
+        description: When VMI last updated the arrears record (atnaujinta), set by the change.
+      - name: company_name
+        description: The company's name (ja_pavadinimas), set by the change.
+      - name: municipality_code
+        description: >
+          The municipality where the company is registered (sav_kodas), set by the change: the
+          Address Register's code, as the municipalities seed (13 is Vilnius city).
+      - name: arrears_amount
+        description: >
+          The company's tax arrears in EUR (nepriemoka), set by the change: overdue_amount plus
+          deferred_amount less deferred_overdue_amount, as the overdue amount includes the
+          deferred amount that is overdue.
+      - name: overdue_amount
+        description: The overdue part of the arrears in EUR (pradelsta_nepriemoka), set by the change.
+      - name: deferred_amount
+        description: >
+          The part deferred in EUR (atideta_nepriemoka), set by the change: under a tax loan
+          agreement, an aid agreement, a restructuring or solvency recovery plan or a settlement.
+      - name: deferred_overdue_amount
+        description: The part of the deferred amount that is overdue in EUR (atideta_pradelsta), set by the change.
+      - name: transaction_id
+        description: The changelog transaction the change was made in; a morning's reload is a few.
+      - name: snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch the change is from.
+        data_tests:
+          - not_null
+
+  - name: stg_vmi_tax_arrears__monthly
+    description: >
+      One row per company on VMI's list of companies with tax arrears and snapshot: the list as it
+      stood at the snapshot's tick (the 21st, 06:00 Vilnius time; the list is reloaded each
+      morning at about 09:00, so this is the 20th's list), from 2024-11 on. A company is on the
+      list while it owes any tax, from 0.01 EUR; it leaves it when it owes nothing. Amounts are
+      VMI's, as of record_updated_on, excluding debts under enforcement documents. The newest
+      snapshot is the list now. Where the list held a company twice at a tick (1,880 companies
+      at 2025-07's, older records deleted the next morning), its newest record. Joins
+      stg_jar__entities on company_code and snapshot_month.
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [company_code, snapshot_month]
+    data_tests:
+      - unique:
+          column_name: "company_code || '-' || snapshot_month"
+    columns:
+      - name: company_code
+        description: >
+          JAR code (ja_kodas); Sodra's jarCode. A 10-digit code is VMI's own for a foreign
+          company, which JAR does not hold.
+        data_tests:
+          - not_null
+      - name: snapshot_month
+        description: >
+          The snapshot (YYYY-MM) whose tick the list is as of. Monthly by choice: the changelog
+          holds every change, so the list could be had as of any day
+          (vmi_tax_arrears.snapshot_schedule).
+        data_tests:
+          - not_null
+      - name: company_name
+        description: The company's name on the list.
+        data_tests:
+          - not_null
+      - name: municipality_code
+        description: >
+          The municipality where the company is registered: the Address Register's code, as the
+          municipalities seed (13 is Vilnius city). Empty for the rows of the list's first load,
+          until VMI filled it.
+      - name: arrears_amount
+        description: >
+          The company's tax arrears in EUR: overdue_amount plus deferred_amount less
+          deferred_overdue_amount.
+        data_tests:
+          - not_null
+      - name: overdue_amount
+        description: The overdue part of the arrears in EUR, including the deferred part that is overdue.
+        data_tests:
+          - not_null
+      - name: deferred_amount
+        description: >
+          The part deferred in EUR, under a tax loan agreement, an aid agreement, a restructuring or
+          solvency recovery plan or a settlement.
+        data_tests:
+          - not_null
+      - name: deferred_overdue_amount
+        description: The part of the deferred amount that is overdue, in EUR.
+        data_tests:
+          - not_null
+      - name: months_listed
+        description: >
+          How many snapshots in a row, up to this one, had the company on the list at some time in
+          their month (1 when it is new to it). A month it was on the list but not at the tick
+          counts: in March 2026 VMI deleted 11,877 companies' rows and inserted them again over
+          eleven days, across the tick. Counted from 2024-11, the first snapshot.
+        data_tests:
+          - not_null
+      - name: previous_arrears_amount
+        description: >
+          The arrears at the last tick before, within months_listed's run, that found the company
+          on the list (the snapshot before, unless it was off the list at that tick); empty for a
+          company new to the list.
+      - name: previous_overdue_amount
+        description: The overdue amount at that tick; empty for a company new to the list.
+      - name: arrears_change
+        description: How much the arrears grew since that tick (all of it for a company new to the list).
+      - name: overdue_change
+        description: How much the overdue amount grew since that tick (all of it for a company new to the list).
+      - name: record_number
+        description: VMI's id of the arrears record.
+      - name: record_created_on
+        description: >
+          When VMI created the arrears record: the day the company came onto the list, as a
+          company that pays off loses its record and gets a new one when it owes again. Records
+          from before the dataset's start show 2023-03-06, and March 2026's reload gave new
+          records, created then, to the companies it deleted and inserted again.
+      - name: record_updated_on
+        description: When VMI last updated the arrears record, which the amounts are as of.
+      - name: arrears_row_id
+        description: The list row (stg_vmi_tax_arrears__changes.arrears_row_id).
+      - name: list_changed_at
+        description: >
+          When the list last changed before the snapshot's tick (UTC), which the row is as of.
+
+unit_tests:
+  - name: stg_vmi_tax_arrears__changes_finds_each_rows_company
+    description: >
+      An upsert of a row the list holds and a delete name only the row: their company comes from
+      the row's insert. The upsert sets the municipality, which the insert left empty, and leaves
+      the overdue amount as it was, so it is empty in the change.
+    model: stg_vmi_tax_arrears__changes
+    given:
+      - input: ref('raw_vmi_tax_arrears__changes')
+        rows:
+          - {"_cid": "1", "_created": "2024-11-18T21:10:46.270456", "_op": "insert", "_id": "r1", "change": '{"_cid": 1, "id": "1670721", "sukurta": "2023-06-15", "atnaujinta": "2023-06-15", "ja_kodas": "301498934", "ja_pavadinimas": "UAB Hauzas", "sav_kodas": null, "nepriemoka": 4968.24, "pradelsta_nepriemoka": 4968.24, "atideta_nepriemoka": 0.0, "atideta_pradelsta": 0.0}', "_snapshot_month": "2024-11"}
+          - {"_cid": "5", "_created": "2025-07-17T04:53:11.141959", "_op": "upsert", "_id": "r1", "change": '{"_cid": 5, "atnaujinta": "2025-07-16", "sav_kodas": {"sav_kodas": 13}, "nepriemoka": 28044.65, "atideta_nepriemoka": 11744.73}', "_snapshot_month": "2025-07"}
+          - {"_cid": "6", "_created": "2025-08-01T06:05:34", "_op": "delete", "_id": "r1", "change": '{"_cid": 6}', "_snapshot_month": "2025-08"}
+    expect:
+      rows:
+        - {change_id: 1, operation: insert, company_code: 301498934, changed_fields: "[id, sukurta, atnaujinta, ja_kodas, ja_pavadinimas, sav_kodas, nepriemoka, pradelsta_nepriemoka, atideta_nepriemoka, atideta_pradelsta]", record_number: "1670721", record_created_on: "2023-06-15", municipality_code: null, arrears_amount: 4968.24, overdue_amount: 4968.24, deferred_amount: 0}
+        - {change_id: 5, operation: upsert, company_code: 301498934, changed_fields: "[atnaujinta, sav_kodas, nepriemoka, atideta_nepriemoka]", record_number: null, record_created_on: null, municipality_code: 13, arrears_amount: 28044.65, overdue_amount: null, deferred_amount: 11744.73}
+        - {change_id: 6, operation: delete, company_code: 301498934, changed_fields: "[]", record_number: null, record_created_on: null, municipality_code: null, arrears_amount: null, overdue_amount: null, deferred_amount: null}
+
+  - name: stg_vmi_tax_arrears__monthly_folds_the_changes_into_the_list_at_each_tick
+    description: >
+      Company 1's row is deleted and inserted again by December's reload, then stands unchanged
+      through January, and February's patch moves most of its arrears into a deferral and empties
+      its municipality. Company 2 pays off in December (its row deleted), is off the list all
+      January, and is back in February on a new row, added by an upsert, so its months on the list
+      start again. Company 3 holds two rows at November's tick, the older deleted in December, so
+      each tick has its newer record; its row is deleted in January and a new one inserted in
+      February, as March 2026's reload did: on the list in January's month, if not at its tick, so
+      its months run on and February compares with December.
+    model: stg_vmi_tax_arrears__monthly
+    given:
+      - input: ref('stg_vmi_tax_arrears__changes')
+        rows:
+          - {change_id: 1, changed_at: "2024-11-18 21:10:46", operation: insert, arrears_row_id: a1, company_code: 300000001, changed_fields: "[id, sukurta, ja_kodas, ja_pavadinimas, sav_kodas, nepriemoka, pradelsta_nepriemoka, atideta_nepriemoka, atideta_pradelsta]", record_number: "11", record_created_on: "2024-10-01", company_name: UAB Kava, municipality_code: null, arrears_amount: 100, overdue_amount: 100, deferred_amount: 0, deferred_overdue_amount: 0, snapshot_month: "2024-11"}
+          - {change_id: 2, changed_at: "2024-11-18 21:10:46", operation: insert, arrears_row_id: b1, company_code: 300000002, changed_fields: "[id, sukurta, ja_kodas, ja_pavadinimas, sav_kodas, nepriemoka, pradelsta_nepriemoka, atideta_nepriemoka, atideta_pradelsta]", record_number: "12", record_created_on: "2024-11-01", company_name: MB Kirpykla, municipality_code: 13, arrears_amount: 5, overdue_amount: 5, deferred_amount: 0, deferred_overdue_amount: 0, snapshot_month: "2024-11"}
+          - {change_id: 21, changed_at: "2024-11-18 21:10:46", operation: insert, arrears_row_id: c1, company_code: 300000003, changed_fields: "[id, sukurta, atnaujinta, ja_kodas, ja_pavadinimas, sav_kodas, nepriemoka, pradelsta_nepriemoka, atideta_nepriemoka, atideta_pradelsta]", record_number: "21", record_created_on: "2024-09-01", record_updated_on: "2024-10-01", company_name: UAB Autoservisas, municipality_code: 13, arrears_amount: 9, overdue_amount: 9, deferred_amount: 0, deferred_overdue_amount: 0, snapshot_month: "2024-11"}
+          - {change_id: 22, changed_at: "2024-11-19 15:15:06", operation: insert, arrears_row_id: c2, company_code: 300000003, changed_fields: "[id, sukurta, atnaujinta, ja_kodas, ja_pavadinimas, sav_kodas, nepriemoka, pradelsta_nepriemoka, atideta_nepriemoka, atideta_pradelsta]", record_number: "22", record_created_on: "2024-11-15", record_updated_on: "2024-11-15", company_name: UAB Autoservisas, municipality_code: 13, arrears_amount: 4, overdue_amount: 4, deferred_amount: 0, deferred_overdue_amount: 0, snapshot_month: "2024-11"}
+          - {change_id: 23, changed_at: "2024-12-02 09:00:00", operation: delete, arrears_row_id: c1, company_code: 300000003, changed_fields: "[]", snapshot_month: "2024-12"}
+          - {change_id: 3, changed_at: "2024-12-02 09:00:00", operation: delete, arrears_row_id: a1, company_code: 300000001, changed_fields: "[]", snapshot_month: "2024-12"}
+          - {change_id: 4, changed_at: "2024-12-02 09:00:01", operation: insert, arrears_row_id: a2, company_code: 300000001, changed_fields: "[id, sukurta, ja_kodas, ja_pavadinimas, sav_kodas, nepriemoka, pradelsta_nepriemoka, atideta_nepriemoka, atideta_pradelsta]", record_number: "11", record_created_on: "2024-10-01", company_name: UAB Kava, municipality_code: 13, arrears_amount: 150, overdue_amount: 150, deferred_amount: 0, deferred_overdue_amount: 0, snapshot_month: "2024-12"}
+          - {change_id: 6, changed_at: "2024-12-10 06:05:00", operation: delete, arrears_row_id: b1, company_code: 300000002, changed_fields: "[]", snapshot_month: "2024-12"}
+          - {change_id: 24, changed_at: "2025-01-05 06:05:00", operation: delete, arrears_row_id: c2, company_code: 300000003, changed_fields: "[]", snapshot_month: "2025-01"}
+          - {change_id: 25, changed_at: "2025-01-25 06:05:00", operation: insert, arrears_row_id: c3, company_code: 300000003, changed_fields: "[id, sukurta, atnaujinta, ja_kodas, ja_pavadinimas, sav_kodas, nepriemoka, pradelsta_nepriemoka, atideta_nepriemoka, atideta_pradelsta]", record_number: "23", record_created_on: "2025-01-25", record_updated_on: "2025-01-25", company_name: UAB Autoservisas, municipality_code: 13, arrears_amount: 6, overdue_amount: 6, deferred_amount: 0, deferred_overdue_amount: 0, snapshot_month: "2025-02"}
+          - {change_id: 8, changed_at: "2025-02-03 06:05:00", operation: upsert, arrears_row_id: b2, company_code: 300000002, changed_fields: "[id, sukurta, ja_kodas, ja_pavadinimas, sav_kodas, nepriemoka, pradelsta_nepriemoka, atideta_nepriemoka, atideta_pradelsta]", record_number: "13", record_created_on: "2025-02-02", company_name: MB Kirpykla, municipality_code: 13, arrears_amount: 7, overdue_amount: 7, deferred_amount: 0, deferred_overdue_amount: 0, snapshot_month: "2025-02"}
+          - {change_id: 9, changed_at: "2025-02-03 06:05:00", operation: patch, arrears_row_id: a2, company_code: 300000001, changed_fields: "[sav_kodas, nepriemoka, pradelsta_nepriemoka, atideta_nepriemoka]", municipality_code: null, arrears_amount: 120, overdue_amount: 20, deferred_amount: 100, snapshot_month: "2025-02"}
+    expect:
+      rows:
+        - {company_code: 300000001, snapshot_month: "2024-11", record_number: "11", municipality_code: null, arrears_amount: 100, overdue_amount: 100, deferred_amount: 0, months_listed: 1, previous_arrears_amount: null, arrears_change: 100, overdue_change: 100, arrears_row_id: a1}
+        - {company_code: 300000001, snapshot_month: "2024-12", record_number: "11", municipality_code: 13, arrears_amount: 150, overdue_amount: 150, deferred_amount: 0, months_listed: 2, previous_arrears_amount: 100, arrears_change: 50, overdue_change: 50, arrears_row_id: a2}
+        - {company_code: 300000001, snapshot_month: "2025-01", record_number: "11", municipality_code: 13, arrears_amount: 150, overdue_amount: 150, deferred_amount: 0, months_listed: 3, previous_arrears_amount: 150, arrears_change: 0, overdue_change: 0, arrears_row_id: a2}
+        - {company_code: 300000001, snapshot_month: "2025-02", record_number: "11", municipality_code: null, arrears_amount: 120, overdue_amount: 20, deferred_amount: 100, months_listed: 4, previous_arrears_amount: 150, arrears_change: -30, overdue_change: -130, arrears_row_id: a2}
+        - {company_code: 300000002, snapshot_month: "2024-11", record_number: "12", municipality_code: 13, arrears_amount: 5, overdue_amount: 5, deferred_amount: 0, months_listed: 1, previous_arrears_amount: null, arrears_change: 5, overdue_change: 5, arrears_row_id: b1}
+        - {company_code: 300000002, snapshot_month: "2025-02", record_number: "13", municipality_code: 13, arrears_amount: 7, overdue_amount: 7, deferred_amount: 0, months_listed: 1, previous_arrears_amount: null, arrears_change: 7, overdue_change: 7, arrears_row_id: b2}
+        - {company_code: 300000003, snapshot_month: "2024-11", record_number: "22", municipality_code: 13, arrears_amount: 4, overdue_amount: 4, deferred_amount: 0, months_listed: 1, previous_arrears_amount: null, arrears_change: 4, overdue_change: 4, arrears_row_id: c2}
+        - {company_code: 300000003, snapshot_month: "2024-12", record_number: "22", municipality_code: 13, arrears_amount: 4, overdue_amount: 4, deferred_amount: 0, months_listed: 2, previous_arrears_amount: 4, arrears_change: 0, overdue_change: 0, arrears_row_id: c2}
+        - {company_code: 300000003, snapshot_month: "2025-02", record_number: "23", municipality_code: 13, arrears_amount: 6, overdue_amount: 6, deferred_amount: 0, months_listed: 4, previous_arrears_amount: 4, arrears_change: 2, overdue_change: 2, arrears_row_id: c3}

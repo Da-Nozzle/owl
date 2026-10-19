@@ -1,0 +1,202 @@
+version: 2
+
+models:
+  - name: stg_jar_financial_statements__lines
+    description: >
+      One row per line of a financial statement filed with JAR, from the newest snapshot, which
+      holds every filing since 2015: the income statements' and balance sheets' lines, long. The
+      register publishes only a filing's summary lines (sales revenue, profit before tax, net
+      profit; non-current and current assets, equity, liabilities), never the full statement, so no
+      cost of sales, gross profit, income tax or staff costs. The register loaded the filings on
+      2025-05-27 (adding to them on 2025-09-04) and all of them again on 2026-03-17 and 18, without
+      deleting the first rows, so of 16.1 M rows 8.1 M lines are distinct: most published twice,
+      85,704 three times, always with the same amount. Each is kept once, with how many copies there
+      were. Amounts are whole euros, a loss or a deficit negative. A filing is the lines of one
+      entity, period and filing date; a restatement is a later filing for the same period. entity_id
+      is the filer's entity_id in stg_jar__entities, whose company_code is the JAR code.
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [entity_id, period_start, period_end, filed_on, template_id, standard_id, line_type_id]
+    data_tests:
+      - unique:
+          column_name: >
+            concat_ws('-', entity_id, period_start, period_end, filed_on, template_id,
+            standard_id, line_type_id)
+    columns:
+      - name: entity_id
+        description: The filer's entity_id in stg_jar__entities (juridinis_asmuo._id).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_jar__entities')
+                field: entity_id
+      - name: period_start
+        description: The first day of the period the statement covers (laikotarpis_nuo).
+        data_tests:
+          - not_null
+      - name: period_end
+        description: The last day of the period the statement covers (laikotarpis_iki).
+        data_tests:
+          - not_null
+      - name: fiscal_year
+        description: The year the period ends in.
+        data_tests:
+          - not_null
+      - name: filed_on
+        description: When the register received the filing (reg_date).
+        data_tests:
+          - not_null
+      - name: statement
+        description: income_statement (PelnoAtaskaita) or balance_sheet (BalansoAtaskaita).
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [income_statement, balance_sheet]
+      - name: template_id
+        description: >
+          The set of statements filed (FS0128 micro companies applying exemptions, FS0129 small
+          and micro companies, FS0130 medium and large, FS0322 and FS0422 small partnerships,
+          FS0323 non-profits, ...), each set in several versions by year.
+        data_tests:
+          - not_null
+      - name: template_name
+        description: The set's name, in Lithuanian.
+      - name: is_consolidated
+        description: >
+          A group's consolidated statements, filed beside its parent's own for the same period
+          (the set's name says konsoliduot-).
+        data_tests:
+          - not_null
+      - name: standard_id
+        description: The statement's form within the set (IST024 income statement, BST124 abridged balance sheet, ...).
+        data_tests:
+          - not_null
+      - name: standard_name
+        description: The form's name, in Lithuanian.
+      - name: line_type_id
+        description: >
+          The line, the same id for the same line in every form (ISLT00345 sales revenue,
+          BSLT00040 equity); financial_statement_measures maps each to a measure.
+        data_tests:
+          - not_null
+          # A line the register adds is in no company year until the seed maps it.
+          - relationships:
+              arguments:
+                to: ref('financial_statement_measures')
+                field: line_type_id
+              config:
+                severity: warn
+      - name: line_name
+        description: The line's name, in Lithuanian.
+      - name: amount
+        description: In euros; a loss or a deficit is negative.
+        data_tests:
+          - not_null
+      - name: published_copies
+        description: How many rows of the export held this line (1, or 2 for a filing loaded twice).
+      - name: snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch the line is from.
+        data_tests:
+          - not_null
+      - name: file_published_at
+        description: >
+          When the register last changed the dataset before the snapshot fetched it (its
+          Last-Modified, UTC): what the lines are as of.
+
+  - name: stg_jar_financial_statements__non_filers
+    description: >
+      One row per entity and fiscal year whose financial statements the entity had not filed when
+      the register published the list (fa_dokumentu_nepateike), from the newest snapshot. The
+      export lists an entity again for a year whenever its form or status changed between loads;
+      each year is kept once. About 7% of the years listed have statements in the lines all the
+      same, filed late.
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [entity_id, fiscal_year]
+    data_tests:
+      - unique:
+          column_name: "entity_id || '-' || fiscal_year"
+    columns:
+      - name: entity_id
+        description: The entity's entity_id in stg_jar__entities (juridinis_asmuo._id).
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_jar__entities')
+                field: entity_id
+      - name: fiscal_year
+        description: The fiscal year not filed (nepateikta_iki).
+        data_tests:
+          - not_null
+      - name: published_copies
+        description: How many rows of the export listed the entity for the year.
+      - name: snapshot_month
+        data_tests:
+          - not_null
+      - name: file_published_at
+        description: When the register last changed the list before the snapshot fetched it (UTC).
+
+  - name: stg_jar_financial_statements__late_filers
+    description: >
+      One row per entity late to file its statements for the last fiscal year
+      (fa_veluojantys), from the newest snapshot. The dataset names no year and was last
+      changed on 2025-09-03, so presumably it lists those late with 2024's statements then.
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [entity_id]
+    columns:
+      - name: entity_id
+        description: The entity's entity_id in stg_jar__entities (juridinis_asmuo._id).
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_jar__entities')
+                field: entity_id
+      - name: published_copies
+        description: How many rows of the export listed the entity.
+      - name: snapshot_month
+        data_tests:
+          - not_null
+      - name: file_published_at
+        description: When the register last changed the list before the snapshot fetched it (UTC).
+
+unit_tests:
+  - name: stg_jar_financial_statements__lines_keeps_each_line_of_the_newest_snapshot_once
+    description: >
+      The newest snapshot repeats a line under a new id, as the export does for filings loaded
+      twice: it is kept once, with two copies. An older snapshot's lines are not read, and a
+      consolidated set is marked.
+    model: stg_jar_financial_statements__lines
+    given:
+      - input: ref('raw_jar_financial_statements__income_statements')
+        rows:
+          - {"_snapshot_month": "2026-06", "_file_last_modified": "Wed, 18 Mar 2026 02:22:27 GMT", "_id": "l0", "juridinis_asmuo._id": "00000000-0000-4000-8000-000000000001", "template_id": "FS0129", "template_name": "Mažų ir labai mažų įmonių, netaikančių išimčių, finansinių ataskaitų rinkinys", "standard_id": "IST024", "standard_name": "PELNO (NUOSTOLIŲ) ATASKAITA", "line_type_id": "ISLT00019", "line_name": "GRYNASIS PELNAS (NUOSTOLIAI)", "reiksme": "-100", "laikotarpis_nuo": "2023-01-01", "laikotarpis_iki": "2023-12-31", "reg_date": "2024-05-10"}
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Wed, 18 Mar 2026 02:22:27 GMT", "_id": "l1", "juridinis_asmuo._id": "00000000-0000-4000-8000-000000000001", "template_id": "FS0129", "template_name": "Mažų ir labai mažų įmonių, netaikančių išimčių, finansinių ataskaitų rinkinys", "standard_id": "IST024", "standard_name": "PELNO (NUOSTOLIŲ) ATASKAITA", "line_type_id": "ISLT00019", "line_name": "GRYNASIS PELNAS (NUOSTOLIAI)", "reiksme": "-300", "laikotarpis_nuo": "2023-01-01", "laikotarpis_iki": "2023-12-31", "reg_date": "2024-05-10"}
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Wed, 18 Mar 2026 02:22:27 GMT", "_id": "l2", "juridinis_asmuo._id": "00000000-0000-4000-8000-000000000001", "template_id": "FS0129", "template_name": "Mažų ir labai mažų įmonių, netaikančių išimčių, finansinių ataskaitų rinkinys", "standard_id": "IST024", "standard_name": "PELNO (NUOSTOLIŲ) ATASKAITA", "line_type_id": "ISLT00019", "line_name": "GRYNASIS PELNAS (NUOSTOLIAI)", "reiksme": "-300", "laikotarpis_nuo": "2023-01-01", "laikotarpis_iki": "2023-12-31", "reg_date": "2024-05-10"}
+      - input: ref('raw_jar_financial_statements__balance_sheets')
+        rows:
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Tue, 17 Mar 2026 18:03:22 GMT", "_id": "b1", "juridinis_asmuo._id": "00000000-0000-4000-8000-000000000001", "template_id": "FS0231", "template_name": "Konsoliduotųjų finansinių ataskaitų rinkinys", "standard_id": "BST125", "standard_name": "KONSOLIDUOTASIS BALANSAS", "line_type_id": "BSLT00040", "line_name": "NUOSAVAS KAPITALAS", "reiksme": "1530", "laikotarpis_nuo": "2023-01-01", "laikotarpis_iki": "2023-12-31", "reg_date": "2024-05-10"}
+    expect:
+      rows:
+        - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2023, filed_on: "2024-05-10", statement: income_statement, is_consolidated: false, line_type_id: ISLT00019, amount: -300, published_copies: 2, snapshot_month: "2026-09", file_published_at: "2026-03-18 02:22:27"}
+        - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2023, filed_on: "2024-05-10", statement: balance_sheet, is_consolidated: true, line_type_id: BSLT00040, amount: 1530, published_copies: 1, snapshot_month: "2026-09", file_published_at: "2026-03-17 18:03:22"}
+
+  - name: stg_jar_financial_statements__non_filers_keeps_each_year_once
+    model: stg_jar_financial_statements__non_filers
+    given:
+      - input: ref('raw_jar_financial_statements__non_filers')
+        rows:
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Mon, 16 Mar 2026 12:23:28 GMT", "_id": "n1", "juridinis_asmuo._id": "00000000-0000-4000-8000-000000000001", "statusas._id": "s0", "nepateikta_iki": "2023"}
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Mon, 16 Mar 2026 12:23:28 GMT", "_id": "n2", "juridinis_asmuo._id": "00000000-0000-4000-8000-000000000001", "statusas._id": "s7", "nepateikta_iki": "2023"}
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Mon, 16 Mar 2026 12:23:28 GMT", "_id": "n3", "juridinis_asmuo._id": "00000000-0000-4000-8000-000000000001", "statusas._id": "s7", "nepateikta_iki": "2024"}
+    expect:
+      rows:
+        - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2023, published_copies: 2, snapshot_month: "2026-09", file_published_at: "2026-03-16 12:23:28"}
+        - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2024, published_copies: 1, snapshot_month: "2026-09", file_published_at: "2026-03-16 12:23:28"}

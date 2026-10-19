@@ -19,6 +19,7 @@ seats as (
 
 select
     entities.ja_kodas::bigint as company_code,
+    entities._id as entity_id,
     entities.ja_pavadinimas as company_name,
     legal_forms.kodas::integer as legal_form_code,
     legal_forms.pavadinimas as legal_form,

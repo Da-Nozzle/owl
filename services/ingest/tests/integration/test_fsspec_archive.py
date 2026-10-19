@@ -1,10 +1,14 @@
+import gzip
 import json
+from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 
+import httpx
 import pytest
 
 from owl_ingest.adapters.archive.fsspec_archive import FsspecRawArchive, open_fsspec_archive
+from owl_ingest.ports.downloader import OpenedDownload
 from owl_ingest.ports.raw_archive import SnapshotManifest, file_record
 from owl_testing.ingest import build_download
 
@@ -35,6 +39,103 @@ def test_a_saved_download_is_kept_byte_for_byte_with_its_fetch_beside_it(
     sidecar = json.loads(path.with_name("monthly-2026.csv.zip.meta.json").read_text())
     assert sidecar == file_record(download)
     assert sidecar["sha256"] == download.sha256
+
+
+def opened(chunks: Iterable[bytes]) -> OpenedDownload:
+    """A download of `chunks`, as `build_download` would record their body whole."""
+    recorded = build_download(last_modified="Sun, 18 Oct 2026 02:40:18 GMT")
+    return OpenedDownload(
+        url=recorded.url,
+        fetched_at=recorded.fetched_at,
+        last_modified=recorded.last_modified,
+        etag=recorded.etag,
+        chunks=iter(chunks),
+    )
+
+
+def broken_off(chunks: list[bytes]) -> Iterator[bytes]:
+    """`chunks`, then the connection dropped, as get.data.gov.lt drops a long export."""
+    yield from chunks
+    raise httpx.RemoteProtocolError("peer closed connection without sending complete message")
+
+
+def test_a_streamed_download_is_kept_as_it_arrived_and_recorded_as_a_saved_one(
+    archive: FsspecRawArchive, tmp_path: Path
+) -> None:
+    # Arrange
+    chunks = [b"_id,darbo_vietos_id\n", b"v1,DV-59-", b"996710668\n"]
+    whole = build_download(b"".join(chunks), last_modified="Sun, 18 Oct 2026 02:40:18 GMT")
+
+    # Act
+    streamed = archive.save_stream("uzt_vacancies", "2026-09", "Vieta.csv", opened(chunks))
+    archive.complete("uzt_vacancies", "2026-09", {"Vieta.csv": streamed}, COMPLETED_AT)
+
+    # Assert
+    path = tmp_path / "uzt_vacancies" / "2026-09" / "Vieta.csv"
+    assert path.read_bytes() == whole.body
+    sidecar = json.loads(path.with_name("Vieta.csv.meta.json").read_text())
+    assert sidecar == file_record(streamed) == file_record(whole)
+    assert archive.manifest("uzt_vacancies", "2026-09").files == {"Vieta.csv": sidecar}
+
+
+def test_a_streamed_gz_file_is_compressed_and_recorded_as_sent(
+    archive: FsspecRawArchive, tmp_path: Path
+) -> None:
+    # Arrange
+    chunks = [b"_id,kodas\n", b"r1,310\n" * 1000]
+    whole = build_download(b"".join(chunks), last_modified="Sun, 18 Oct 2026 02:40:18 GMT")
+
+    # Act
+    streamed = archive.save_stream("jar", "2026-09", "Finansai.csv.gz", opened(chunks))
+
+    # Assert
+    stored = (tmp_path / "jar" / "2026-09" / "Finansai.csv.gz").read_bytes()
+    assert gzip.decompress(stored) == whole.body
+    assert len(stored) < whole.size
+    assert file_record(streamed) == file_record(whole)
+
+
+def test_a_stream_saved_again_starts_its_file_over(
+    archive: FsspecRawArchive, tmp_path: Path
+) -> None:
+    # Arrange
+    archive.save_stream("jar", "2026-09", "Finansai.csv.gz", opened([b"_id\n", b"r1\n" * 50]))
+
+    # Act
+    archive.save_stream("jar", "2026-09", "Finansai.csv.gz", opened([b"_id\nr2\n"]))
+
+    # Assert
+    stored = (tmp_path / "jar" / "2026-09" / "Finansai.csv.gz").read_bytes()
+    assert gzip.decompress(stored) == b"_id\nr2\n"
+
+
+def test_a_stream_is_moved_into_place_only_once_it_arrived_whole(
+    archive: FsspecRawArchive, tmp_path: Path
+) -> None:
+    # Act
+    archive.save_stream("uzt_vacancies", "2026-09", "Vieta.csv", opened([b"_id\n", b"v1\n"]))
+
+    # Assert
+    folder = tmp_path / "uzt_vacancies" / "2026-09"
+    assert sorted(path.name for path in folder.iterdir()) == ["Vieta.csv", "Vieta.csv.meta.json"]
+
+
+def test_a_stream_that_broke_off_leaves_the_file_it_would_have_replaced(
+    archive: FsspecRawArchive, tmp_path: Path
+) -> None:
+    # Arrange
+    complete = archive.save_stream("jar", "2026-09", "Finansai.csv.gz", opened([b"_id\nr1\n"]))
+    folder = tmp_path / "jar" / "2026-09"
+    before = {path.name: path.read_bytes() for path in folder.iterdir()}
+
+    # Act
+    with pytest.raises(httpx.RemoteProtocolError):
+        archive.save_stream("jar", "2026-09", "Finansai.csv.gz", opened(broken_off([b"_id\n"])))
+
+    # Assert
+    assert {path.name: path.read_bytes() for path in folder.iterdir()} == before
+    assert gzip.decompress(before["Finansai.csv.gz"]) == b"_id\nr1\n"
+    assert json.loads(before["Finansai.csv.gz.meta.json"]) == file_record(complete)
 
 
 def test_the_request_a_file_answered_is_kept_beside_it_and_not_in_the_manifest(

@@ -8,8 +8,9 @@ from owl_ingest.adapters.archive.fsspec_archive import FsspecRawArchive, open_fs
 from owl_ingest.adapters.ducklake.search_areas import DuckLakeSearchAreaReader
 from owl_ingest.adapters.http.downloader import HttpDownloader
 from owl_ingest.adapters.http.places_api import HttpPlacesApi
+from owl_ingest.adapters.http.streaming_downloader import HttpStreamingDownloader
 from owl_ingest.adapters.s3.configuration import s3fs_options
-from owl_ingest.ports.downloader import Downloader
+from owl_ingest.ports.downloader import Downloader, StreamingDownloader
 from owl_ingest.ports.places_api import PlacesApi
 from owl_ingest.ports.search_areas import SearchAreaReader
 from owl_ingest.settings import PipelineMode, PipelineSettings, raw_archive_path
@@ -24,11 +25,16 @@ class LiveAdapters:
     downloader: Callable[[str], Downloader]
     places_api: Callable[[], PlacesApi]
     search_areas: SearchAreaReader
+    # For a file too big to hold in memory, by its HTTP client's table too.
+    streaming_downloader: Callable[[str], StreamingDownloader]
 
 
 def build_live_adapters(config: Configuration, user_agent: str, lake: LakeSettings) -> LiveAdapters:
     def downloader(key: str) -> Downloader:
         return HttpDownloader(build_http_client(user_agent, load_http_client_settings(config, key)))
+
+    def streaming_downloader(key: str) -> StreamingDownloader:
+        return HttpStreamingDownloader(user_agent, load_http_client_settings(config, key))
 
     places_client = build_http_client(
         user_agent, load_http_client_settings(config, "google_places.http")
@@ -48,6 +54,7 @@ def build_live_adapters(config: Configuration, user_agent: str, lake: LakeSettin
         search_areas=DuckLakeSearchAreaReader(
             lake, config.get_str("transform.duckdb_memory_limit")
         ),
+        streaming_downloader=streaming_downloader,
     )
 
 

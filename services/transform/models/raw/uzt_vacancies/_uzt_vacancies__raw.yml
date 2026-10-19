@@ -1,0 +1,42 @@
+version: 2
+
+sources:
+  - name: archive
+    tables:
+      - name: uzt_vacancies
+        description: >
+          The Employment Service's (Užimtumo tarnyba) vacancies on get.data.gov.lt
+          (datasets/gov/uzt/ldv/Vieta), fetched in pages of 400,000 rows in the model's page order
+          (darbo_vietos_id) and stored as Vieta.csv.gz, Vieta.2.csv.gz, ..., compressed as they were
+          written (a sidecar's size and SHA-256 are of the CSV as sent; snapshots up to 2026-09 are
+          one whole export, Vieta.csv.gz, without _type and _page.next): one row per vacancy
+          registered with the service since 1990, by legal entities, farmers and people working
+          under a business certificate or on their own account, each as it stands at the export
+          (status, validity, pay, profession, workplace, employer). The employer's contact person,
+          phone numbers and e-mail address are left out by the export's select(), so no snapshot
+          holds them. Comma-separated, double-quoted UTF-8 with no BOM; multi-line descriptions are
+          quoted. Changed every night at about 02:00 UTC; fetched monthly.
+
+models:
+  - name: raw_uzt_vacancies__vacancies
+    description: >
+      Every row of the Vieta pages as each snapshot fetched them, under their published header, as
+      text: one row per snapshot and vacancy, a vacancy repeated in each snapshot as it stood then.
+      Built from nothing, it reads every complete snapshot in the archive. darbo_vietos_id is the
+      Employment Service's id of the vacancy; _id is the portal's row id, which changes when the
+      dataset is loaded again (it was, whole, in January 2026).
+    columns:
+      - name: _source_file
+        description: The archived file the row was read from.
+      - name: _snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch this row is from, from the archive path.
+      - name: _file_url
+        description: Where the file was downloaded from, its select() naming the columns fetched.
+      - name: _file_fetched_at
+        description: When the file was downloaded (ISO 8601, UTC).
+      - name: _file_last_modified
+        description: >
+          The export's Last-Modified header as the portal sent it (HTTP date): when the newest
+          change it holds was made.
+      - name: _file_sha256
+        description: The downloaded file's SHA-256.

@@ -70,3 +70,71 @@ seeds:
           - accepted_values:
               arguments:
                 values: [price, fetch]
+
+  - name: profession_categories
+    description: >
+      The leads' categories by profession, for the Employment Service's vacancies: the
+      occupations whose ads say most about a café, restaurant, hair or beauty salon or car
+      repair shop, each as a prefix of the vacancy's six-digit profession code (Lietuvos
+      profesijų klasifikatorius, built on ISCO-08: four digits are an ISCO unit group, the last
+      two the Lithuanian profession within it). A whole unit group where all of it is the
+      occupation (5120 cooks, 5131 waiters, 5141 hairdressers, 7231 motor vehicle mechanics),
+      single professions where the group mixes others in (513202 barista beside 513201
+      bartender; 5142's beauticians, manicurists and make-up artists but not its masseurs, sauna
+      or solarium attendants). Professions outside it are no category.
+    data_tests:
+      - unique:
+          column_name: profession_code_prefix
+    columns:
+      - name: category
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('activity_categories')
+                field: category
+      - name: occupation
+        description: The occupation the prefix is, in English (cook, waiter, car_mechanic, ...).
+        data_tests:
+          - not_null
+      - name: profession_code_prefix
+        description: >
+          The first four or six digits of a profession code; no prefix starts another
+          (profession_categories_do_not_overlap), so a profession has one category at most.
+        data_tests:
+          - not_null
+
+  - name: financial_statement_measures
+    description: >
+      The canonical measure of each line JAR's financial statements publish
+      (stg_jar_financial_statements__lines), by its line_type_id, which names one line in every
+      form that has it: sales revenue (PARDAVIMO PAJAMOS) is ISLT00345 in the short and the small
+      companies' and partnerships' income statements (IST023, IST024, IST118, IST303) and
+      ISLT00001 in the others. A non-profit's results (VEIKLOS REZULTATAS) are its profit, but
+      its income (PAJAMOS, grants included) is total_income, not revenue: since 2024 its forms
+      (FS05xx, FS06xx) publish its sales revenue too, a part of it. The register publishes only
+      these 24 lines (2026-10-18). A line the register adds warns in staging until it is mapped
+      here.
+    columns:
+      - name: line_type_id
+        data_tests:
+          - unique
+          - not_null
+      - name: line_name
+        description: As the register names the line, for reading.
+      - name: measure
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - revenue
+                  - total_income
+                  - profit_before_tax
+                  - net_profit
+                  - non_current_assets
+                  - tangible_non_current_assets
+                  - current_assets
+                  - total_assets
+                  - equity
+                  - liabilities

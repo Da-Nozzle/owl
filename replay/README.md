@@ -68,4 +68,52 @@ found: 81 pages kept byte for byte as the API sent them, each sidecar with the r
 holding 803 listings (one search has a page more than its plan, from before the fetch stopped at
 the planned pages). The pages were renamed the same day with their search area's code
 (`places-13-...`, Vilnius), as pages are named since areas were added; the manifest's names with them. Google's terms allow only place ids to be stored indefinitely, so this sample is
-not to be published as it is.
+not to be published as it is (see DECISIONS.md, Google Places source).
+
+## vmi_tax_arrears/2024-11 to vmi_tax_arrears/2026-09
+
+The changelog of VMI's list of companies with tax arrears (`vmi/ja_nepriemokos/NepriemokosSuma`),
+one snapshot a month from its first change (2024-11-18) to the 2026-09 tick, as the
+`vmi_tax_arrears` source fetched them on 2026-10-18 (each the changes made from the 21st, 06:00
+Vilnius time, of the month before). They are cut down to every change of the list rows of the 251
+companies of `jar/2026-09` whose code is divisible by 8: 13,483 changes of 2,682 rows (all 1,847
+companies' would be 29 MB). A row's company is known from its insert, so a row is kept whole or not
+at all. Its staging has 184 companies on the list at some tick, 94 at 2026-09's. Pages with none of
+their changes are left out, from the manifests too. The kept pages' entries are as the portal sent
+them, re-serialized (`{"_data":[...]}`, compact, UTF-8) after the cut. Sidecars and manifests
+record the full download.
+
+## vmi_taxes_paid/2025-06 to vmi_taxes_paid/2026-09
+
+The changelog of the taxes legal entities paid to VMI (`vmi/ja_mokesciai/Moketojas/:changes`),
+one snapshot a month as the `vmi_taxes_paid` source's own fetch took them on 2026-10-18 (each the
+changes made from 06:00 Vilnius time on the 21st of the month before), cut down to one in eight of
+the sample's companies: the 251 entities in `jar/2026-09` whose code is divisible by 8, and every
+change of the rows that refer to one of them (`mm_kodas`), their inserts, patches and deletes.
+7,093 changes in 208 pages, 2.9 MB; 2025-10 has no load, so it has a manifest and no page. 244 of
+the 251 paid something in some month, 3,777 rows of `stg_vmi_taxes_paid__monthly` from 2025-04 to
+2026-08. Pages are re-serialized after the cut (`{"_data":[...]}`, compact, UTF-8), as
+`vmi_daily_changes`' are; each sidecar and manifest keeps the full page's URL, fetch time,
+Last-Modified and ETag, with the size and SHA-256 of the file kept here.
+
+## uzt_vacancies/2026-09
+
+The Employment Service's vacancy export (`uzt/ldv/Vieta`, `:format/csv` with the columns the
+source selects) as fetched on 2026-10-18 at 21:28 UTC by the `uzt_vacancies` source's own fetch,
+cut down to the vacancies of one in eight of `jar/2026-09`'s companies (the 251 whose code is
+divisible by 8, as the VMI tax samples are cut): 4,559 vacancies since 1990 of 160 employers,
+3,357 of them (of 145 companies) posted since 2015. Records are kept byte for byte as published
+(multi-line descriptions included), header included, and gzipped as the archive stores the export (530 KB, 3.1 MB as CSV).
+The sidecar and manifest record the URL, fetch time, Last-Modified and ETag of the full download,
+and the size and SHA-256 of the CSV kept here, before compression.
+
+## jar_financial_statements/2026-09
+
+The register's financial statements (`rc/jar/.../:format/csv`) as the live snapshot `2026-09`
+holds them, cut down to the 251 entities in `jar/2026-09` whose code is divisible by 8 (one in
+eight of the sample's companies), lines byte for byte as published, header included: the income
+statements' 13 pages as fetched page by page on 2026-10-19 at 05:55–06:32 UTC (9,079 rows), and
+the balance sheets (13,496 rows), the non-filers (70) and the late filers (12) as exported whole
+on 2026-10-18 at 19:25–19:29 UTC. Each file is kept gzip-compressed, as in the live archive; the
+sidecars and manifest are recorded as for `jar/2026-09`, the size and SHA-256 being of the file
+kept here before compression. 225 of the 251 companies filed statements.

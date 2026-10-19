@@ -93,6 +93,26 @@ backoff_seconds = 1
 max_wait_seconds = 300
 min_interval_seconds = 0
 
+[jar_financial_statements]
+# {dataset} is a dataset's path below rc/jar/, such as pelno_ataskaitos/PelnoAtaskaita.
+download_url_template = "https://get.data.gov.lt/datasets/gov/rc/jar/{dataset}/:format/csv"
+# Loaded in JAR's batches every three to six months (2025-05, 2025-09, 2026-03), each export the
+# whole history, about 7 GB: quarterly on the 21st, with JAR's fetch of the month.
+snapshot_schedule = "0 6 21 3,6,9,12 *"
+# The portal drops a response after about 25 minutes and sends a page of rows at 0.6 to 1.6 MB/s:
+# 500,000 rows are about 220 MB, two to seven minutes: 35 pages and 4 counts in all.
+page_rows = 500000
+# The fetch's dagster/max_runtime: 7 GB at the slowest 0.6 MB/s seen take over three hours.
+fetch_max_runtime_seconds = 14400
+
+[jar_financial_statements.http]
+# Pages fetched whole, as sodra.http's files; one silent for 300 s midway is asked for again.
+timeout_seconds = 300
+attempts = 5
+backoff_seconds = 1
+max_wait_seconds = 300
+min_interval_seconds = 1
+
 [address_register]
 # {dataset} is a dataset's path below rc/ar/, such as pastatas/Pastatas.
 download_url_template = "https://get.data.gov.lt/datasets/gov/rc/ar/{dataset}/:format/csv"
@@ -143,3 +163,81 @@ attempts = 5
 backoff_seconds = 1
 max_wait_seconds = 300
 min_interval_seconds = 0
+
+[vmi_tax_arrears]
+# VMI's list of companies with tax arrears (Juridinių asmenų nepriemokos sumos), one row per
+# company, reloaded every morning at about 06:00 UTC. Fetched through its changelog, which holds
+# every change since the list's first load on 2024-11-18.
+model_url = "https://get.data.gov.lt/datasets/gov/vmi/ja_nepriemokos/NepriemokosSuma"
+# Monthly on the 21st with Sodra and JAR: a snapshot holds the month's changes up to its tick, so
+# each month's leads see the list as it stood that morning. Daily would work as well: the list
+# changes most mornings and the changelog keeps every change, so a daily cadence (about 700
+# partitions back to 2024-11) costs requests, not data.
+snapshot_schedule = "0 6 21 * *"
+# The first month partitioned: its window (from 2024-10-21) holds the changelog's first change,
+# so the snapshots from here on hold the whole list's history.
+first_snapshot = "2024-11"
+# Changes per changelog request: about 6 MB of JSON. A month is about 160,000 changes.
+changelog_page_size = 20000
+
+[vmi_tax_arrears.http]
+# Changelog reads, as vmi.daily_changes_http: one silent for 30 s has hung, and the portal stops
+# answering changelog reads for a while after a burst, hence one a second.
+timeout_seconds = 30
+attempts = 5
+backoff_seconds = 1
+max_wait_seconds = 300
+min_interval_seconds = 1
+
+[vmi_taxes_paid]
+# Taxes paid by legal entities (vmi/ja_mokesciai), read through its model's changelog: each
+# monthly load inserts every company's year-to-date sum for the current year as a new row and
+# deletes the previous load's.
+model_url = "https://get.data.gov.lt/datasets/gov/vmi/ja_mokesciai/Moketojas"
+# Loads land on no fixed day, one to three weeks after VMI's own date, sometimes two in a month.
+# A snapshot holds the changes made in the month before its tick, so each month's leads see
+# every load made by the 21st.
+snapshot_schedule = "0 6 21 * *"
+# The first month partitioned: its changes start on 2025-05-21. Until 2025-04-23 the changelog
+# is 35 M patches pointing mm_kodas at JAR instead of the VMI register, too many to read, and
+# the loads after it refer to JAR's entities.
+first_snapshot = "2025-06"
+# Changes per changelog request: a load's inserts are about 500 bytes of JSON each, so a page is
+# about 10 MB, which raw reads with a 16 MB buffer, and a load about 13 requests.
+changelog_page_size = 20000
+
+[vmi_taxes_paid.http]
+# Changelog pages of up to 20,000 changes, which the portal may take a while to start sending.
+# The portal stops answering changelog reads for a while after a burst, hence one a second.
+timeout_seconds = 60
+attempts = 5
+backoff_seconds = 1
+max_wait_seconds = 300
+min_interval_seconds = 1
+
+[uzt_vacancies]
+# The Employment Service's vacancies (laisvos darbo vietos): one row per vacancy since 1990.
+vacancies_url = "https://get.data.gov.lt/datasets/gov/uzt/ldv/Vieta"
+# Changed every night at about 02:00 UTC, but read monthly: a snapshot is the whole export (about
+# 2.3 GB), and each holds every vacancy as it stands, history included. On the 21st with Sodra.
+snapshot_schedule = "0 6 21 * *"
+# The portal's cache may send a count or a page from before the newest change while it makes a
+# new one: the fetch is asked for again from its count after this wait, up to export_attempts
+# times in all.
+export_attempts = 6
+export_wait_seconds = 300
+# The portal drops a response after about 25 minutes and sends at 0.6 to 1.6 MB/s: 400,000 rows
+# are about 290 MB, three to eight minutes, so 3.2 M vacancies are nine pages.
+page_rows = 400000
+# The fetch's dagster/max_runtime: 2.3 GB at the slowest 0.6 MB/s seen take over an hour, and a
+# stale count or page waits export_wait_seconds before the fetch is asked for again.
+fetch_max_runtime_seconds = 7200
+
+[uzt_vacancies.http]
+# Pages fetched whole, as jar_financial_statements.http; each is streamed into the archive, and
+# one that drops midway is asked for again from its beginning.
+timeout_seconds = 300
+attempts = 5
+backoff_seconds = 1
+max_wait_seconds = 300
+min_interval_seconds = 1

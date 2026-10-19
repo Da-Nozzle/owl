@@ -9,13 +9,17 @@
 ) }}
 
 with entries as (
+    {#- A page holds at most 20 places; the largest of 2026-09's 910, as Google sends them
+        (indented), was 90,218 bytes. 1 MiB leaves room for fields added to the mask and keeps
+        eight threads to about 16 MB, where the default 64 MB asked for about 1 GB. #}
     {{ archived_json_entries(
         'google_places',
         'places-*.json',
         'raw_google_places__places',
         '_snapshot_month',
         list_key='places',
-        with_request=true
+        with_request=true,
+        maximum_object_size=1048576
     ) }}
 )
 

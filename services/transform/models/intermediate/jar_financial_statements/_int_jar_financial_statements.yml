@@ -1,0 +1,189 @@
+version: 2
+
+models:
+  - name: int_jar_financial_statements__company_years
+    description: >
+      One row per company and fiscal year it filed statements for, with the canonical measures
+      (financial_statement_measures) of the period ending last in the year, as last filed: a
+      restatement (a later filing for the same period) replaces the one before, and of two
+      periods ending in one year (a moved year end, 0.06% of years) the later counts. The export
+      holds restatements almost only of 2024 (336 of its 150,549 years; 9 of all earlier years).
+      A group's consolidated statements are left out. The register publishes summary lines only:
+      there is no cost of sales, gross profit or staff cost, income tax is what profit before tax
+      less net profit leaves, and total assets are reported only by non-profits and some small
+      partnerships, else non-current plus current assets (prepayments and accrued income, which
+      the register does not publish, are left out). Fiscal years 2015 to 2024 are complete; the
+      register had loaded 11,150 of 2025's statements by 2026-03 (2024 has 150,549).
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [entity_id, fiscal_year]
+    data_tests:
+      - unique:
+          column_name: "entity_id || '-' || fiscal_year"
+    columns:
+      - name: company_code
+        description: JAR code, from stg_jar__entities' newest snapshot, which keeps deregistered entities.
+        data_tests:
+          - not_null
+      - name: entity_id
+        description: The entity's entity_id in stg_jar__entities.
+        data_tests:
+          - not_null
+      - name: fiscal_year
+        description: The year the period ends in.
+        data_tests:
+          - not_null
+      - name: period_start
+        data_tests:
+          - not_null
+      - name: period_end
+        data_tests:
+          - not_null
+      - name: filed_on
+        description: When the register received the filing the year's measures are from.
+        data_tests:
+          - not_null
+      - name: template_id
+        description: The set of statements filed (stg_jar_financial_statements__lines.template_id).
+        data_tests:
+          - not_null
+      - name: template_name
+      - name: revenue
+        description: >
+          Sales revenue (pardavimo pajamos), in euros. Empty where the filing has no income
+          statement, and for a non-profit before 2024, whose forms publish only total_income.
+      - name: total_income
+        description: A non-profit's income (pajamos), grants included, in euros.
+      - name: profit_before_tax
+        description: In euros, a loss negative.
+      - name: income_tax
+        description: Profit before tax less net profit, in euros; deferred tax included.
+      - name: net_profit
+        description: Net profit, a loss negative, in euros (a non-profit's net result).
+      - name: non_current_assets
+      - name: tangible_non_current_assets
+        description: Only one rare form reports it.
+      - name: current_assets
+      - name: total_assets
+        description: As reported, else non_current_assets + current_assets.
+      - name: is_total_assets_reported
+      - name: equity
+        description: Equity, negative when liabilities exceed assets.
+      - name: liabilities
+        description: Amounts payable and other liabilities, as the form names them.
+      - name: is_loss
+        description: Net profit below zero; empty without an income statement.
+      - name: consecutive_loss_years
+        description: >
+          Loss years in a row up to this one, this one included (0 unless a loss year). A year with
+          no statements, or with a profit, ends a run.
+        data_tests:
+          - not_null
+      - name: has_negative_equity
+      - name: consecutive_negative_equity_years
+        description: As consecutive_loss_years, for years ending with negative equity.
+        data_tests:
+          - not_null
+      - name: is_restated
+        description: The period has more than one filing, the latest of which is used.
+      - name: filings_in_year
+        description: Filings for periods ending in the year, restatements included.
+      - name: has_conflicting_lines
+        description: >
+          Two lines of the filing map to one measure with different amounts; the larger is kept.
+          Never true on 2026-09's snapshot.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [false]
+              config:
+                severity: warn
+
+  - name: int_jar_financial_statements__filing_compliance
+    description: >
+      One row per company that filed statements, or is listed as not having filed a year or as
+      late to file: the fiscal years filed, the years not filed, and whether it is on the late
+      filers' list (as of 2025-09-03, for 2024).
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [entity_id]
+    columns:
+      - name: company_code
+        description: JAR code, from stg_jar__entities' newest snapshot.
+        data_tests:
+          - unique
+          - not_null
+      - name: entity_id
+        data_tests:
+          - unique
+          - not_null
+      - name: first_fiscal_year_filed
+      - name: last_fiscal_year_filed
+      - name: fiscal_years_filed
+        description: Fiscal years with statements, not necessarily in a row.
+      - name: fiscal_years_not_filed
+        description: The years the register lists as not filed, oldest first; some were filed later.
+      - name: last_fiscal_year_not_filed
+      - name: is_late_filer
+        data_tests:
+          - not_null
+
+unit_tests:
+  - name: int_jar_financial_statements__company_years_takes_each_years_last_filing
+    description: >
+      2022 is filed and then restated: the restatement's measures count. 2023 has the company's
+      own statements and its group's consolidated ones, whose equity differs: the group's are left
+      out. Income tax and total assets are derived. Losses in 2021 to 2023 make a run of three,
+      broken in 2025 by the missing 2024.
+    model: int_jar_financial_statements__company_years
+    given:
+      - input: ref('financial_statement_measures')
+        rows:
+          - {line_type_id: ISLT00345, measure: revenue}
+          - {line_type_id: ISLT00017, measure: profit_before_tax}
+          - {line_type_id: ISLT00019, measure: net_profit}
+          - {line_type_id: BSLT00001, measure: non_current_assets}
+          - {line_type_id: BSLT00021, measure: current_assets}
+          - {line_type_id: BSLT00040, measure: equity}
+      - input: ref('stg_jar__entities')
+        rows:
+          - {entity_id: 00000000-0000-4000-8000-000000000001, company_code: 110607882, snapshot_month: "2026-09"}
+      - input: ref('stg_jar_financial_statements__lines')
+        rows:
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2021, period_start: "2021-01-01", period_end: "2021-12-31", filed_on: "2022-05-02", template_id: FS0129, is_consolidated: false, line_type_id: ISLT00019, amount: -10}
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2022, period_start: "2022-01-01", period_end: "2022-12-31", filed_on: "2023-05-02", template_id: FS0129, is_consolidated: false, line_type_id: ISLT00019, amount: 50}
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2022, period_start: "2022-01-01", period_end: "2022-12-31", filed_on: "2023-09-14", template_id: FS0129, is_consolidated: false, line_type_id: ISLT00019, amount: -40}
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2023, period_start: "2023-01-01", period_end: "2023-12-31", filed_on: "2024-05-10", template_id: FS0129, is_consolidated: false, line_type_id: ISLT00345, amount: 1000}
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2023, period_start: "2023-01-01", period_end: "2023-12-31", filed_on: "2024-05-10", template_id: FS0129, is_consolidated: false, line_type_id: ISLT00017, amount: -70}
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2023, period_start: "2023-01-01", period_end: "2023-12-31", filed_on: "2024-05-10", template_id: FS0129, is_consolidated: false, line_type_id: ISLT00019, amount: -75}
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2023, period_start: "2023-01-01", period_end: "2023-12-31", filed_on: "2024-05-10", template_id: FS0129, is_consolidated: false, line_type_id: BSLT00001, amount: 200}
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2023, period_start: "2023-01-01", period_end: "2023-12-31", filed_on: "2024-05-10", template_id: FS0129, is_consolidated: false, line_type_id: BSLT00021, amount: 300}
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2023, period_start: "2023-01-01", period_end: "2023-12-31", filed_on: "2024-05-10", template_id: FS0129, is_consolidated: false, line_type_id: BSLT00040, amount: -20}
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2023, period_start: "2023-01-01", period_end: "2023-12-31", filed_on: "2024-05-10", template_id: FS0131, is_consolidated: true, line_type_id: BSLT00040, amount: 900}
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2025, period_start: "2025-01-01", period_end: "2025-12-31", filed_on: "2026-02-20", template_id: FS0129, is_consolidated: false, line_type_id: ISLT00019, amount: -5}
+    expect:
+      rows:
+        - {company_code: 110607882, fiscal_year: 2021, filed_on: "2022-05-02", revenue: null, income_tax: null, net_profit: -10, total_assets: null, equity: null, is_loss: true, consecutive_loss_years: 1, has_negative_equity: null, consecutive_negative_equity_years: 0, is_restated: false, filings_in_year: 1, has_conflicting_lines: false}
+        - {company_code: 110607882, fiscal_year: 2022, filed_on: "2023-09-14", revenue: null, income_tax: null, net_profit: -40, total_assets: null, equity: null, is_loss: true, consecutive_loss_years: 2, has_negative_equity: null, consecutive_negative_equity_years: 0, is_restated: true, filings_in_year: 2, has_conflicting_lines: false}
+        - {company_code: 110607882, fiscal_year: 2023, filed_on: "2024-05-10", revenue: 1000, income_tax: 5, net_profit: -75, total_assets: 500, equity: -20, is_loss: true, consecutive_loss_years: 3, has_negative_equity: true, consecutive_negative_equity_years: 1, is_restated: false, filings_in_year: 1, has_conflicting_lines: false}
+        - {company_code: 110607882, fiscal_year: 2025, filed_on: "2026-02-20", revenue: null, income_tax: null, net_profit: -5, total_assets: null, equity: null, is_loss: true, consecutive_loss_years: 1, has_negative_equity: null, consecutive_negative_equity_years: 0, is_restated: false, filings_in_year: 1, has_conflicting_lines: false}
+
+  - name: int_jar_financial_statements__company_years_counts_the_later_of_two_periods_in_a_year
+    description: A company that moved its year end files a short period ending in the same year.
+    model: int_jar_financial_statements__company_years
+    given:
+      - input: ref('financial_statement_measures')
+        rows:
+          - {line_type_id: ISLT00019, measure: net_profit}
+      - input: ref('stg_jar__entities')
+        rows:
+          - {entity_id: 00000000-0000-4000-8000-000000000001, company_code: 110607882, snapshot_month: "2026-09"}
+      - input: ref('stg_jar_financial_statements__lines')
+        rows:
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2023, period_start: "2022-07-01", period_end: "2023-06-30", filed_on: "2023-10-02", template_id: FS0129, is_consolidated: false, line_type_id: ISLT00019, amount: 10}
+          - {entity_id: 00000000-0000-4000-8000-000000000001, fiscal_year: 2023, period_start: "2023-07-01", period_end: "2023-12-31", filed_on: "2024-04-30", template_id: FS0129, is_consolidated: false, line_type_id: ISLT00019, amount: 20}
+    expect:
+      rows:
+        - {fiscal_year: 2023, period_start: "2023-07-01", net_profit: 20, is_restated: false, filings_in_year: 2}

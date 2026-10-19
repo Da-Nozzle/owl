@@ -36,8 +36,14 @@ from owl_dagster_orchestration.sources.adapters import (
 from owl_dagster_orchestration.sources.address_register import address_register_source
 from owl_dagster_orchestration.sources.google_places import google_places_source
 from owl_dagster_orchestration.sources.jar import jar_source
+from owl_dagster_orchestration.sources.jar_financial_statements import (
+    jar_financial_statements_source,
+)
 from owl_dagster_orchestration.sources.sodra import sodra_source
+from owl_dagster_orchestration.sources.uzt_vacancies import uzt_vacancies_source
 from owl_dagster_orchestration.sources.vmi import vmi_sources
+from owl_dagster_orchestration.sources.vmi_tax_arrears import vmi_tax_arrears_source
+from owl_dagster_orchestration.sources.vmi_taxes_paid import vmi_taxes_paid_source
 from owl_ingest.ports.raw_archive import RawArchive
 from owl_ingest.settings import PipelineMode, load_pipeline_settings
 from owl_lake.settings import load_lake_settings
@@ -104,7 +110,11 @@ def archived_sources(
     return [
         sodra_source(config, timezone, archive, live),
         jar_source(config, timezone, archive, live),
+        jar_financial_statements_source(config, timezone, archive, live),
         address_register_source(config, timezone, archive, live),
         *vmi_sources(config, timezone, archive, live),
+        vmi_tax_arrears_source(config, timezone, archive, live),
+        vmi_taxes_paid_source(config, timezone, archive, live),
         google_places_source(config, timezone, archive, live),
+        uzt_vacancies_source(config, timezone, archive, live),
     ]

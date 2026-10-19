@@ -12,17 +12,27 @@ from owl_ingest.settings import PipelineMode, load_pipeline_settings
 from owl_ingest.sources.address_register.settings import load_address_register_settings
 from owl_ingest.sources.google_places.settings import load_google_places_settings
 from owl_ingest.sources.jar.settings import load_jar_settings
+from owl_ingest.sources.jar_financial_statements.settings import (
+    load_jar_financial_statements_settings,
+)
 from owl_ingest.sources.sodra.settings import load_sodra_settings
+from owl_ingest.sources.uzt_vacancies.settings import load_uzt_vacancies_settings
 from owl_ingest.sources.vmi.settings import load_vmi_settings
+from owl_ingest.sources.vmi_tax_arrears.settings import load_vmi_tax_arrears_settings
+from owl_ingest.sources.vmi_taxes_paid.settings import load_vmi_taxes_paid_settings
 from owl_lake.settings import load_lake_settings
 
 HTTP_TABLES = [
     "sodra.http",
     "jar.http",
+    "jar_financial_statements.http",
     "address_register.http",
     "vmi.daily_changes_http",
     "vmi.monthly_register_http",
+    "vmi_tax_arrears.http",
+    "vmi_taxes_paid.http",
     "google_places.http",
+    "uzt_vacancies.http",
 ]
 
 
@@ -36,9 +46,13 @@ def test_the_local_config_loads_into_every_packages_settings(pytestconfig: pytes
     load_lake_settings(config, replay=True)
     load_sodra_settings(config)
     load_jar_settings(config)
+    load_jar_financial_statements_settings(config)
     load_address_register_settings(config)
     load_vmi_settings(config)
+    load_vmi_tax_arrears_settings(config)
+    load_vmi_taxes_paid_settings(config)
     load_google_places_settings(config)
+    load_uzt_vacancies_settings(config)
     for key in HTTP_TABLES:
         load_http_client_settings(config, key)
     dagster_storage_environment(config)

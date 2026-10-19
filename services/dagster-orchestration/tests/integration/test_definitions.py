@@ -40,6 +40,16 @@ MODELS = {
         "raw": {"raw_jar__entities", "raw_jar__legal_forms", "raw_jar__statuses", "raw_jar__seats"},
         "staging": {"stg_jar__entities"},
     },
+    "jar_financial_statements": {
+        "raw": {
+            f"raw_jar_financial_statements__{table}"
+            for table in ("income_statements", "balance_sheets", "non_filers", "late_filers")
+        },
+        "staging": {
+            f"stg_jar_financial_statements__{table}"
+            for table in ("lines", "non_filers", "late_filers")
+        },
+    },
     "address_register": {
         "raw": {
             f"raw_address_register__{table}"
@@ -56,35 +66,70 @@ MODELS = {
         },
         "staging": set(),
     },
+    "vmi_tax_arrears": {
+        "raw": {"raw_vmi_tax_arrears__changes"},
+        "staging": {"stg_vmi_tax_arrears__changes", "stg_vmi_tax_arrears__monthly"},
+    },
     "google_places": {"raw": {"raw_google_places__places"}, "staging": set()},
+    "vmi_taxes_paid": {
+        "raw": {"raw_vmi_taxes_paid__changes"},
+        "staging": {"stg_vmi_taxes_paid__monthly", "stg_vmi_taxes_paid__yearly"},
+    },
+    "uzt_vacancies": {"raw": {"raw_uzt_vacancies__vacancies"}, "staging": set()},
 }
 COMBINED = {
     "vmi": {"stg_vmi__changes", "stg_vmi__current_register"},
     "google": {"stg_google__listings"},
+    "uzt": {"stg_uzt__vacancies"},
 }
 # Sources drawn in their dataset's group rather than one of their own.
 GROUPS = {
     "vmi_daily_changes": "vmi/daily_changes",
     "vmi_monthly_register": "vmi/monthly_register",
     "google_places": "google/places",
+    "uzt_vacancies": "uzt/vacancies",
 }
-MONTHLY, DAILY = "0 6 21 * *", "0 6 * * *"
+MONTHLY, DAILY, QUARTERLY = "0 6 21 * *", "0 6 * * *", "0 6 21 3,6,9,12 *"
 SCHEDULES = {
     "sodra": MONTHLY,
     "jar": MONTHLY,
+    "jar_financial_statements": QUARTERLY,
     "address_register": MONTHLY,
     "vmi_daily_changes": DAILY,
     "vmi_monthly_register": MONTHLY,
+    "vmi_tax_arrears": MONTHLY,
     "google_places": MONTHLY,
+    "vmi_taxes_paid": MONTHLY,
+    "uzt_vacancies": MONTHLY,
 }
+# Sources whose models stg_vmi_taxes_paid__* resolve companies and municipalities in, so their
+# rebuilds rebuild it too.
+MATCHED_BY_TAXES_PAID = {"jar", "address_register", "vmi_daily_changes", "vmi_monthly_register"}
 # Sources whose fetch takes any period of their history.
-WITH_HISTORY = {"vmi_daily_changes"}
+WITH_HISTORY = {"vmi_daily_changes", "vmi_tax_arrears", "vmi_taxes_paid"}
 # The sources billed per request: their schedules start stopped, and each has a plan.
 PAID = {"google_places"}
-# Models of no source, in one step: the seeds, and where Google is searched.
+# Models of no source, in one step: the seeds, where Google is searched, and each company's
+# vacancies by month, financial years and filing record.
+FINANCIAL_YEARS = {
+    "int_jar_financial_statements__company_years",
+    "int_jar_financial_statements__filing_compliance",
+}
 SHARED = {
-    "seeds": {"municipalities", "activity_categories", "google_search_scope"},
-    "intermediate": {"int_google_search_areas"},
+    "seeds": {
+        "municipalities",
+        "activity_categories",
+        "google_search_scope",
+        "profession_categories",
+        "financial_statement_measures",
+    },
+    "intermediate": {"int_google_search_areas", "int_uzt_company_months", *FINANCIAL_YEARS},
+}
+# Each intermediate model is drawn in its folder's group, beside the source it is about.
+INTERMEDIATE_GROUPS = {
+    "int_google_search_areas": "google",
+    "int_uzt_company_months": "uzt",
+    **dict.fromkeys(FINANCIAL_YEARS, "jar_financial_statements"),
 }
 SEARCH_AREAS = dg.AssetKey(["live", "intermediate", "int_google_search_areas"])
 
@@ -170,8 +215,12 @@ def test_each_sources_assets_are_a_group_within_their_lakes(
                 for folder in COMBINED
                 for key in combined(lake, folder)
             },
-            # In models/intermediate/google/: drawn beside Google's source, whose plan reads it.
-            **dict.fromkeys(shared(lake, "intermediate"), f"{lake.value}/google"),
+            # In models/intermediate/<folder>/: Google's search areas beside Google's source,
+            # whose plan reads them.
+            **{
+                key: f"{lake.value}/{INTERMEDIATE_GROUPS[key.path[-1]]}"
+                for key in shared(lake, "intermediate")
+            },
             **dict.fromkeys(shared(lake, "seeds"), f"{lake.value}/static_data"),
             **(
                 {plan_of(source): f"live/{GROUPS.get(source, source)}" for source in PAID}
@@ -227,6 +276,11 @@ def test_a_fetch_takes_a_period_only_where_the_source_keeps_its_history(
         "Europe/Vilnius",
         "2026-09-01",
     )
+    arrears = fetches["vmi_tax_arrears"]
+    assert isinstance(arrears, dg.TimeWindowPartitionsDefinition)
+    # From the month whose window holds the changelog's first change, 2024-11-18.
+    assert arrears.get_first_partition_window().start.date().isoformat() == "2024-11-21"
+    assert arrears.cron_schedule == MONTHLY
 
 
 def partitions_name(definitions: dg.Definitions, key: dg.AssetKey) -> str | None:
@@ -384,13 +438,20 @@ def test_a_model_of_two_snapshot_sources_waits_until_both_have_one(
 
 
 def rebuilt(lake: PipelineMode, source: str) -> set[dg.AssetKey]:
-    """The source's models, its dataset's combined staging, and for Sodra the search areas, but
-    never Google's plan or fetch."""
+    """The source's models, its dataset's combined staging, for Sodra the search areas and for
+    UZT's vacancies each company's months, for JAR and its statements each company's financial
+    years, but never Google's plan or fetch."""
     built = models(lake, source, "raw") | models(lake, source, "staging")
     if source in GROUPS:
         built |= combined(lake, GROUPS[source].split("/")[0])
     if source == "sodra":
         built |= {dg.AssetKey([lake.value, "intermediate", "int_google_search_areas"])}
+    if source in MATCHED_BY_TAXES_PAID:
+        built |= models(lake, "vmi_taxes_paid", "staging")
+    if source == "uzt_vacancies":
+        built |= {dg.AssetKey([lake.value, "intermediate", "int_uzt_company_months"])}
+    if source in {"jar", "jar_financial_statements"}:
+        built |= {dg.AssetKey([lake.value, "intermediate", model]) for model in FINANCIAL_YEARS}
     return built
 
 
@@ -421,7 +482,7 @@ def test_live_fetches_on_its_schedule_and_rebuilds_without_fetching(
         )
 
 
-def test_only_googles_fetch_may_run_longer_than_run_monitorings_hour(
+def test_only_googles_statements_and_vacancies_fetches_may_run_longer_than_run_monitorings_hour(
     locations: dict[PipelineMode, dg.Definitions],
 ) -> None:
     # Arrange
@@ -435,16 +496,25 @@ def test_only_googles_fetch_may_run_longer_than_run_monitorings_hour(
 
     # Assert
     assert {source: runtime for source, runtime in runtimes.items() if runtime} == {
-        "google_places": "10800"
+        "google_places": "10800",
+        "jar_financial_statements": "14400",
+        "uzt_vacancies": "7200",
     }
 
 
+@pytest.mark.parametrize(
+    ("source", "tick", "period"),
+    [
+        ("vmi_daily_changes", datetime(2026, 10, 17, 6, 0), "2026-10-17"),
+        ("vmi_taxes_paid", datetime(2026, 10, 21, 6, 0), "2026-10"),
+    ],
+)
 def test_a_source_with_history_fetches_the_period_its_tick_begins(
-    locations: dict[PipelineMode, dg.Definitions],
+    locations: dict[PipelineMode, dg.Definitions], source: str, tick: datetime, period: str
 ) -> None:
     # Arrange
-    schedule = locations[LIVE].resolve_schedule_def("fetch_vmi_daily_changes_schedule")
-    tick = datetime(2026, 10, 17, 6, 0, tzinfo=ZoneInfo("Europe/Vilnius"))
+    schedule = locations[LIVE].resolve_schedule_def(f"fetch_{source}_schedule")
+    tick = tick.replace(tzinfo=ZoneInfo("Europe/Vilnius"))
 
     # Act
     with dg.instance_for_test() as instance:
@@ -453,7 +523,7 @@ def test_a_source_with_history_fetches_the_period_its_tick_begins(
         )
 
     # Assert
-    assert [request.partition_key for request in result.run_requests or []] == ["2026-10-17"]
+    assert [request.partition_key for request in result.run_requests or []] == [period]
 
 
 def test_replay_only_rebuilds_from_its_sample(
@@ -526,7 +596,10 @@ def test_googles_plan_reads_where_it_is_searched_and_its_fetch_pays_for_it(
     assert fetch.parent_keys == {plan_of("google_places")}
     assert graph.get(SEARCH_AREAS).parent_keys == {
         dg.AssetKey(["live", "staging", "stg_sodra__monthly"]),
-        *(dg.AssetKey(["live", "seeds", seed]) for seed in SHARED["seeds"]),
+        *(
+            dg.AssetKey(["live", "seeds", seed])
+            for seed in SHARED["seeds"] - {"profession_categories", "financial_statement_measures"}
+        ),
     }
     assert step is definitions.resolve_assets_def(fetch_of("google_places"))
     assert step.can_subset

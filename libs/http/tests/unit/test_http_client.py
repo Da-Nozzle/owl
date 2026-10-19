@@ -6,7 +6,13 @@ from datetime import UTC, datetime, timedelta
 import httpx
 import pytest
 
-from owl_http.client import Pacer, build_http_client, retry_after_seconds
+from owl_http.client import (
+    Pacer,
+    build_http_client,
+    build_streaming_http_client,
+    retry_after_seconds,
+    retrying_whole_downloads,
+)
 from owl_http.settings import HttpClientSettings, RetryPolicy
 
 URL = "https://source.test/file.csv"
@@ -271,3 +277,79 @@ def test_a_paced_call_after_a_long_pause_does_not_wait() -> None:
 
     # Assert
     assert clock.waits == []
+
+
+def download_through(
+    transport: httpx.MockTransport, waits: list[float], settings: HttpClientSettings = SETTINGS
+) -> bytes:
+    """A whole download read in chunks through a streaming client, as retried."""
+
+    def attempt(client: httpx.Client) -> bytes:
+        with client.stream("GET", URL) as response:
+            return b"".join(response.iter_bytes())
+
+    with build_streaming_http_client("owl-test/1.0", settings, transport=transport) as client:
+        return retrying_whole_downloads(settings, sleep=waits.append)(attempt, client)
+
+
+def test_a_download_that_stops_halfway_is_downloaded_again_from_its_start() -> None:
+    # Arrange
+    transport, sent = answering(
+        httpx.Response(200, stream=StallingBody()), httpx.Response(200, content=b"id,name")
+    )
+    waits: list[float] = []
+
+    # Act
+    body = download_through(transport, waits)
+
+    # Assert
+    assert (body, len(sent), waits) == (b"id,name", 2, [1])
+
+
+def test_a_download_refused_before_its_body_is_retried_as_the_server_asks() -> None:
+    # Arrange
+    transport, sent = answering(
+        httpx.ConnectError("refused"),
+        httpx.Response(503, headers={"Retry-After": "7"}),
+        httpx.Response(200, content=b"id"),
+    )
+    waits: list[float] = []
+
+    # Act
+    body = download_through(transport, waits)
+
+    # Assert
+    assert (body, len(sent), waits) == (b"id", 3, [1, 7])
+
+
+def test_a_download_that_cannot_work_fails_at_once_with_the_servers_reason() -> None:
+    # Arrange
+    transport, sent = answering(httpx.Response(404, text="Model not found"))
+
+    # Act / Assert
+    with pytest.raises(httpx.HTTPStatusError, match=r"404 Not Found .*: Model not found"):
+        download_through(transport, [])
+    assert len(sent) == 1
+
+
+def test_a_download_still_failing_after_its_attempts_raises_the_last_error() -> None:
+    # Arrange
+    transport, sent = answering(*(httpx.Response(500, text="down") for _ in range(3)))
+
+    # Act / Assert
+    with pytest.raises(httpx.HTTPStatusError, match="500 Internal Server Error"):
+        download_through(transport, [])
+    assert len(sent) == SETTINGS.retry.attempts
+
+
+def test_a_streaming_client_retries_nothing_by_itself() -> None:
+    # Arrange
+    transport, sent = answering(httpx.Response(503), httpx.Response(200))
+
+    # Act / Assert
+    with (
+        build_streaming_http_client("owl-test/1.0", SETTINGS, transport=transport) as client,
+        pytest.raises(httpx.HTTPStatusError, match="503"),
+    ):
+        client.get(URL)
+    assert len(sent) == 1

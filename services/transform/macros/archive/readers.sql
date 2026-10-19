@@ -1,11 +1,19 @@
-{# Every row of the archived CSV `name`, all text, with its file, snapshot and the fetch its
-   sidecar recorded. The dialect is get.data.gov.lt's export. #}
+{# Every row of the archived CSV `name` (a glob: a paged export's pages), all text, with its
+   file, snapshot and the fetch its sidecar recorded, from the files the snapshots' manifests
+   list. The dialect is get.data.gov.lt's export. #}
 {% macro archived_csv(source, name, model_name, snapshot_column) %}
     {%- set snapshots = archived_snapshots(model_name, source) -%}
+    {%- set files = listed_archived_files(source, name, snapshots) -%}
+    {%- if not files -%}
+        {{ exceptions.raise_compiler_error(
+            "The manifests of " ~ source ~ "'s snapshots " ~ snapshots
+            ~ " list no file matching " ~ name
+        ) }}
+    {%- endif -%}
 with published as (
     select *
     from read_csv(
-        {{ archived_files(source, name, snapshots) }},
+        {{ files }},
         delim = ',',
         quote = '"',
         escape = '"',
@@ -19,7 +27,7 @@ with published as (
 fetches as (
     select _meta_file, url, fetched_at, last_modified, sha256
     from read_json(
-        {{ archived_files(source, name ~ '.meta.json', snapshots) }},
+        {{ sidecars_of(files) }},
         columns = {
             url: 'varchar',
             fetched_at: 'varchar',
@@ -43,16 +51,15 @@ left join fetches
     on published._source_file || '.meta.json' = fetches._meta_file
 {% endmacro %}
 
-{# One row per entry of each archived JSON page's `list_key` array ({"_data": [...]} from
+{# One row per entry of each listed JSON page's `list_key` array ({"_data": [...]} from
    get.data.gov.lt, {"places": [...]} from the Places API), as JSON in `entry`, with its file,
-   snapshot and sidecar fetch; with `with_request`, also the request the page answered. #}
-{% macro archived_json_entries(source, pattern, model_name, snapshot_column, list_key='_data', with_request=false) %}
+   snapshot and sidecar fetch; with `with_request`, also the request the page answered. A page
+   may be up to `maximum_object_size` bytes (64 MB; a page of 10,000 changes is about 3 MB), and
+   each thread reading one holds twice that: a source read many pages at once keeps it near its
+   pages' size, or eight threads ask for 1 GB. #}
+{% macro archived_json_entries(source, pattern, model_name, snapshot_column, list_key='_data', with_request=false, maximum_object_size=67108864) %}
     {%- set snapshots = archived_snapshots(model_name, source) -%}
-    {%- set files = existing_archived_files(source, pattern, snapshots) -%}
-    {%- set sidecars = [] -%}
-    {%- for file in files -%}
-        {%- do sidecars.append(file ~ '.meta.json') -%}
-    {%- endfor -%}
+    {%- set files = listed_archived_files(source, pattern, snapshots) -%}
     {%- if files %}
 with published as (
     select unnest({{ list_key }}) as entry, _source_file
@@ -60,7 +67,7 @@ with published as (
         {{ files }},
         columns = { {{- list_key }}: 'json[]'},
         format = 'unstructured',
-        maximum_object_size = 67108864,  -- a page of 10,000 changes is about 3 MB
+        maximum_object_size = {{ maximum_object_size }},
         filename = '_source_file'
     )
 ),
@@ -68,7 +75,7 @@ with published as (
 fetches as (
     select _meta_file, url, fetched_at, last_modified, sha256{% if with_request %}, request{% endif %}
     from read_json(
-        {{ sidecars }},
+        {{ sidecars_of(files) }},
         columns = {
             url: 'varchar',
             fetched_at: 'varchar',

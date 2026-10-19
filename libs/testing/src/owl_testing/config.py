@@ -74,6 +74,13 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "snapshot_schedule": "0 6 21 * *",
         "http": http_table(),
     },
+    "jar_financial_statements": {
+        "download_url_template": "https://jar.test/{dataset}/:format/csv",
+        "snapshot_schedule": "0 6 21 3,6,9,12 *",
+        "page_rows": 500_000,
+        "fetch_max_runtime_seconds": 14_400,
+        "http": http_table(),
+    },
     "address_register": {
         "download_url_template": "https://ar.test/{dataset}/:format/csv",
         "snapshot_schedule": "0 6 21 * *",
@@ -91,6 +98,20 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "daily_changes_http": http_table(timeout=30, interval=1),
         "monthly_register_http": http_table(),
     },
+    "vmi_tax_arrears": {
+        "model_url": "https://vmi.test/NepriemokosSuma",
+        "snapshot_schedule": "0 6 21 * *",
+        "first_snapshot": "2024-11",
+        "changelog_page_size": 20_000,
+        "http": http_table(timeout=30, interval=1),
+    },
+    "vmi_taxes_paid": {
+        "model_url": "https://vmi.test/Moketojas",
+        "snapshot_schedule": "0 6 21 * *",
+        "first_snapshot": "2025-06",
+        "changelog_page_size": 20_000,
+        "http": http_table(timeout=60, interval=1),
+    },
     "google_places": {
         "api_key": {SECRET_NAME_KEY: "google_places_api_key"},
         "search_text_url": "https://places.test/v1/places:searchText",
@@ -106,6 +127,15 @@ LOCAL_LIKE_VALUES: Mapping[str, Any] = {
         "free_paid_requests_a_month": 1_000,
         "usd_per_paid_request": 0.035,
         "http": http_table(timeout=30, attempts=10, backoff=2, max_wait=60),
+    },
+    "uzt_vacancies": {
+        "vacancies_url": "https://uzt.test/Vieta",
+        "snapshot_schedule": "0 6 21 * *",
+        "export_attempts": 6,
+        "export_wait_seconds": 300,
+        "page_rows": 400_000,
+        "fetch_max_runtime_seconds": 7_200,
+        "http": http_table(),
     },
     "archive_index": {"sensor_interval_seconds": 60},
     "transform": {

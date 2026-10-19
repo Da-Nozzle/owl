@@ -3,7 +3,7 @@ from collections.abc import Mapping, Sequence
 import dagster as dg
 
 from owl_dagster_orchestration.snapshots import FetchPlan
-from owl_ingest.ports.downloader import Download
+from owl_ingest.ports.downloader import FetchedFile
 from owl_ingest.ports.raw_archive import file_record
 
 # Beyond this many files, a snapshot's metadata gives their count and size instead: a Places
@@ -11,7 +11,7 @@ from owl_ingest.ports.raw_archive import file_record
 LISTED_FILES_LIMIT = 100
 
 
-def files_metadata(downloads: Mapping[str, Download]) -> dict[str, dict[str, object]]:
+def files_metadata(downloads: Mapping[str, FetchedFile]) -> dict[str, dict[str, object]]:
     return {name: file_record(download) for name, download in downloads.items()}
 
 

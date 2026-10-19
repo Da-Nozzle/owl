@@ -1,0 +1,59 @@
+version: 2
+
+sources:
+  - name: archive
+    tables:
+      - name: jar_financial_statements
+        description: >
+          The financial statements filed with the Register of Legal Entities (JAR) on
+          get.data.gov.lt, each dataset fetched in pages of 500,000 rows in _id order and kept
+          gzip-compressed, the first page as <dataset>.csv.gz and the next as
+          <dataset>.2.csv.gz, ...: PelnoAtaskaita (income statements), BalansoAtaskaita (balance
+          sheets), Nepateikes (entities that have not filed) and VeluojantisPateikti (entities
+          late to file). Comma-separated, double-quoted UTF-8 with no BOM; Spinta's own columns
+          (_type, _id, _revision, _base, empty and only in newer responses, _page.next)
+          come first, and a reference to another dataset is <property>._id:
+          juridinis_asmuo._id is the filing entity's _id in JAR's
+          JuridinisAsmuo, forma._id and statusas._id its form and status in JAR's classifiers.
+          Loaded in JAR's batches, every three to six months.
+
+models:
+  - name: raw_jar_financial_statements__income_statements
+    description: >
+      Every row of PelnoAtaskaita's pages as each snapshot fetched it, under its published header,
+      as text: one row per snapshot and line of a filed income statement.
+    columns: &file_columns
+      - name: _source_file
+        description: The archived file the row was read from.
+      - name: _snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch this row is from, from the archive path.
+      - name: _file_url
+        description: Where the file was downloaded from.
+      - name: _file_fetched_at
+        description: When the file was downloaded (ISO 8601, UTC).
+      - name: _file_last_modified
+        description: >
+          The export's Last-Modified header as the portal sent it (HTTP date): when the register
+          last changed the dataset.
+      - name: _file_sha256
+        description: >
+          The SHA-256 of the export as downloaded, before compression; equal for two fetches of
+          the same version.
+
+  - name: raw_jar_financial_statements__balance_sheets
+    description: >
+      Every row of BalansoAtaskaita's pages as each snapshot fetched it, as text: one row per
+      snapshot and line of a filed balance sheet.
+    columns: *file_columns
+
+  - name: raw_jar_financial_statements__non_filers
+    description: >
+      Every row of Nepateikes' pages as each snapshot fetched it, as text: entities that have not
+      filed their financial statements.
+    columns: *file_columns
+
+  - name: raw_jar_financial_statements__late_filers
+    description: >
+      Every row of VeluojantisPateikti's pages as each snapshot fetched it, as text: entities late
+      to file their statements for the last financial year.
+    columns: *file_columns

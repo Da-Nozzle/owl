@@ -1,0 +1,199 @@
+version: 2
+
+models:
+  - name: stg_vmi_taxes_paid__monthly
+    description: >
+      One row per payer and month VMI published, from every monthly load in the changelog: the
+      taxes the payer paid into VMI's collection accounts from January to through_month
+      (year-to-date, net of refunds, so it can fall), and what it paid since its previous month
+      published that year. Every month from 2025-04 is loaded once; a year's December is its
+      total, loaded in January. A payer appears only in a month it had paid something that year.
+      The company is the JAR entity the row refers to (mm_kodas), or else the one company whose
+      name is the payer's. A payer matched to no company (foreign companies, the state and
+      municipalities as such) has no code, and cannot be followed from month to month.
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [row_id]
+    data_tests:
+      - unique:
+          column_name: "company_code || '-' || tax_year || '-' || through_month"
+          config:
+            where: "company_code is not null"
+    columns:
+      - name: company_code
+        description: JAR code (ja_kodas); Sodra's jarCode. Empty for a payer matched to no company.
+      - name: match_method
+        description: >
+          How the company was found: jar_reference (the row's mm_kodas is a JAR entity), jar_name
+          (the payer's name, quotes and whitespace normalised, is one JAR entity's in the newest
+          snapshot) or vmi_register_name (likewise in the VMI register, which holds companies newer
+          than JAR's publication). A name two companies share matches neither. Empty when none.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [jar_reference, jar_name, vmi_register_name]
+          - not_null:
+              config:
+                where: "company_code is not null"
+      - name: taxpayer_name
+        description: The payer's name as VMI published it.
+        data_tests:
+          - not_null
+      - name: legal_form
+        description: The legal form in words (Uždaroji akcinė bendrovė); empty for foreign payers.
+      - name: municipality_code
+        description: >
+          The payer's municipality (savivaldybe), the Address Register's code (13 is Vilnius
+          city), resolved in the Address Register's municipalities.
+        data_tests:
+          # Also fails when a municipality is not in the Address Register.
+          - not_null
+      - name: municipality
+        description: The municipality's name in the Address Register (Vilniaus miesto).
+      - name: tax_year
+        data_tests:
+          - not_null
+      - name: through_month
+        description: The last month the sum covers (1 to 12).
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+                quote: false
+      - name: year_to_date_eur
+        description: Taxes paid from January to through_month, EUR (suma); always positive.
+        data_tests:
+          - not_null
+      - name: paid_eur
+        description: >
+          Taxes paid from paid_from_month to through_month, EUR: the year-to-date sum less the
+          company's previous month published that year (or all of it, from January). Negative
+          when refunds exceed payments. Empty for a payer matched to no company.
+      - name: paid_from_month
+        description: >
+          The first month paid_eur covers: the month after the company's previous month published
+          that year, or 1. The history starts at 2025-04, so that month's covers January to April.
+      - name: published_on
+        description: VMI's date for the load (atnaujinta), one to three weeks before it reached the portal.
+        data_tests:
+          - not_null
+      - name: loaded_at
+        description: When the row was inserted on the portal (UTC).
+        data_tests:
+          - not_null
+      - name: record_id
+        description: VMI's id of the record (id), new in every load.
+      - name: row_id
+        description: The dataset row's id on the portal (_id), new in every load.
+        data_tests:
+          - unique
+          - not_null
+
+  - name: stg_vmi_taxes_paid__yearly
+    description: >
+      One row per payer and year: the newest month published that year from
+      stg_vmi_taxes_paid__monthly, the year's total for a year that has ended (is_full_year),
+      the year to date for the current one. A payer matched to no company is taken from its
+      year's newest load.
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [row_id]
+    data_tests:
+      - unique:
+          column_name: "company_code || '-' || tax_year"
+          config:
+            where: "company_code is not null"
+    columns:
+      - name: company_code
+        description: JAR code (ja_kodas); empty for a payer matched to no company.
+      - name: match_method
+        description: As in stg_vmi_taxes_paid__monthly.
+      - name: tax_year
+        data_tests:
+          - not_null
+      - name: through_month
+        description: The last month the sum covers; earlier than the year's newest load for a company missing from it.
+        data_tests:
+          - not_null
+      - name: is_full_year
+        description: Whether the sum covers the whole year (through_month 12).
+      - name: year_to_date_eur
+        description: Taxes paid from January to through_month, EUR.
+        data_tests:
+          - not_null
+      - name: row_id
+        data_tests:
+          - unique
+          - not_null
+
+unit_tests:
+  - name: stg_vmi_taxes_paid__monthly_follows_each_company_from_load_to_load
+    description: >
+      Three monthly loads, each inserting the year to date and deleting the previous load's rows.
+      UAB Kava refers to its JAR entity, which a later patch points at again; it is absent from
+      June's load, so July's paid covers June and July, and its refund in August makes August's
+      negative. MB Naujoji refers to no entity until its name is JAR's. A foreign payer matches
+      nothing and keeps no paid. UAB Dvynys's name is two companies', so it matches neither.
+    model: stg_vmi_taxes_paid__monthly
+    given:
+      - input: ref('raw_vmi_taxes_paid__changes')
+        rows:
+          - {"_cid": "1", "_created": "2026-06-03T11:59:03", "_op": "insert", "_id": "r1", "change": '{"id": "1", "mm_kodas": {"_id": "e1"}, "pavadinimas": "UAB \"Kava\"", "tipas": "Uždaroji akcinė bendrovė", "savivaldybe": {"_id": "s13"}, "metai": 2026, "menuo": 5, "suma": 100.0, "atnaujinta": "2026-06-09"}'}
+          - {"_cid": "2", "_created": "2026-06-03T11:59:04", "_op": "insert", "_id": "r2", "change": '{"id": "2", "mm_kodas": null, "pavadinimas": "MB „Naujoji“", "tipas": "Mažoji bendrija", "savivaldybe": {"_id": "s13"}, "metai": 2026, "menuo": 5, "suma": 50.0, "atnaujinta": "2026-06-09"}'}
+          - {"_cid": "3", "_created": "2026-06-03T11:59:05", "_op": "insert", "_id": "r3", "change": '{"id": "3", "mm_kodas": null, "pavadinimas": "TGW LIMITED", "tipas": null, "savivaldybe": {"_id": "s52"}, "metai": 2026, "menuo": 5, "suma": 900.0, "atnaujinta": "2026-06-09"}'}
+          - {"_cid": "4", "_created": "2026-06-03T11:59:06", "_op": "insert", "_id": "r4", "change": '{"id": "4", "mm_kodas": null, "pavadinimas": "UAB Dvynys", "tipas": "Uždaroji akcinė bendrovė", "savivaldybe": {"_id": "s13"}, "metai": 2026, "menuo": 5, "suma": 10.0, "atnaujinta": "2026-06-09"}'}
+          - {"_cid": "10", "_created": "2026-07-27T10:07:34", "_op": "delete", "_id": "r1", "change": '{}'}
+          - {"_cid": "11", "_created": "2026-07-27T10:07:35", "_op": "insert", "_id": "r5", "change": '{"id": "5", "mm_kodas": {"_id": "e9"}, "pavadinimas": "UAB \"Kava\"", "tipas": "Uždaroji akcinė bendrovė", "savivaldybe": {"_id": "s13"}, "metai": 2026, "menuo": 7, "suma": 250.0, "atnaujinta": "2026-08-13"}'}
+          - {"_cid": "12", "_created": "2026-09-01T06:29:52", "_op": "patch", "_id": "r5", "change": '{"mm_kodas": {"_id": "e1"}}'}
+          - {"_cid": "20", "_created": "2026-09-18T06:15:24", "_op": "delete", "_id": "r5", "change": '{}'}
+          - {"_cid": "21", "_created": "2026-09-18T06:15:25", "_op": "insert", "_id": "r6", "change": '{"id": "6", "mm_kodas": {"_id": "e1"}, "pavadinimas": "UAB \"Kava\"", "tipas": "Uždaroji akcinė bendrovė", "savivaldybe": {"_id": "s13"}, "metai": 2026, "menuo": 8, "suma": 230.0, "atnaujinta": "2026-09-11"}'}
+          - {"_cid": "22", "_created": "2026-09-18T06:15:26", "_op": "delete", "_id": "r0", "change": '{}'}
+      - input: ref('raw_jar__entities')
+        rows:
+          - {"_snapshot_month": "2026-09", "_id": "e1", "ja_kodas": "110607882"}
+      - input: ref('stg_jar__entities')
+        rows:
+          - {company_code: 110607882, company_name: "UAB \"Kava\"", snapshot_month: "2026-09"}
+          - {company_code: 306000001, company_name: "MB \"Naujoji\"", snapshot_month: "2026-09"}
+          - {company_code: 306000002, company_name: "UAB Dvynys", snapshot_month: "2026-09"}
+          - {company_code: 306000003, company_name: "UAB Dvynys", snapshot_month: "2026-09"}
+      - input: ref('stg_vmi__current_register')
+        rows:
+          - {company_code: 110607882, taxpayer_name: "UAB \"Kava\""}
+      - input: ref('raw_address_register__municipalities')
+        rows:
+          - {"_snapshot_month": "2026-09", "_id": "s13", "sav_kodas": "13", "pavadinimas": "Vilniaus miesto"}
+          - {"_snapshot_month": "2026-09", "_id": "s52", "sav_kodas": "52", "pavadinimas": "Kauno rajono"}
+    expect:
+      rows:
+        - {row_id: r1, company_code: 110607882, match_method: jar_reference, municipality_code: 13, through_month: 5, year_to_date_eur: 100.00, paid_eur: 100.00, paid_from_month: 1}
+        - {row_id: r2, company_code: 306000001, match_method: jar_name, municipality_code: 13, through_month: 5, year_to_date_eur: 50.00, paid_eur: 50.00, paid_from_month: 1}
+        - {row_id: r3, company_code: null, match_method: null, municipality_code: 52, through_month: 5, year_to_date_eur: 900.00, paid_eur: null, paid_from_month: null}
+        - {row_id: r4, company_code: null, match_method: null, municipality_code: 13, through_month: 5, year_to_date_eur: 10.00, paid_eur: null, paid_from_month: null}
+        - {row_id: r5, company_code: 110607882, match_method: jar_reference, municipality_code: 13, through_month: 7, year_to_date_eur: 250.00, paid_eur: 150.00, paid_from_month: 6}
+        - {row_id: r6, company_code: 110607882, match_method: jar_reference, municipality_code: 13, through_month: 8, year_to_date_eur: 230.00, paid_eur: -20.00, paid_from_month: 8}
+
+  - name: stg_vmi_taxes_paid__yearly_takes_each_companys_newest_month
+    description: >
+      UAB Kava's newest month in 2026 is August; MB Sena is missing from August's load, so its
+      July stands. A payer matched to no company is taken from the year's newest load only, as
+      the July row of TGW LIMITED cannot be told from another payer of that name. 2025 has ended.
+    model: stg_vmi_taxes_paid__yearly
+    given:
+      - input: ref('stg_vmi_taxes_paid__monthly')
+        rows:
+          - {row_id: r1, company_code: 110607882, tax_year: 2025, through_month: 12, year_to_date_eur: 1200.00}
+          - {row_id: r2, company_code: 110607882, tax_year: 2026, through_month: 7, year_to_date_eur: 700.00}
+          - {row_id: r3, company_code: 110607882, tax_year: 2026, through_month: 8, year_to_date_eur: 800.00}
+          - {row_id: r4, company_code: 300000004, tax_year: 2026, through_month: 7, year_to_date_eur: 70.00}
+          - {row_id: r5, company_code: null, taxpayer_name: TGW LIMITED, tax_year: 2026, through_month: 7, year_to_date_eur: 5.00}
+          - {row_id: r6, company_code: null, taxpayer_name: TGW LIMITED, tax_year: 2026, through_month: 8, year_to_date_eur: 6.00}
+    expect:
+      rows:
+        - {row_id: r1, company_code: 110607882, tax_year: 2025, through_month: 12, is_full_year: true, year_to_date_eur: 1200.00}
+        - {row_id: r3, company_code: 110607882, tax_year: 2026, through_month: 8, is_full_year: false, year_to_date_eur: 800.00}
+        - {row_id: r4, company_code: 300000004, tax_year: 2026, through_month: 7, is_full_year: false, year_to_date_eur: 70.00}
+        - {row_id: r6, company_code: null, tax_year: 2026, through_month: 8, is_full_year: false, year_to_date_eur: 6.00}

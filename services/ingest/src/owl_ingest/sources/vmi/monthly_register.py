@@ -4,7 +4,7 @@ from collections.abc import Callable
 from owl_ingest.ports.downloader import Download, Downloader
 from owl_ingest.ports.raw_archive import RawArchive
 from owl_ingest.sources.spinta.changelog import last_change
-from owl_ingest.sources.spinta.exports import csv_export_url, require_rows_with_ids
+from owl_ingest.sources.spinta.exports import csv_export_url, require_rows_with_ids, unquoted
 from owl_ingest.sources.vmi.settings import VmiSettings
 
 SOURCE_NAME = "vmi_monthly_register"
@@ -58,8 +58,3 @@ def matching_export(
         f"The register's export never matched its changelog's newest change "
         f"(ETag, newest revision): {revisions}"
     )
-
-
-def unquoted(etag: str | None) -> str | None:
-    """Without the weak marker and the quotes HTTP allows around it."""
-    return etag.removeprefix("W/").strip('"') if etag else None

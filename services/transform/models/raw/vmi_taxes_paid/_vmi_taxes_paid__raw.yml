@@ -1,0 +1,44 @@
+version: 2
+
+sources:
+  - name: archive
+    tables:
+      - name: vmi_taxes_paid
+        description: >
+          The changelog of the taxes legal entities paid to VMI on get.data.gov.lt
+          (vmi/ja_mokesciai/Moketojas/:changes), one snapshot a month holding the changes made in
+          the month before its tick, as JSON pages ({"_data": [...]}) of up to 20,000 changes,
+          named changes-<first change id>.json. VMI loads the dataset about monthly: each load
+          inserts (or upserts) a row per company with its year-to-date sum for the current year,
+          every field set, and deletes the previous load's rows; a January load adds the past
+          year's totals. A change has its id (_cid), time (_created, UTC), operation (_op),
+          dataset row (_id), transaction and revision. A month with no load has no pages. The
+          changelog keeps every past month, so a month can be fetched again with the same result.
+
+models:
+  - name: raw_vmi_taxes_paid__changes
+    description: >
+      The dataset's changes as each monthly snapshot fetched them: one row per change, its
+      changelog fields as text and the change itself as JSON. Built from nothing, it reads every
+      complete snapshot in the archive.
+    columns:
+      - name: _cid
+        description: The change's id in the changelog; ids grow with time, with gaps.
+      - name: _created
+        description: When the change was made (ISO 8601, UTC, no offset).
+      - name: _op
+        description: insert, upsert, patch or delete.
+      - name: _id
+        description: The dataset row changed; each load's rows are new rows.
+      - name: change
+        description: The change as the portal sent it, JSON.
+      - name: _source_file
+        description: The archived page the change was read from.
+      - name: _snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch this change is from, from the archive path.
+      - name: _file_url
+        description: Where the page was downloaded from.
+      - name: _file_fetched_at
+        description: When the page was downloaded (ISO 8601, UTC).
+      - name: _file_sha256
+        description: The downloaded page's SHA-256.

@@ -103,9 +103,112 @@ tests are in `services/transform/tests/`.
 
 ### Changing models
 
-`owl-dbt-dev` builds models into a local DuckDB file and reads anything you did not select from the
-lake, read-only, so you never touch the lake or wait for Dagster. `--lake` picks the lake (`replay`
-unless given).
+| Source | Fetches | Schedule | Key |
+|---|---|---|---|
+| `sodra` | the yearly employer files covering the last 13 months | 21st at 06:00 (`sodra.snapshot_schedule`), as Sodra publishes the previous month by the 20th | `YYYY-MM` |
+| `jar` | the register's entities, legal forms, statuses and seats (registered offices), each whole | 21st at 06:00 (`jar.snapshot_schedule`): the register publishes monthly at most, on no fixed day | `YYYY-MM` |
+| `jar_financial_statements` | the financial statements filed with JAR since 2015 (income statements' and balance sheets' summary lines), the non-filers and the late filers, each whole, fetched in pages of 500,000 rows as the portal drops a response after about 25 minutes (about 7 GB, stored gzipped, about 1.35 GB; the fetch may run four hours) | 21st of March, June, September and December at 06:00 (`jar_financial_statements.snapshot_schedule`): loaded in JAR's batches every three to six months, each export the whole history | `YYYY-MM` |
+| `address_register` | the Address Register's building and premises addresses, streets, settlements and municipalities, each whole (about 565 MB) | 21st at 06:00 (`address_register.snapshot_schedule`): loaded in the same batches as JAR, every one to six months | `YYYY-MM` |
+| `vmi_daily_changes` | the VMI taxpayer register's changelog: the changes made in the day before the snapshot's tick | daily at 06:00 (`vmi.daily_changes_schedule`): the register changes most days, mostly at about 03:00 | `YYYY-MM-DD` |
+| `vmi_monthly_register` | the whole VMI register, the EVRK 2 classifier, and the changelog's newest change at that moment | 21st at 06:00 (`vmi.monthly_register_schedule`), the baseline `vmi_daily_changes`' changes are applied to | `YYYY-MM` |
+| `vmi_tax_arrears` | VMI's list of companies with tax arrears, through its changelog: the changes made from the tick before to the snapshot's own; from 2024-11, whose window holds the list's first load, so the snapshots hold its whole history (23 months, 3.1 M changes, 1.0 GB of JSON by 2026-09) | 21st at 06:00 (`vmi_tax_arrears.snapshot_schedule`): the list is reloaded every morning, but the changelog keeps every change, and the leads are monthly | `YYYY-MM` |
+| `vmi_taxes_paid` | the changelog of the taxes legal entities paid to VMI (`vmi/ja_mokesciai`): the changes made in the month before the snapshot's tick, each monthly load's year-to-date sums inserted whole | 21st at 06:00 (`vmi_taxes_paid.snapshot_schedule`): VMI loads about monthly on no fixed day; any month from 2025-06 (`vmi_taxes_paid.first_snapshot`) can be fetched again | `YYYY-MM` |
+| `google_places` | Google's listings from the Places API in the search areas to be fetched (`int_google_search_areas`; Vilnius): each query swept over tiles of at most 1 km, planned for free with place ids, then the searches holding every place found paid for (Vilnius priced at 927 requests on 2026-10-17; 1,000 a month are free) | 21st at 06:00 (`google_places.snapshot_schedule`), with the leads; **its schedule starts stopped**, as each sweep is paid for | `YYYY-MM` |
+| `uzt_vacancies` | the Employment Service's vacancies since 1990, each as it stands, without the employer's contact people, fetched in pages of 400,000 rows as the portal drops a response after about 25 minutes (about 2.4 GB, stored gzipped, about 540 MB; the fetch may run two hours) | 21st at 06:00 (`uzt_vacancies.snapshot_schedule`): changed every night, but each export holds every vacancy's history | `YYYY-MM` |
+
+A second fetch in the same period replaces that period's snapshot; a file it no longer fetches
+may stay in the folder, but raw reads only the files the manifest lists.
+
+A source's partitions are its complete snapshots, so every partition has something to build from.
+A source captured as it is now cannot be fetched for a period that has passed: its fetch takes no
+partition, the clock picks its snapshot. A source that keeps its history, as the VMI register's
+changelog does, can: its fetch is partitioned by its periods from a first one (`vmi.first_daily_changes`)
+to the current one, the schedule fetches the current one, and a backfill fetches past ones, such as
+a month of days, in one run. Adding a snapshot to the replay sample, with its manifest, adds a partition with
+no reload.
+
+| What | Does | Started by |
+|---|---|---|
+| `fetch_<source>` (live) | fetches the source now into the archive, as the current period's snapshot (for `vmi_daily_changes`, the period chosen) | its schedule, or you (a backfill for several of `vmi_daily_changes`' days) |
+| `archive_index` sensor | adds a partition for each complete snapshot, and reports it as the archive's | Dagster, every minute |
+| `transform_automation` sensor | builds raw for each new snapshot, then staging and after; rebuilds staging and after when their SQL changes | Dagster |
+| `rebuild_<source>_from_archive` | rebuilds raw for the snapshots you choose, then staging and after once | you, from the job's page (a backfill for several) |
+
+So each source's build is a chain of runs: the scheduled fetch, then (within a minute or two)
+raw for the new snapshot, then staging. Sources build side by side, each in its own pools.
+Raw is partitioned by snapshot; staging and later models are one table each, rebuilt whole, so
+their latest materialization is the table's.
+
+Every run and materialization is labelled `owl/trigger`: `schedule` or `fetch` (by hand) on a
+fetch, `automation` on what Dagster built by itself, `rebuild` on a rebuild by hand. Each raw
+snapshot also shows `archive_fetched_at`, the download it was built from. Filter the runs list by
+`owl/trigger` to see, say, every rebuild.
+
+A new source is one `ArchivedSource`, built in its own module in
+`owl_dagster_orchestration/sources/` and listed in `archived_sources()`
+(`entrypoints/definitions.py`): its name, its schedule and key format, and its fetch
+(`owl_ingest/sources/<source>/`, with its settings in `config/<env>/pipeline.toml`), plus its
+dbt models in `models/raw/<source>/` (schema `raw_<source>` in `dbt_project.yml`) and
+`models/staging/<source>/`. Its partitions, archive,
+fetch job and schedule, rebuild job, automation and group all follow from that. `jar` is the
+smallest example: three CSV exports, read by the `archived_csv` macro. The VMI register is the
+example of one dataset fetched as two sources, drawn together in one box (`ArchivedSource.group`):
+`vmi_daily_changes`, a source with history (`history_start`) whose changelog pages are read by the
+`archived_json_entries` macro, and `vmi_monthly_register`, the baseline the changes are applied to
+by the staging models in `models/staging/vmi/`. `vmi_tax_arrears` is a monthly source with
+history and no baseline: its snapshots from the changelog's first change on are the whole list's
+history, which `stg_vmi_tax_arrears__monthly` folds into the list at each tick. `vmi_taxes_paid`
+is one too: each of VMI's monthly loads inserts every row whole, so its changelog alone holds
+every month since its first snapshot. `google_places` is the example of a paid API: a client of
+its own (`ports/places_api.py`), a plan in place of a fetch (`ArchivedSource.plan`), a
+schedule that starts stopped, a longer `dagster/max_runtime` for its job, and a plan that reads a
+model of the lake (`fetch_deps`). The plan and the fetch are two assets made in one step
+(`build_planned_fetch_asset`): `plan_google_places` plans the sweep for free and shows what it
+pays for, with a blocking check `within_budget` against `google_places.max_paid_requests`;
+`fetch_google_places` pays for that plan, made in the same step, and refuses one over the budget.
+The fetch job selects both, so a fetch always pays for a plan made minutes before. The snapshot
+keeps the plan it was paid for, `plan.json`: every search, the places it found and whether it was
+paid for. Both the plan and the payment send `google_places.workers` searches at once, without
+counting Google's per-minute quota: a request over it is answered 429, then waited for and sent
+again, for about five minutes (`HttpPlacesApi`). `uzt_vacancies` is the example of an export
+too big to hold in memory or to fetch in one response: fetched in counted pages
+(`spinta/pages.py`, as `jar_financial_statements` is), each streamed into the archive as it
+arrives and stored gzipped (`StreamingDownloader`, `RawArchive.save_stream`; DECISIONS.md,
+Streaming downloads and UZT vacancies source).
+
+### Where Google is searched
+
+Google is searched in the municipalities listed in `services/transform/seeds/google_search_scope.csv`,
+each `price` or `fetch`; only Vilnius (13) is listed, as `fetch`. Seeds, data kept by hand, are
+drawn in each lake's `static_data` box, and build themselves on a fresh lake. `int_google_search_areas`
+(`models/intermediate/google/`, drawn in the lake's `google` box beside Google's source) lists
+all 60 municipalities with their bounding boxes and how many employers Sodra counts there in the
+leads' categories, ranked, so the next one worth searching is the top row without a mode. To see
+what Kaunas would cost, add `19,price` to the seed and **Reload definitions** (live): the seed, the
+areas and `plan_google_places` rebuild by themselves (the plan alone, in a run of its own), and the
+plan's metadata shows each area's places and paid requests, and the next fetch's in USD against
+`google_places.max_paid_requests`, having paid for nothing. Change it to `19,fetch` to have the next
+fetch pay for it. A rebuild of any source's archive never fetches or plans.
+
+### Tests
+
+Each package keeps its tests in `tests/unit/` (in-process only) or `tests/integration/` (a temporary
+directory, DuckDB, a local HTTP server, or a throwaway Dagster instance running real runs; none
+needs the compose services). `conftest.py` marks each test by its directory, so `pytest -m unit` or
+`pytest -m integration` runs one kind, and a test in neither directory fails collection.
+
+Tests build settings with `owl_testing` (`libs/testing`, a dev dependency only):
+`build_config({"sodra.history_months": 1})` is a configuration like `config/local` with the dotted keys
+replaced, and `owl_testing.ingest` holds a `Download` builder and in-memory fakes of the ingest
+ports. dbt's own tests stay in `services/transform/tests/`, where dbt reads them.
+
+### Iterating on models
+
+Load the sources once through Dagster, then work on the SQL with `owl-dbt-dev`. It runs dbt on the
+`dev` target: models build into a DuckDB file of their own, and a lake is attached read-only, so
+nothing you do there touches the lake or waits for a Dagster run. A model you do not select is read
+from the lake (dbt's `--defer`), as that location's last build left it. `--lake` picks the lake,
+`replay` unless given; each lake has its own dev copy in `services/transform/target/<lake>/dev/`.
 
 ```sh
 owl-dbt-dev build -s state:modified+                # what you changed since Dagster's last build
@@ -128,8 +231,16 @@ stg_sodra__monthly: "dev"."staging"."stg_sodra__monthly" (dev) against "lake"."s
   => only columns added
 ```
 
-Once merged, **Reload definitions** is all that is left: Dagster rebuilds the changed models and
-everything after them. To start the dev copy over, delete `services/transform/target/<lake>/dev/`.
+Once merged, **Reload definitions** (a deploy, in production) is all that is left: the models whose
+SQL changed get a new code version, and the `transform_automation` sensor rebuilds them and
+everything after them. A new model is built by the next new snapshot, or by hand.
+
+Raw models read a snapshot: the files its manifest lists, in its archive folder. On `owl-dbt-dev`
+that is the source's newest complete snapshot unless `OWL_SNAPSHOT=<key>` names another;
+`owl-dbt` always needs it, and Dagster sets it per partition.
+
+Once a model is built in dev, the models after it read the dev copy, not the lake's. To read the
+lake's again, add `--favor-state`, or start over by deleting `target/<lake>/dev/`.
 
 ### Agents (MCP servers)
 

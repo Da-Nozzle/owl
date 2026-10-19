@@ -17,14 +17,22 @@ models:
         +schema: raw_sodra
       jar:
         +schema: raw_jar
+      jar_financial_statements:
+        +schema: raw_jar_financial_statements
       address_register:
         +schema: raw_address_register
       vmi_daily_changes:
         +schema: raw_vmi_daily_changes
       vmi_monthly_register:
         +schema: raw_vmi_monthly_register
+      vmi_tax_arrears:
+        +schema: raw_vmi_tax_arrears
+      vmi_taxes_paid:
+        +schema: raw_vmi_taxes_paid
       google_places:
         +schema: raw_google_places
+      uzt_vacancies:
+        +schema: raw_uzt_vacancies
     staging:
       +schema: staging
     intermediate:
@@ -49,3 +57,11 @@ seeds:
       +column_types:
         municipality_code: integer
         search_mode: varchar
+    profession_categories:
+      +column_types:
+        profession_code_prefix: varchar
+    financial_statement_measures:
+      +column_types:
+        line_type_id: varchar
+        line_name: varchar
+        measure: varchar

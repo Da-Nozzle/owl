@@ -1,0 +1,45 @@
+version: 2
+
+sources:
+  - name: archive
+    tables:
+      - name: vmi_tax_arrears
+        description: >
+          The changelog of VMI's list of companies with tax arrears on get.data.gov.lt
+          (vmi/ja_nepriemokos/NepriemokosSuma/:changes), one snapshot a month holding the changes
+          made from the tick of the month before to its own (the 21st, 06:00 Vilnius time), as
+          JSON pages ({"_data": [...]}) of up to 20,000 changes, named changes-<first change
+          id>.json. A change is an insert (every field), an upsert (every field for a new row,
+          only those it set for one the list holds), a patch (only the fields it set) or a delete
+          (no field), with its id (_cid), time (_created, UTC), list row (_id), transaction and
+          revision. The changelog starts with the list's first load, on 2024-11-18, and keeps every
+          change since, so a month can be fetched again with the same result, and the snapshots
+          from 2024-11 on hold the list's whole history.
+
+models:
+  - name: raw_vmi_tax_arrears__changes
+    description: >
+      The arrears list's changes as each monthly snapshot fetched them: one row per change, its
+      changelog fields as text and the change itself as JSON. Built from nothing, it reads every
+      complete snapshot in the archive.
+    columns:
+      - name: _cid
+        description: The change's id in the changelog; ids grow with time, with gaps.
+      - name: _created
+        description: When the change was made (ISO 8601, UTC, no offset).
+      - name: _op
+        description: insert, upsert, patch or delete.
+      - name: _id
+        description: The list row changed (Spinta's id of the row).
+      - name: change
+        description: The change as the portal sent it, JSON.
+      - name: _source_file
+        description: The archived page the change was read from.
+      - name: _snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch this change is from, from the archive path.
+      - name: _file_url
+        description: Where the page was downloaded from.
+      - name: _file_fetched_at
+        description: When the page was downloaded (ISO 8601, UTC).
+      - name: _file_sha256
+        description: The downloaded page's SHA-256.

@@ -1,0 +1,89 @@
+version: 2
+
+models:
+  - name: int_uzt_company_months
+    description: >
+      What each company advertised with the Employment Service, by month: one row per company
+      (JAR code), month, profession category and workplace municipality, from the newest
+      snapshot of stg_uzt__vacancies (each snapshot holds every vacancy as it stands). A vacancy
+      counts in every month from its valid_from to its valid_until, at most up to the month the
+      export is as of. Professions are categorised by profession_categories (cafes_restaurants,
+      hair_beauty, car_repair), every other profession is other. Pay is per month for the hours
+      advertised (stg_uzt__vacancies.monthly_pay_from_eur), so part-time vacancies offer less.
+      The risk models compare it with Sodra's average wage (job_ad_wage_gap) and the vacancies
+      with the insured count (hiring while headcount stays flat). The publisher has loaded few
+      vacancies since July 2026, so months from then are incomplete.
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [company_code, month, profession_category, workplace_municipality_code]
+    data_tests:
+      - unique:
+          column_name: >-
+            company_code || '-' || month || '-' || profession_category || '-' ||
+            coalesce(workplace_municipality_code::varchar, '')
+    columns:
+      - name: company_code
+        description: The employer's JAR code (stg_jar__entities.company_code).
+        data_tests:
+          - not_null
+      - name: month
+        description: The first day of the month.
+        data_tests:
+          - not_null
+      - name: profession_category
+        description: The leads' category of the vacancies' professions, or other.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [cafes_restaurants, hair_beauty, car_repair, other]
+      - name: workplace_municipality_code
+        description: Where the jobs are (13 is Vilnius city); empty where the ad gives no place.
+      - name: vacancies_open
+        description: Vacancies offered on at least one day of the month.
+        data_tests:
+          - not_null
+      - name: vacancies_posted
+        description: Of those, the ones registered with the Employment Service in the month.
+      - name: places_offered
+        description: The people the open vacancies are for (a vacancy may be for several).
+      - name: vacancies_with_pay
+        description: Open vacancies that state their pay.
+      - name: min_monthly_pay_eur
+        description: The lowest month's pay offered (the lower bound of a range), in euros.
+      - name: median_monthly_pay_eur
+        description: >
+          The typical month's pay offered: the median of the open vacancies' pay (each a
+          range's lower bound), in euros.
+      - name: max_monthly_pay_eur
+        description: The highest month's pay offered (the upper bound of a range), in euros.
+      - name: snapshot_month
+        description: The snapshot of stg_uzt__vacancies the row is from.
+
+unit_tests:
+  - name: int_uzt_company_months_counts_a_vacancy_in_each_month_it_is_open
+    description: >
+      A cook's vacancy open from mid-March to mid-May counts in March, April and May, and is
+      posted in March; a waiter's pay range shares the cafes_restaurants row; a driver is other.
+      One archived early but valid until 2027 counts no further than the export's month. A
+      vacancy of a natural person, with no company code, is left out.
+    model: int_uzt_company_months
+    given:
+      - input: ref('stg_uzt__vacancies')
+        rows:
+          - {vacancy_id: DV-1, company_code: 304675464, profession_code: "512001", workplace_municipality_code: 13, posted_on: "2026-03-10", valid_from: "2026-03-16", valid_until: "2026-05-15", places: 2, monthly_pay_from_eur: 1400.00, monthly_pay_to_eur: null, snapshot_month: "2026-09", file_published_at: "2026-10-18 02:40:18"}
+          - {vacancy_id: DV-2, company_code: 304675464, profession_code: "513101", workplace_municipality_code: 13, posted_on: "2026-04-01", valid_from: "2026-04-01", valid_until: "2026-04-30", places: 1, monthly_pay_from_eur: 1200.00, monthly_pay_to_eur: 1800.00, snapshot_month: "2026-09", file_published_at: "2026-10-18 02:40:18"}
+          - {vacancy_id: DV-3, company_code: 304675464, profession_code: "832203", workplace_municipality_code: 13, posted_on: "2026-09-20", valid_from: "2026-09-20", valid_until: "2027-03-01", places: 1, monthly_pay_from_eur: null, monthly_pay_to_eur: null, snapshot_month: "2026-09", file_published_at: "2026-10-18 02:40:18"}
+          - {vacancy_id: DV-4, company_code: null, profession_code: "512001", workplace_municipality_code: 13, posted_on: "2026-04-01", valid_from: "2026-04-01", valid_until: "2026-04-30", places: 1, monthly_pay_from_eur: 1300.00, monthly_pay_to_eur: null, snapshot_month: "2026-09", file_published_at: "2026-10-18 02:40:18"}
+      - input: ref('profession_categories')
+        rows:
+          - {category: cafes_restaurants, occupation: cook, profession_code_prefix: "5120"}
+          - {category: cafes_restaurants, occupation: waiter, profession_code_prefix: "5131"}
+    expect:
+      rows:
+        - {company_code: 304675464, month: "2026-03-01", profession_category: cafes_restaurants, vacancies_open: 1, vacancies_posted: 1, places_offered: 2, vacancies_with_pay: 1, min_monthly_pay_eur: 1400.00, median_monthly_pay_eur: 1400.00, max_monthly_pay_eur: 1400.00}
+        - {company_code: 304675464, month: "2026-04-01", profession_category: cafes_restaurants, vacancies_open: 2, vacancies_posted: 1, places_offered: 3, vacancies_with_pay: 2, min_monthly_pay_eur: 1200.00, median_monthly_pay_eur: 1300.00, max_monthly_pay_eur: 1800.00}
+        - {company_code: 304675464, month: "2026-05-01", profession_category: cafes_restaurants, vacancies_open: 1, vacancies_posted: 0, places_offered: 2, vacancies_with_pay: 1, min_monthly_pay_eur: 1400.00, median_monthly_pay_eur: 1400.00, max_monthly_pay_eur: 1400.00}
+        - {company_code: 304675464, month: "2026-09-01", profession_category: other, vacancies_open: 1, vacancies_posted: 1, places_offered: 1, vacancies_with_pay: 0, min_monthly_pay_eur: null, median_monthly_pay_eur: null, max_monthly_pay_eur: null}
+        - {company_code: 304675464, month: "2026-10-01", profession_category: other, vacancies_open: 1, vacancies_posted: 0, places_offered: 1, vacancies_with_pay: 0, min_monthly_pay_eur: null, median_monthly_pay_eur: null, max_monthly_pay_eur: null}

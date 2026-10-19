@@ -12,6 +12,9 @@ owl:
       # spills into a folder of its own, as DuckDB names its spill files alike in every process.
       settings:
         memory_limit: "{{ env_var('OWL_DUCKDB_MEMORY_LIMIT') }}"
+      # Set once, as the database opens: dbt-duckdb applies `settings` again on every cursor, and
+      # once DuckDB has spilled it refuses to set its temp directory, even to the same folder.
+      config_options:
         temp_directory: "{{ env_var('OWL_DUCKDB_TEMP_DIRECTORY') }}/{{ invocation_id }}"
       extensions:
         - httpfs

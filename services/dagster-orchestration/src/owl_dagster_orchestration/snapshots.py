@@ -4,7 +4,7 @@ from datetime import datetime
 
 import dagster as dg
 
-from owl_ingest.ports.downloader import Download
+from owl_ingest.ports.downloader import Download, FetchedFile
 from owl_ingest.settings import PipelineMode
 
 # Any time before every source's first snapshot.
@@ -68,7 +68,7 @@ class ArchivedSource:
     name: str
     cadence: SnapshotCadence
     # Archives a snapshot's files and returns them by name.
-    fetch: Callable[[str], Mapping[str, Download]] | None = None
+    fetch: Callable[[str], Mapping[str, FetchedFile]] | None = None
     # For a source that keeps its history, as a changelog does: any period from here can be
     # fetched. Otherwise only the current period can.
     history_start: str | None = None

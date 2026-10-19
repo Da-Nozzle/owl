@@ -44,6 +44,50 @@ def build_http_client(
     )
 
 
+def build_streaming_http_client(
+    user_agent: str,
+    settings: HttpClientSettings,
+    *,
+    transport: httpx.BaseTransport | None = None,
+) -> httpx.Client:
+    """A client whose bodies are read as they arrive (`client.stream()`), for files too big to
+    hold in memory. It retries nothing, as a body half read cannot be asked for again from inside
+    the request: `retrying_whole_downloads` retries each download from its start instead."""
+    return httpx.Client(
+        headers={"User-Agent": user_agent},
+        timeout=settings.timeout_seconds,
+        follow_redirects=True,
+        transport=transport,
+        event_hooks={"response": [raise_for_error_status]},
+    )
+
+
+def retrying_whole_downloads(
+    settings: HttpClientSettings, *, sleep: Callable[[float], None] = time.sleep
+) -> Retrying:
+    """Retries a whole download through a streaming client as RetryingTransport retries an
+    attempt: after a timeout or a dropped connection, before its body or while it is read, or a
+    429 or 5xx (which the client's hook raises), waiting what Retry-After asks for or the
+    policy's backoff. Anything else the download raises fails it at once."""
+
+    def wait_seconds(state: RetryCallState) -> float:
+        error = state.outcome.exception() if state.outcome is not None else None
+        asked = None
+        if isinstance(error, httpx.HTTPStatusError):
+            asked = retry_after_seconds(
+                error.response.headers.get("Retry-After"), datetime.now(UTC)
+            )
+        return settings.retry.wait_seconds(state.attempt_number, asked)
+
+    return Retrying(
+        stop=stop_after_attempt(settings.retry.attempts),
+        wait=wait_seconds,
+        retry=retry_if_exception(is_transient_download_error),
+        sleep=sleep,
+        reraise=True,
+    )
+
+
 class RetryingTransport(httpx.BaseTransport):
     """Retries each request as the settings' policy allows, each attempt starting at least
     `min_interval_seconds` after the last. An attempt reads the whole body, so a server going
@@ -141,6 +185,13 @@ def is_transient(error: BaseException) -> bool:
 
 def is_retried_response(response: httpx.Response) -> bool:
     return response.status_code in RETRY_STATUSES
+
+
+def is_transient_download_error(error: BaseException) -> bool:
+    """A transient error, or an error status the client's hook raised that is worth retrying."""
+    return is_transient(error) or (
+        isinstance(error, httpx.HTTPStatusError) and is_retried_response(error.response)
+    )
 
 
 def last_outcome(state: RetryCallState) -> httpx.Response:

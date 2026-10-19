@@ -16,9 +16,18 @@ models:
     data_tests:
       - unique:
           column_name: "company_code || '-' || snapshot_month"
+      - unique:
+          column_name: "entity_id || '-' || snapshot_month"
     columns:
       - name: company_code
         description: JAR code (ja_kodas); Sodra's jarCode.
+        data_tests:
+          - not_null
+      - name: entity_id
+        description: >
+          The entity's id on get.data.gov.lt (_id), by which the register's other datasets refer
+          to it (juridinis_asmuo._id): its seat, and its financial statements and filing records
+          (stg_jar_financial_statements__*).
         data_tests:
           - not_null
       - name: company_name
@@ -98,5 +107,5 @@ unit_tests:
           - {"_snapshot_month": "2026-09", "juridinis_asmuo._id": "e1", "adresas._id": "a2", "adresas_nuo": "2026-08-03"}
     expect:
       rows:
-        - {company_code: 110607882, company_name: "UAB \"Kavos pupa\"", legal_form_code: 310, status_code: 0, deregistered_on: null, registered_address_id: a1, registered_address_since: "1997-05-21", snapshot_month: "2026-08", file_published_at: "2026-08-21 06:07:56"}
-        - {company_code: 110607882, company_name: "UAB \"Kavos pupa\"", legal_form_code: 310, status_code: 10, deregistered_on: "2026-09-01", registered_address_id: a2, registered_address_since: "2026-08-03", snapshot_month: "2026-09", file_published_at: "2026-09-21 06:00:00"}
+        - {company_code: 110607882, entity_id: e1, company_name: "UAB \"Kavos pupa\"", legal_form_code: 310, status_code: 0, deregistered_on: null, registered_address_id: a1, registered_address_since: "1997-05-21", snapshot_month: "2026-08", file_published_at: "2026-08-21 06:07:56"}
+        - {company_code: 110607882, entity_id: e1, company_name: "UAB \"Kavos pupa\"", legal_form_code: 310, status_code: 10, deregistered_on: "2026-09-01", registered_address_id: a2, registered_address_since: "2026-08-03", snapshot_month: "2026-09", file_published_at: "2026-09-21 06:00:00"}

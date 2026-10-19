@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
-from owl_ingest.ports.downloader import Download
+from owl_ingest.ports.downloader import Download, FetchedFile, OpenedDownload, StreamedDownload
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,11 +19,19 @@ class RawArchive(Protocol):
 
     def save(self, source: str, snapshot: str, name: str, download: Download) -> None: ...
 
+    def save_stream(
+        self, source: str, snapshot: str, name: str, download: OpenedDownload
+    ) -> StreamedDownload:
+        """Writes the body as its chunks arrive, never holding it whole, from the file's start
+        each time; gzip-compressed if `name` ends in `.gz`. The file is replaced only once the
+        body has arrived whole: a body that breaks off leaves the file as it was."""
+        ...
+
     def complete(
         self,
         source: str,
         snapshot: str,
-        downloads: Mapping[str, Download],
+        downloads: Mapping[str, FetchedFile],
         completed_at: datetime,
     ) -> None: ...
 
@@ -34,7 +42,7 @@ class RawArchive(Protocol):
     def manifest(self, source: str, snapshot: str) -> SnapshotManifest: ...
 
 
-def file_record(download: Download) -> dict[str, object]:
+def file_record(download: FetchedFile) -> dict[str, object]:
     """A file's fetch as the archive records it, in the snapshot's manifest and beside the file."""
     return {
         "url": download.url,

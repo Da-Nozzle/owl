@@ -2,12 +2,13 @@
 {{ config(materialized='ephemeral') }}
 
 {% set snapshots = archived_snapshots('raw_sodra__monthly', 'sodra') %}
+{% set files = listed_archived_files('sodra', 'monthly-*.csv.zip', snapshots) %}
 
 with published as (
     select *
     from read_csv(
         [
-            {%- for zipped in archived_files('sodra', 'monthly-*.csv.zip', snapshots) %}
+            {%- for zipped in files %}
             'zip://{{ zipped }}/*.csv'{{ ',' if not loop.last }}
             {%- endfor %}
         ],
@@ -29,7 +30,7 @@ fetches as (
         last_modified,
         sha256
     from read_json(
-        {{ archived_files('sodra', 'monthly-*.csv.zip.meta.json', snapshots) }},
+        {{ sidecars_of(files) }},
         columns = {
             url: 'varchar',
             fetched_at: 'varchar',

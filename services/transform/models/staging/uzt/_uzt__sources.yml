@@ -1,0 +1,243 @@
+version: 2
+
+models:
+  - name: stg_uzt__vacancies
+    description: >
+      One row per vacancy and snapshot, for the vacancies posted with the Employment Service
+      since 2015-01-01 (the euro years; older ones stay in raw): each as the snapshot's export
+      had it, with its pay in euros, its profession, its validity, the employer's JAR code and
+      the workplace's address split into components to match against the Address Register
+      (stg_address_register__addresses). The employer's contact person, phones and e-mail are
+      never fetched, and the free-text description and requirements are left in raw. A vacancy
+      is published with its final state: one archived long ago keeps the validity it ended with.
+      Since July 2026 the dataset has had few new vacancies (about 12,000 a month until June
+      2026; 3,468 posted in July, 2,395 in August, 1,115 in September in the 2026-09 snapshot)
+      and 31 open ones, against 3,648 open on 2026-07-08: the publisher has stopped loading most
+      of them, so recent months are incomplete.
+    config:
+      meta:
+        # owl-dbt-diff matches rows on it.
+        key: [vacancy_id, snapshot_month]
+    data_tests:
+      - unique:
+          column_name: "vacancy_id || '-' || snapshot_month"
+    columns:
+      - name: vacancy_id
+        description: The Employment Service's id of the vacancy (darbo_vietos_id, DV-59-996710668).
+        data_tests:
+          - not_null
+      - name: status
+        description: >
+          sukurta (created: published), koreguojama (being edited) or archyvuota (archived: no
+          longer offered), as published.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [sukurta, koreguojama, archyvuota]
+      - name: is_open
+        description: Whether the vacancy was open on the day of the export (ar_aktuali_siandien).
+        data_tests:
+          - not_null
+      - name: is_filled
+        description: Whether the Employment Service records the vacancy as filled (ar_uzpildyta).
+        data_tests:
+          - not_null
+      - name: posted_on
+        description: When the vacancy was registered with the Employment Service (ikelimo_data).
+        data_tests:
+          - not_null
+      - name: valid_from
+        description: The first day the vacancy is offered.
+        data_tests:
+          - not_null
+      - name: valid_until
+        description: >
+          The last day the vacancy is offered, as it ended or was last extended. Before valid_from
+          on about 1,300 vacancies, as published.
+        data_tests:
+          - not_null
+      - name: wanted_start_on
+        description: When the employer would like the job to start; often empty.
+      - name: places
+        description: How many people the vacancy is for (darbo_vietu_skaicius).
+        data_tests:
+          - not_null
+      - name: contract_type
+        description: The employment contract offered, as published (Neterminuota for open-ended).
+      - name: registration_basis
+        description: >
+          Why the vacancy was registered, as published: Sukūrus naują darbo vietą (a new job),
+          Atsilaisvinus darbo vietai (a job vacated), and others.
+      - name: registration_channel
+        description: How the employer registered it (the service's portal, by phone, ...).
+      - name: currency
+        description: The currency the pay was stated in, EUR or (early 2015) LTL.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [EUR, LTL]
+      - name: pay_from_eur
+        description: >
+          The pay offered as advertised, or its lower bound (vid_darbo_uzmokestis), in euros
+          (litas at 3.4528), gross, per month or, when under 50, per hour (pay_period). Empty on
+          about a fifth of vacancies, nearly all posted in 2015 to 2017.
+      - name: pay_to_eur
+        description: The upper bound of the pay offered (maks_darbo_uzmokestis), per pay_period.
+      - name: pay_period
+        description: >
+          hour when pay_from_eur is under 50 euros (no monthly pay is that low: monthly pay of 50
+          to 300 euros is part-time), month otherwise, including when no pay is stated.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [hour, month]
+      - name: monthly_pay_eur
+        description: >
+          The Employment Service's month's pay for the hours advertised (prelim_darbo_uzmokestis):
+          an hourly rate times the hours a month (168 for 40 hours a week, 84 for 20), or the
+          monthly pay; sometimes the middle or top of a monthly range.
+      - name: monthly_pay_from_eur
+        description: >
+          The pay offered for a month of the hours advertised, or its lower bound: pay_from_eur
+          if monthly, monthly_pay_eur if hourly. What the leads compare with Sodra's average
+          wage. Part-time vacancies offer a part of a month's pay.
+      - name: monthly_pay_to_eur
+        description: >
+          The upper bound for a month: pay_to_eur if monthly, scaled to a month as
+          monthly_pay_eur is if hourly.
+      - name: pay_comment
+        description: The employer's note on the pay, as published (bonuses, net amounts, tips).
+      - name: profession_group_code
+        description: The Employment Service's profession group, as published.
+      - name: profession_group
+      - name: profession_code
+        description: >
+          The six-digit profession code (Lietuvos profesijų klasifikatorius, built on ISCO-08:
+          512001 is a cook), as text; profession_categories gives the leads' categories by its
+          prefix. The publisher reclassified many in April 2026.
+      - name: profession
+        description: The profession's name, in Lithuanian.
+      - name: company_code
+        description: >
+          The employer's JAR code (stg_jar__entities.company_code), when the employer is a legal
+          entity with a nine-digit code; empty for natural persons (published as "Fizinis
+          asmuo"), farmers (whose code is their farm's) and the old six- to eight-digit codes of
+          entities from before JAR.
+      - name: employer_code
+        description: The employer's code as published (jar_kodas).
+        data_tests:
+          - not_null
+      - name: employer_name
+        description: The employer's name as published.
+      - name: employer_kind
+        description: >
+          Juridiniai asmenys (legal entities), Ūkininkai (farmers), Asmenys su individualia
+          veikla (self-employed) or Asmenys su verslo liudijimais (with a business certificate).
+      - name: employer_status
+        description: The employer's legal status in JAR, as published (Įregistruotas, Bankrutavęs, ...).
+      - name: employer_registered_on
+        description: When the employer was registered, as published.
+      - name: employer_seat
+        description: >
+          The employer's registered office as published, municipality first and postcode last
+          (Vilniaus miesto sav., Vilnius, Ozo g. 12A, LT-08200); its number may carry the
+          premises after a dash.
+      - name: workplace_address
+        description: Where the job is, as published (Turistų g. 1, Lazdijai, Lietuva).
+        data_tests:
+          - not_null
+      - name: workplace_municipality
+        description: >
+          The workplace's municipality as published (Vilniaus miesto sav.). Empty, with a
+          workplace_address of only ", Lietuva", on about 19,700 vacancies, nearly all posted
+          since 2023.
+      - name: workplace_municipality_code
+        description: >
+          The workplace municipality's code (the municipalities seed; 13 is Vilnius city), to
+          match against stg_address_register__addresses.municipality_code.
+        data_tests:
+          # Also fails when a municipality is not in the seed.
+          - not_null:
+              config:
+                where: "workplace_municipality is not null"
+      - name: workplace_settlement
+        description: The workplace's city, town or village, in the nominative (Vilnius).
+        data_tests:
+          - not_null:
+              config:
+                where: "workplace_municipality is not null"
+      - name: workplace_street
+        description: >
+          The workplace's street as an address writes it, without its kind (Savanorių for
+          Savanorių pr.), as the Address Register's street; empty when the address gives only a
+          settlement.
+      - name: workplace_street_type
+        description: The street's kind, abbreviated (g., pr., al., pl., ...), as the Address Register's.
+      - name: workplace_house_number
+        description: >
+          The building's number as the Address Register writes it (12, 12A), a premises after a
+          dash dropped; empty when the address has none.
+      - name: workplace_postcode
+        description: The workplace's postcode with LT- (LT-44151), when the address gives one.
+      - name: workplace_is_seat
+        description: >
+          Whether the workplace is at the employer's registered office: the same street and
+          number, in the same settlement (a village's name is not compared: the seat writes it
+          in the genitive). Empty unless both addresses name a street and a number.
+      - name: snapshot_month
+        description: The snapshot (YYYY-MM) whose fetch this row is from.
+        data_tests:
+          - not_null
+      - name: file_published_at
+        description: >
+          When the newest change the export holds was made (its Last-Modified, UTC): what the row
+          is as of.
+
+unit_tests:
+  - name: stg_uzt__vacancies_states_pay_for_a_month_in_euros
+    description: >
+      A monthly range, an hourly rate with its month for the hours advertised, and a 2015
+      vacancy in litas; a vacancy posted before 2015 is left out.
+    model: stg_uzt__vacancies
+    given:
+      - input: ref('raw_uzt_vacancies__vacancies')
+        rows:
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Sun, 18 Oct 2026 02:40:18 GMT", "darbo_vietos_id": "DV-1", "ikelimo_data": "2026-05-04", "galioja_nuo": "2026-05-04", "galioja_iki": "2026-06-04", "vid_darbo_uzmokestis": "1600.0", "maks_darbo_uzmokestis": "1800.0", "prelim_darbo_uzmokestis": "1700.0", "valiuta": "EUR", "darbo_vietos_adresas": "Vilnius, Lietuva", "darbo_vietos_sav_pav": "Vilniaus miesto sav."}
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Sun, 18 Oct 2026 02:40:18 GMT", "darbo_vietos_id": "DV-2", "ikelimo_data": "2026-05-04", "galioja_nuo": "2026-05-04", "galioja_iki": "2026-06-04", "vid_darbo_uzmokestis": "10.0", "maks_darbo_uzmokestis": "14.0", "prelim_darbo_uzmokestis": "840.0", "valiuta": "EUR", "darbo_vietos_adresas": "Vilnius, Lietuva", "darbo_vietos_sav_pav": "Vilniaus miesto sav."}
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Sun, 18 Oct 2026 02:40:18 GMT", "darbo_vietos_id": "DV-3", "ikelimo_data": "2015-01-05", "galioja_nuo": "2015-01-05", "galioja_iki": "2015-02-05", "vid_darbo_uzmokestis": "3452.8", "maks_darbo_uzmokestis": null, "prelim_darbo_uzmokestis": "3452.8", "valiuta": "LTL", "darbo_vietos_adresas": "Vilnius, Lietuva", "darbo_vietos_sav_pav": "Vilniaus miesto sav."}
+          - {"_snapshot_month": "2026-09", "_file_last_modified": "Sun, 18 Oct 2026 02:40:18 GMT", "darbo_vietos_id": "DV-4", "ikelimo_data": "2014-12-30", "galioja_nuo": "2014-12-30", "galioja_iki": "2015-01-30", "vid_darbo_uzmokestis": "2000.0", "maks_darbo_uzmokestis": null, "prelim_darbo_uzmokestis": "2000.0", "valiuta": "LTL", "darbo_vietos_adresas": "Vilnius, Lietuva", "darbo_vietos_sav_pav": "Vilniaus miesto sav."}
+      - input: ref('municipalities')
+        rows:
+          - {municipality_code: 13, municipality: "Vilniaus miesto sav."}
+    expect:
+      rows:
+        - {vacancy_id: DV-1, pay_period: month, pay_from_eur: 1600.00, monthly_pay_from_eur: 1600.00, monthly_pay_to_eur: 1800.00, workplace_municipality_code: 13}
+        - {vacancy_id: DV-2, pay_period: hour, pay_from_eur: 10.00, monthly_pay_from_eur: 840.00, monthly_pay_to_eur: 1176.00, workplace_municipality_code: 13}
+        - {vacancy_id: DV-3, pay_period: month, pay_from_eur: 1000.00, monthly_pay_from_eur: 1000.00, monthly_pay_to_eur: null, workplace_municipality_code: 13}
+
+  - name: stg_uzt__vacancies_splits_the_workplace_and_compares_it_with_the_seat
+    description: >
+      A workplace at the seat (its premises dropped), one elsewhere with a postcode and a floor
+      after the number, one in a village matched to a seat in the genitive, and one with no
+      street; a natural person has no company code.
+    model: stg_uzt__vacancies
+    given:
+      - input: ref('raw_uzt_vacancies__vacancies')
+        rows:
+          - {"_snapshot_month": "2026-09", "darbo_vietos_id": "DV-1", "ikelimo_data": "2026-05-04", "jar_kodas": "304675464", "teisines_formos_pav": "Juridiniai asmenys", "darbo_vietos_adresas": "Gabijos g. 52, Vilnius, Lietuva", "darbdavio_bustine": "Vilniaus miesto sav., Vilnius, Gabijos g. 52-102, LT-06157", "darbo_vietos_sav_pav": "Vilniaus miesto sav."}
+          - {"_snapshot_month": "2026-09", "darbo_vietos_id": "DV-2", "ikelimo_data": "2026-05-04", "jar_kodas": "304675464", "teisines_formos_pav": "Juridiniai asmenys", "darbo_vietos_adresas": "Savanorių pr. 192a, 3 aukštas, Kaunas 44151, Lietuva", "darbdavio_bustine": "Vilnius, Ozo g. 12A, LT-08200", "darbo_vietos_sav_pav": "Kauno miesto sav."}
+          - {"_snapshot_month": "2026-09", "darbo_vietos_id": "DV-3", "ikelimo_data": "2026-05-04", "jar_kodas": "Fizinis asmuo", "teisines_formos_pav": "Asmenys su verslo liudijimais", "darbo_vietos_adresas": "Erdvės g. 2, Ramučiai, Lietuva", "darbdavio_bustine": "Kauno rajono sav., Karmėlavos sen., Ramučių k., Erdvės g. 2, LT-52114", "darbo_vietos_sav_pav": "Kauno rajono sav."}
+          - {"_snapshot_month": "2026-09", "darbo_vietos_id": "DV-4", "ikelimo_data": "2026-05-04", "jar_kodas": "750052", "teisines_formos_pav": "Juridiniai asmenys", "darbo_vietos_adresas": "Kovo 11-osios g., Kaunas, Lietuva", "darbdavio_bustine": "Kaunas, Kovo 11-osios g. 3", "darbo_vietos_sav_pav": "Kauno miesto sav."}
+      - input: ref('municipalities')
+        rows:
+          - {municipality_code: 13, municipality: "Vilniaus miesto sav."}
+          - {municipality_code: 19, municipality: "Kauno miesto sav."}
+          - {municipality_code: 52, municipality: "Kauno rajono sav."}
+    expect:
+      rows:
+        - {vacancy_id: DV-1, company_code: 304675464, workplace_municipality_code: 13, workplace_settlement: Vilnius, workplace_street: Gabijos, workplace_street_type: g., workplace_house_number: "52", workplace_postcode: null, workplace_is_seat: true}
+        - {vacancy_id: DV-2, company_code: 304675464, workplace_municipality_code: 19, workplace_settlement: Kaunas, workplace_street: Savanorių, workplace_street_type: pr., workplace_house_number: "192A", workplace_postcode: LT-44151, workplace_is_seat: false}
+        - {vacancy_id: DV-3, company_code: null, workplace_municipality_code: 52, workplace_settlement: Ramučiai, workplace_street: Erdvės, workplace_street_type: g., workplace_house_number: "2", workplace_postcode: null, workplace_is_seat: true}
+        - {vacancy_id: DV-4, company_code: null, workplace_municipality_code: 19, workplace_settlement: Kaunas, workplace_street: Kovo 11-osios, workplace_street_type: g., workplace_house_number: null, workplace_postcode: null, workplace_is_seat: null}

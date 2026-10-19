@@ -1,11 +1,11 @@
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from owl_ingest.ports.downloader import Download
+from owl_ingest.ports.downloader import Download, FetchedFile, OpenedDownload, StreamedDownload
 from owl_ingest.ports.raw_archive import SnapshotManifest, file_record
 
 FETCHED_AT = datetime(2026, 9, 29, 11, 23, tzinfo=UTC)
@@ -40,6 +40,37 @@ class FakeDownloader:
     def download(self, url: str) -> Download:
         self.requested.append(url)
         return build_download(self.body, url=url)
+
+
+@dataclass
+class FakeStreamingDownloader:
+    """A StreamingDownloader answering each URL with the next of its queued downloads, in chunks;
+    it records the URLs streamed and how many bytes of each body the writer read."""
+
+    responses: dict[str, list[Download]]
+    chunk_bytes: int = 4
+    streamed: list[str] = field(default_factory=list)
+    read: list[int] = field(default_factory=list)
+
+    def stream[T](self, url: str, write: Callable[[OpenedDownload], T]) -> T:
+        self.streamed.append(url)
+        download = self.responses[url].pop(0)
+        self.read.append(0)
+        return write(
+            OpenedDownload(
+                url=url,
+                fetched_at=download.fetched_at,
+                last_modified=download.last_modified,
+                etag=download.etag,
+                chunks=self._chunks(download.body),
+            )
+        )
+
+    def _chunks(self, body: bytes) -> Iterator[bytes]:
+        for start in range(0, len(body), self.chunk_bytes):
+            chunk = body[start : start + self.chunk_bytes]
+            self.read[-1] += len(chunk)
+            yield chunk
 
 
 @dataclass
@@ -94,11 +125,32 @@ class InMemoryRawArchive:
     def save(self, source: str, snapshot: str, name: str, download: Download) -> None:
         self.downloads[(source, snapshot, name)] = download
 
+    def save_stream(
+        self, source: str, snapshot: str, name: str, download: OpenedDownload
+    ) -> StreamedDownload:
+        """Kept as a Download of the body as sent, as `save` keeps one, whatever its name."""
+        stored = build_download(
+            b"".join(download.chunks),
+            url=download.url,
+            fetched_at=download.fetched_at,
+            last_modified=download.last_modified,
+            etag=download.etag,
+        )
+        self.downloads[(source, snapshot, name)] = stored
+        return StreamedDownload(
+            url=stored.url,
+            fetched_at=stored.fetched_at,
+            last_modified=stored.last_modified,
+            etag=stored.etag,
+            size=stored.size,
+            sha256=stored.sha256,
+        )
+
     def complete(
         self,
         source: str,
         snapshot: str,
-        downloads: Mapping[str, Download],
+        downloads: Mapping[str, FetchedFile],
         completed_at: datetime,
     ) -> None:
         files = {name: file_record(download) for name, download in downloads.items()}
