@@ -214,3 +214,8 @@ pyrightconfig.json
 .ionide
 
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,dbt,git
+
+### Owl ###
+# Source downloads for replay mode: third-party data, not redistributed.
+replay/*
+!replay/README.md

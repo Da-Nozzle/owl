@@ -36,9 +36,11 @@ GitHub from the container: `git` over HTTPS uses your host's credentials, which 
 
 Dagster loads two code locations side by side, each building its own lake:
 
-- **`replay`** builds from the sample committed in `replay/` and calls no source, so it needs no
-  keys. Once Dagster is up, its sensors find the sample's snapshots and build raw, then staging and
-  after, by themselves within a few minutes. Follow it in **Runs**.
+- **`replay`** builds from a sample of the sources' downloads in `replay/` and calls no source, so
+  it needs no keys. The sample is not in the repository (it holds third-party data that is not
+  mine to republish), so `replay/` starts empty; copy archived snapshots into it to use it. Once
+  Dagster is up, its sensors find the sample's snapshots and build raw, then staging and after, by
+  themselves within a few minutes. Follow it in **Runs**.
 - **`live`** fetches the real sources. Each source has a `fetch_<source>` job and a schedule; the
   open-data sources (Sodra, JAR, Address Register, VMI) need no keys. Run a fetch job from its page
   to fetch now; what it fetched is then built the same way as replay.
@@ -161,3 +163,17 @@ Notes:
   through Dagster, or on `dbt-dev`, which reads the newest snapshot.
 - Each dbt command an agent starts may take up to an hour (`mcp.dbt.command_timeout_seconds` in
   `config/local/mcp.toml`).
+
+## Data sources
+
+The pipeline reads open data published by:
+- the State Social Insurance Fund Board (Sodra): employers' monthly insured counts and average wages;
+- the Centre of Registers (Registrų centras): the Register of Legal Entities (JAR), its financial
+  statements, and the Address Register;
+- the State Tax Inspectorate (VMI): the taxpayer register, taxes paid and tax arrears;
+- the Employment Service (Užimtumo tarnyba): job vacancies.
+
+All except Sodra's are fetched from the Lithuanian open data portal, [data.gov.lt](https://data.gov.lt).
+Each publisher's reuse terms apply, including crediting the source and the date the data was
+retrieved; each download's date is recorded in its archive sidecar. Google Places data, when
+fetched, is used under the Google Maps Platform Terms of Service and is not redistributed here.
