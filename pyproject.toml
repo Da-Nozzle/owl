@@ -21,7 +21,7 @@ dev = [
     "pytest-httpserver>=1.2.0",
     "ruff>=0.17.1",
 ]
-# The release job's only (.github/workflows/release.yml); not installed in the dev container.
+# The release job's only (.github/workflows/release.yml). Not installed in the dev container.
 release = ["python-semantic-release>=10.7.0"]
 
 [tool.uv]
@@ -85,7 +85,18 @@ match = "main"
 [tool.semantic_release.commit_parser_options]
 minor_tags = ["feat"]
 patch_tags = ["fix", "perf"]
-allowed_tags = ["feat", "fix", "perf", "build", "chore", "ci", "docs", "style", "refactor", "test"]
+allowed_tags = [
+    "feat",
+    "fix",
+    "perf",
+    "build",
+    "chore",
+    "ci",
+    "docs",
+    "style",
+    "refactor",
+    "test",
+]
 
 [tool.semantic_release.changelog]
 mode = "update"
