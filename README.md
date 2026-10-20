@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/Da-Nozzle/owl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Da-Nozzle/owl/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/Da-Nozzle/owl/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Da-Nozzle/owl/actions/workflows/codeql.yml)
+[![Coverage](https://raw.githubusercontent.com/Da-Nozzle/owl/python-coverage-comment-action-data/badge.svg)](https://github.com/Da-Nozzle/owl/tree/python-coverage-comment-action-data)
 [![Version](https://img.shields.io/github/v/tag/Da-Nozzle/owl?sort=semver&label=version)](CHANGELOG.md)
 [![Python](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FDa-Nozzle%2Fowl%2Fmain%2Fpyproject.toml)](pyproject.toml)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)

@@ -31,6 +31,9 @@ jobs:
         if: ${{ !vars.ACT }}
         runs-on: ubuntu-latest
         timeout-minutes: 45
+        permissions:
+            contents: write # the coverage badge, on its own branch
+            pull-requests: write # the coverage comment
         env:
             # The latest, like the one in VS Code's Dev Containers extension, which updates itself.
             DEVCONTAINER_CLI: "@devcontainers/cli"
@@ -42,6 +45,12 @@ jobs:
               run: npx --yes "$DEVCONTAINER_CLI" up --workspace-folder .
             - name: Lint and test
               run: npx --yes "$DEVCONTAINER_CLI" exec --workspace-folder . sh .devcontainer/ci.sh
+            # On main, the badge and data on the python-coverage-comment-action-data branch; on a
+            # pull request, a comment with what it changes.
+            - name: Coverage
+              uses: py-cov-action/python-coverage-comment-action@e5fb2218463c3377f3504b0c5b5646ed53da7a2f # v4.5
+              with:
+                  GITHUB_TOKEN: ${{ github.token }}
             - name: Service logs
               if: failure()
               run: docker compose --file .devcontainer/compose.yml logs --no-color --tail 200

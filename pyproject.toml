@@ -149,3 +149,13 @@ filterwarnings = [
     # dagster-dbt depends on sqlglot[rs], nothing here parses SQL with it.
     "ignore:sqlglotrs is deprecated:DeprecationWarning",
 ]
+
+[tool.coverage.run]
+# Relative, as CI reads the data outside the dev container, where /workspace is another folder.
+relative_files = true
+source = ["services", "libs"]
+omit = ["*/tests/*", "libs/testing/*"]
+
+[tool.coverage.report]
+skip_covered = true
+skip_empty = true

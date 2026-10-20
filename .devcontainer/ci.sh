@@ -8,4 +8,4 @@ cd "$(dirname "$0")/.."
 uv lock --check
 ruff check .
 ruff format --check .
-pytest
+pytest --cov
