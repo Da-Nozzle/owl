@@ -1,4 +1,3 @@
-from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import dagster as dg
@@ -25,9 +24,9 @@ COMPLETED_AT = datetime(2026, 10, 21, 3, 5, tzinfo=UTC)
 
 
 @pytest.fixture
-def instance() -> Iterator[dg.DagsterInstance]:
-    with dg.instance_for_test() as instance:
-        yield instance
+def instance(postgres_instance: dg.DagsterInstance) -> dg.DagsterInstance:
+    """The index keeps each source's partitions in the instance's storage: Postgres, as dev's."""
+    return postgres_instance
 
 
 def tick(

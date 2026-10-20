@@ -12,6 +12,10 @@ services:
     image: owl-dev:local
     pull_policy: never
     command: sleep infinity
+    # Below the machine's RAM, so a process that runs away is killed in here instead of the whole
+    # machine swapping until the desktop freezes. No swap either, so that happens at once.
+    mem_limit: 8g
+    memswap_limit: 8g
     volumes:
       - ..:/workspace:cached
       - ../config/local:/etc/owl:ro

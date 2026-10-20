@@ -1,5 +1,3 @@
-from collections.abc import Iterator
-
 import dagster as dg
 import pytest
 
@@ -39,12 +37,10 @@ def side_by_side_job() -> dg.JobDefinition:
     return DEFINITIONS.resolve_job_def("side_by_side")
 
 
-@pytest.fixture(scope="module")
-def instance() -> Iterator[dg.DagsterInstance]:
-    """One instance for the module's runs: making one takes about a second, and each test reads
-    only the events of its own run."""
-    with dg.instance_for_test() as instance:
-        yield instance
+@pytest.fixture
+def instance(postgres_instance: dg.DagsterInstance) -> dg.DagsterInstance:
+    """As dev's, so each step's process writes its events to Postgres."""
+    return postgres_instance
 
 
 def executor_message(job_fn: object, instance: dg.DagsterInstance) -> str:

@@ -1,5 +1,14 @@
 # Owl: Off-books Work Locator (Working Title)
 
+[![CI](https://github.com/Da-Nozzle/owl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Da-Nozzle/owl/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Da-Nozzle/owl/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Da-Nozzle/owl/actions/workflows/codeql.yml)
+[![Coverage](https://raw.githubusercontent.com/Da-Nozzle/owl/python-coverage-comment-action-data/badge.svg)](https://github.com/Da-Nozzle/owl/tree/python-coverage-comment-action-data)
+[![Version](https://img.shields.io/github/v/tag/Da-Nozzle/owl?sort=semver&label=version)](CHANGELOG.md)
+[![Python](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FDa-Nozzle%2Fowl%2Fmain%2Fpyproject.toml)](pyproject.toml)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org)
+
 Monthly pipeline that ranks Vilnius businesses which look busy on Google but declare little to Sodra.
 Why it is built the way it is: [DECISIONS.md](DECISIONS.md).
 
@@ -66,11 +75,12 @@ Logs go to stderr at INFO and to `logs/owl.log` at DEBUG.
 ### Machine size
 
 This was tested on a machine with 15 GB of usable RAM and an 8-core CPU. With the current local
-settings it will not work on less. On a more powerful machine, raise the settings below: the
-solution should scale well vertically.
+settings it will not work on less. On a more powerful machine, raise the settings below, starting
+with the dev container's memory cap: the solution should scale well vertically.
 
 | Setting | Where | Local value | What it controls |
 |---|---|---|---|
+| `mem_limit`, `memswap_limit` of `dev` | [.devcontainer/compose.yml:17](.devcontainer/compose.yml#L17) | `8g` | Memory for everything in the dev container: Dagster, dbt and DuckDB, VS Code's server, agents. A process that goes past it is killed in the container instead of the machine swapping until the desktop freezes. Raise both together on a machine with more RAM, leaving about 5 GB for the desktop and the other services: the settings below all have to fit inside it. Takes a container rebuild. |
 | `transform.duckdb_memory_limit` | [config/local/orchestration.toml:15](config/local/orchestration.toml#L15) | `2GB` | DuckDB's memory in each dbt process (and in the Google planner and the `lake` MCP server). Beyond it DuckDB spills to disk, so a low limit is slow rather than fatal, up to a point. |
 | `transform.dbt_threads` | [config/local/orchestration.toml:17](config/local/orchestration.toml#L17) | `4` | Models one dbt process builds at once, all sharing that process's memory limit. |
 | `concurrency.runs.max_concurrent_runs` | [.devcontainer/dagster/dagster.yaml:29](.devcontainer/dagster/dagster.yaml#L29) | `1` | Dagster runs at once; the rest wait in the queue. At 1, when both lakes need rebuilding, they rebuild one after the other. |
@@ -93,6 +103,7 @@ After changing a TOML file, click **Reload definitions** in Dagster. After chang
 ```sh
 pytest                               # all tests; -m unit or -m integration for one kind
 ruff check . && ruff format --check .
+sh .devcontainer/ci.sh               # what CI checks: the lock, ruff, then every test
 owl-dbt --lake replay debug          # dbt on a lake (live or replay), secrets resolved from config
 owl-dbt-dev build -s state:modified+ # your model changes, in a dev copy
 owl-dbt-diff                         # what those changes did to the tables
@@ -100,8 +111,55 @@ owl-dbt-vscode                       # the dbt VS Code extension's environment (
 ```
 
 Tests live in each package's `tests/unit/` (in-process) or `tests/integration/` (temporary files,
-DuckDB, a local HTTP server or a throwaway Dagster instance). None needs the compose services. dbt's
-tests are in `services/transform/tests/`.
+DuckDB, a local HTTP server, Dagster's executor or the compose services). The integration tests reach
+Postgres, s3mock and Marquez as `config/local` says, each session in resources of its own that it
+removes afterwards: `owl_test_<random>_*` databases, an `owl-test-<random>` bucket and a Marquez
+namespace per test (Marquez can only hide a deleted namespace). A service that has not answered
+within two minutes fails the tests that need it, naming the service. The sources themselves are
+never called. dbt's tests are in `services/transform/tests/`.
+
+### Commits, versions and CI
+
+Why it works this way: [DECISIONS.md](DECISIONS.md#cicd).
+
+The whole repo has one version, which the [conventional commit](https://www.conventionalcommits.org)
+types since the last tag decide. Nothing checks commit messages: one without a type makes no release
+and is left out of the changelog.
+
+| Commit | Version |
+| --- | --- |
+| `fix:`, `perf:` | patch, 0.1.0 → 0.1.1 |
+| `feat:` (a feature or a change in logic) | minor, 0.1.0 → 0.2.0 |
+| `feat!:`, any type with `!` (breaking) | major from 1.0.0; minor before |
+| `build:`, `chore:`, `ci:`, `docs:`, `refactor:`, `style:`, `test:` | none of its own |
+
+Once CI passes on main, `release.yml` writes the next version into every `pyproject.toml`,
+`dbt_project.yml` and `uv.lock`, adds its changes to [CHANGELOG.md](CHANGELOG.md), commits
+`chore(release): vX.Y.Z`, tags it and makes a GitHub release. Pull before you commit to main again.
+
+| Workflow | Runs |
+| --- | --- |
+| `ci.yml` | actionlint; the dev container as VS Code builds it, with every compose service, running `.devcontainer/ci.sh` |
+| `release.yml` | the release, after CI on main |
+| `codeql.yml` | CodeQL on the Python and the workflows |
+
+Dependabot (`.github/dependabot.yml`) opens weekly grouped updates for uv, the actions, the image,
+the compose services and the dev container features, all but Dagster and DuckDB, which are updated by
+hand (the comments there say why).
+
+[act](https://nektos.github.io/act/) runs the workflows locally (`.actrc`), in containers beside the
+dev stack. The dev-container and CodeQL jobs skip themselves there: run `.devcontainer/ci.sh` in the
+dev container instead.
+
+```sh
+act push -j workflows                                                        # actionlint
+act workflow_dispatch -W .github/workflows/release.yml --input dry-run=true  # the next version (on main)
+```
+
+Tool versions are each kept in one place that Dependabot updates: uv in `.devcontainer/Dockerfile`
+(the release job takes its uv from there too), python-semantic-release in `uv.lock` (the `release`
+dependency group), act as a dev container feature, and the actions by commit. actionlint and the
+devcontainer CLI run their latest.
 
 ### Changing models
 

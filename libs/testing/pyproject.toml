@@ -1,13 +1,22 @@
 [project]
 name = "owl-testing"
 version = "0.1.0"
-description = "Builders and fakes that the other packages' tests share; a dev dependency only"
+description = "Builders, fakes and fixtures for the dev services that the other packages' tests share; a dev dependency only"
 requires-python = ">=3.14,<3.15"
-dependencies = ["owl-config", "owl-ingest"]
+dependencies = [
+    "owl-config",
+    "owl-ingest",
+    "owl-lake",
+    "httpx>=0.28.1,<1",
+    "psycopg2-binary>=2.9.13",
+    "pytest>=9.1.1",
+    "s3fs>=2026.9",
+]
 
 [tool.uv.sources]
 owl-config = { workspace = true }
 owl-ingest = { workspace = true }
+owl-lake = { workspace = true }
 
 [build-system]
 requires = ["hatchling"]

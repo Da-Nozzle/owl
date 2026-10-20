@@ -146,6 +146,8 @@ celerybeat.pid
 
 # Environments
 .env
+# act's secrets, e.g. a GITHUB_TOKEN
+.secrets
 .venv
 env/
 venv/
