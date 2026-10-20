@@ -13,7 +13,9 @@
             "moby": false,
             "installDockerBuildx": true,
             "installDockerComposeSwitch": false
-        }
+        },
+        // Runs .github/workflows locally (.actrc)
+        "ghcr.io/devcontainers-extra/features/act:1": {}
     },
     "customizations": {
         "vscode": {
@@ -26,7 +28,8 @@
                 "tamasfe.even-better-toml",
                 "ms-azuretools.vscode-containers",
                 "dbtlabsinc.dbt", // not open source
-                "mechatroner.rainbow-csv"
+                "mechatroner.rainbow-csv",
+                "github.vscode-github-actions"
             ],
             "settings": {
                 "python.defaultInterpreterPath": "/usr/local/bin/python"

@@ -27,12 +27,6 @@ RUN apt-get update \
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 
-# act runs .github/workflows locally (.actrc). Not updated by Dependabot: bump it here.
-ARG ACT_VERSION=0.2.89
-RUN case "$(dpkg --print-architecture)" in amd64) arch=x86_64 ;; *) arch="$(dpkg --print-architecture)" ;; esac \
-    && curl -fsSL "https://github.com/nektos/act/releases/download/v${ACT_VERSION}/act_Linux_${arch}.tar.gz" \
-    | tar -xz -C /usr/local/bin act
-
 RUN groupadd --gid "${USER_UID}" "${USERNAME}" \
     && useradd --uid "${USER_UID}" --gid "${USER_UID}" --create-home --shell /bin/bash "${USERNAME}" \
     && chown -R "${USERNAME}:${USERNAME}" /usr/local \
