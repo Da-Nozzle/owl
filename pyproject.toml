@@ -1,7 +1,7 @@
 [project]
-name = "poc-data-pipeline-excercise"
+name = "owl"
 version = "0.1.0"
-description = "Homework"
+description = "Off-books Work Locator: ranks businesses that look busy but declare little to Sodra"
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "owl-config",
@@ -54,6 +54,47 @@ requires-dist = [
     "typer>=0.9.0",
     "dbt-core>=1.7,<1.13; extra == 'dbt-core'",
 ]
+
+[tool.semantic_release]
+# One version for the whole repo, set by the release job on main from the commits since the last
+# tag (.github/workflows/release.yml): fix and perf bump the patch, feat the minor. Until 1.0.0 a
+# breaking change bumps the minor too. Commit types are checked by .githooks/commit-msg.
+version_toml = [
+    "pyproject.toml:project.version",
+    "services/config/pyproject.toml:project.version",
+    "services/dagster-orchestration/pyproject.toml:project.version",
+    "services/ingest/pyproject.toml:project.version",
+    "libs/http/pyproject.toml:project.version",
+    "libs/lake/pyproject.toml:project.version",
+    "libs/testing/pyproject.toml:project.version",
+]
+version_variables = ["services/transform/dbt_project.yml:version"]
+tag_format = "v{version}"
+allow_zero_version = true
+major_on_zero = false
+commit_message = "chore(release): v{version}"
+commit_author = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+# uv.lock records each workspace package's version.
+build_command = "uv lock && git add uv.lock"
+
+[tool.semantic_release.branches.main]
+match = "main"
+
+[tool.semantic_release.commit_parser_options]
+minor_tags = ["feat"]
+patch_tags = ["fix", "perf"]
+allowed_tags = ["feat", "fix", "perf", "build", "chore", "ci", "docs", "style", "refactor", "test"]
+
+[tool.semantic_release.changelog]
+mode = "update"
+exclude_commit_patterns = ['^chore\(release\): ']
+
+[tool.semantic_release.changelog.default_templates]
+changelog_file = "CHANGELOG.md"
+
+[tool.semantic_release.publish]
+# Nothing is built for a release: its tag, changelog and GitHub release are all there is.
+upload_to_vcs_release = false
 
 [tool.ruff]
 line-length = 100

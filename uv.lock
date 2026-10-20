@@ -8,13 +8,13 @@ resolution-markers = [
 
 [manifest]
 members = [
+    "owl",
     "owl-config",
     "owl-dagster-orchestration",
     "owl-http",
     "owl-ingest",
     "owl-lake",
     "owl-testing",
-    "poc-data-pipeline-excercise",
 ]
 
 [[manifest.dependency-metadata]]
@@ -1420,6 +1420,49 @@ wheels = [
 ]
 
 [[package]]
+name = "owl"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "owl-config" },
+    { name = "owl-dagster-orchestration" },
+    { name = "owl-http" },
+    { name = "owl-ingest" },
+    { name = "owl-lake" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "hypothesis" },
+    { name = "owl-testing" },
+    { name = "psycopg2-binary" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "pytest-httpserver" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "owl-config", editable = "services/config" },
+    { name = "owl-dagster-orchestration", editable = "services/dagster-orchestration" },
+    { name = "owl-http", editable = "libs/http" },
+    { name = "owl-ingest", editable = "services/ingest" },
+    { name = "owl-lake", editable = "libs/lake" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "hypothesis", specifier = ">=6.170.0" },
+    { name = "owl-testing", editable = "libs/testing" },
+    { name = "psycopg2-binary", specifier = ">=2.9.13" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
+    { name = "pytest-httpserver", specifier = ">=1.2.0" },
+    { name = "ruff", specifier = ">=0.17.1" },
+]
+
+[[package]]
 name = "owl-config"
 version = "0.1.0"
 source = { editable = "services/config" }
@@ -1581,49 +1624,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f9/e2/3e91f31a7d2b083fe6ef3fa267035b518369d9511ffab804f839851d2779/pluggy-1.6.0.tar.gz", hash = "sha256:7dcc130b76258d33b90f61b658791dede3486c3e6bfb003ee5c9bfb396dd22f3", size = 69412, upload-time = "2025-05-15T12:30:07.975Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/54/20/4d324d65cc6d9205fabedc306948156824eb9f0ee1633355a8f7ec5c66bf/pluggy-1.6.0-py3-none-any.whl", hash = "sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746", size = 20538, upload-time = "2025-05-15T12:30:06.134Z" },
-]
-
-[[package]]
-name = "poc-data-pipeline-excercise"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "owl-config" },
-    { name = "owl-dagster-orchestration" },
-    { name = "owl-http" },
-    { name = "owl-ingest" },
-    { name = "owl-lake" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "hypothesis" },
-    { name = "owl-testing" },
-    { name = "psycopg2-binary" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "pytest-httpserver" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "owl-config", editable = "services/config" },
-    { name = "owl-dagster-orchestration", editable = "services/dagster-orchestration" },
-    { name = "owl-http", editable = "libs/http" },
-    { name = "owl-ingest", editable = "services/ingest" },
-    { name = "owl-lake", editable = "libs/lake" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "hypothesis", specifier = ">=6.170.0" },
-    { name = "owl-testing", editable = "libs/testing" },
-    { name = "psycopg2-binary", specifier = ">=2.9.13" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "pytest-cov", specifier = ">=7.1.0" },
-    { name = "pytest-httpserver", specifier = ">=1.2.0" },
-    { name = "ruff", specifier = ">=0.17.1" },
 ]
 
 [[package]]

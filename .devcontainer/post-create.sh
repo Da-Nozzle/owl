@@ -5,6 +5,9 @@ repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 
 uv sync --frozen --project "$repo_root"
 
+# Commit messages are conventional commits, which the release job versions from.
+git -C "$repo_root" config core.hooksPath .githooks
+
 mkdir -p "$DAGSTER_HOME"
 ln -sf "$repo_root/.devcontainer/dagster/dagster.yaml" "$DAGSTER_HOME/dagster.yaml"
 

@@ -1,0 +1,29 @@
+#!/bin/sh
+# A commit message's first line is a conventional commit, "type(scope): summary", as the release
+# job picks the next version from the types since the last tag: fix and perf bump the patch, feat
+# the minor; a "!" after the type or scope marks a breaking change. Git's own merge and revert
+# messages pass. .github/workflows/pull-request.yml runs this on PR titles and commits too.
+set -eu
+
+types='feat|fix|perf|build|chore|ci|docs|style|refactor|test' # [tool.semantic_release] in pyproject.toml
+
+subject="$(grep -v '^#' "$1" | sed '/^[[:space:]]*$/d' | head -n 1)"
+
+case "$subject" in
+    "Merge "* | "Revert \""* | "fixup! "* | "squash! "* | "amend! "*) exit 0 ;;
+esac
+
+if printf '%s\n' "$subject" | grep -Eq "^($types)(\([^() ]+\))?!?: [^ ]"; then
+    exit 0
+fi
+
+cat >&2 <<MESSAGE
+Not a conventional commit: $subject
+
+Start with a type, an optional scope and a summary, e.g. "fix(ingest): retry vmi downloads".
+  feat      a new feature or a change in logic (minor version)
+  fix, perf a bug fix or a speed-up (patch version)
+  build, chore, ci, docs, style, refactor, test: no new version
+Add "!" after the type or scope for a breaking change, e.g. "feat(lake)!: ...".
+MESSAGE
+exit 1
