@@ -1,0 +1,54 @@
+name: Release
+
+# Once CI passes on main: the next version from the commits since the last tag, written into every
+# pyproject.toml, uv.lock and CHANGELOG.md, committed to main, tagged and released on GitHub.
+# Settings: [tool.semantic_release] in pyproject.toml. Commits that only touch docs, tests, CI and
+# the like make no release.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Print the next version and changelog without committing, tagging or releasing
+        type: boolean
+        default: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+      # The commit CI passed, not one pushed since: the release commit then fails to push, and the
+      # newer commit's own run releases both.
+      - name: Check out the commit CI passed
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: git reset --hard "$SHA"
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.13.1" # the dev image's, in .devcontainer/Dockerfile
+          enable-cache: false
+      - name: Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOOP: ${{ inputs.dry-run && '--noop' || '' }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          uvx --from python-semantic-release==10.7.0 semantic-release -v $NOOP version
