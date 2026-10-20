@@ -6,10 +6,12 @@ import dagster as dg
 import httpx
 import pytest
 
+from owl_config.configuration import Configuration
 from owl_dagster_orchestration.lineage.sensor import LINEAGE, build_lineage_sensor, unsent
-from owl_dagster_orchestration.lineage.settings import LineageSettings
+from owl_dagster_orchestration.lineage.settings import LineageSettings, load_lineage_settings
 from owl_dagster_orchestration.metadata_keys import COMPILED_SQL
 from owl_http.settings import HttpClientSettings, RetryPolicy
+from owl_testing.services import Marquez
 
 ARCHIVE = dg.AssetKey(["live", "archive", "archive_sodra"])
 RAW = dg.AssetKey(["live", "raw", "raw_sodra__monthly"])
@@ -121,10 +123,13 @@ def marquez() -> FakeMarquez:
     return FakeMarquez()
 
 
-def build_definitions(marquez: FakeMarquez) -> dg.Definitions:
-    sensor = build_lineage_sensor(
-        SETTINGS, "owl-test", "Europe/Vilnius", transport=httpx.MockTransport(marquez.handle)
-    )
+def build_definitions(
+    marquez: FakeMarquez | None = None, settings: LineageSettings = SETTINGS
+) -> dg.Definitions:
+    """The assets and the lineage sensor, sending to the fake `marquez` if one is given, else
+    over HTTP to the Marquez `settings` name."""
+    transport = httpx.MockTransport(marquez.handle) if marquez else None
+    sensor = build_lineage_sensor(settings, "owl-test", "Europe/Vilnius", transport=transport)
     return dg.Definitions(
         assets=[archive, raw, staging], asset_checks=STAGING_CHECKS, sensors=[sensor]
     )
@@ -399,3 +404,94 @@ def test_an_assets_materializations_wait_while_one_of_their_runs_is_going(
         ("raw_sodra__monthly", first),
         ("stg_sodra__monthly", staged),
     ]
+
+
+# The tests above check what the sensor sends; these, that the dev container's Marquez takes it
+# and shows it as meant, sent from an instance in Postgres as dev's.
+RAW_NAME, STAGING_NAME = RAW.to_user_string(), STAGING.to_user_string()
+
+
+def sending_to(services_config: Configuration) -> dg.Definitions:
+    """The definitions, their sensor sending to the dev container's Marquez, in the test's
+    namespace."""
+    return build_definitions(settings=load_lineage_settings(services_config))
+
+
+def edges(graph: list[dict[str, Any]]) -> set[tuple[str, str]]:
+    """A Marquez graph's edges, each end as `<kind>:<name>`, without the namespace."""
+
+    def end(node_id: str) -> str:
+        kind, _namespace, name = node_id.split(":", 2)
+        return f"{kind}:{name}"
+
+    return {
+        (end(edge["origin"]), end(edge["destination"]))
+        for node in graph
+        for edge in node["outEdges"]
+    }
+
+
+def test_marquez_takes_each_event_and_draws_the_snapshot_from_the_archive_to_staging(
+    postgres_instance: dg.DagsterInstance, marquez_api: Marquez, services_config: Configuration
+) -> None:
+    # Arrange
+    build_history(postgres_instance)
+
+    # Act
+    result = tick(sending_to(services_config), postgres_instance)
+
+    # Assert
+    assert skip_message(result) == "Marquez took 3 events and refused 0"
+    assert edges(marquez_api.lineage(STAGING_NAME)) == {
+        ("job:live/archive/archive_sodra", "dataset:live/archive/archive_sodra"),
+        ("dataset:live/archive/archive_sodra", f"job:{RAW_NAME}"),
+        (f"job:{RAW_NAME}", f"dataset:{RAW_NAME}"),
+        (f"dataset:{RAW_NAME}", f"job:{STAGING_NAME}"),
+        (f"job:{STAGING_NAME}", f"dataset:{STAGING_NAME}"),
+    }
+
+
+def test_marquez_shows_a_models_columns_their_sources_its_tests_and_its_sql(
+    postgres_instance: dg.DagsterInstance, marquez_api: Marquez, services_config: Configuration
+) -> None:
+    # Arrange
+    build_history(postgres_instance)
+
+    # Act
+    tick(sending_to(services_config), postgres_instance)
+
+    # Assert
+    staged = marquez_api.dataset(STAGING_NAME)
+    assert [(c["name"], c["type"], c["description"]) for c in staged["fields"]] == [
+        ("insurer_code", "bigint", "Sodra's code for the employer")
+    ]
+    assert edges(marquez_api.column_lineage(STAGING_NAME)) == {
+        (
+            f"datasetField:{RAW_NAME}:Draudėjo kodas (code)",
+            f"datasetField:{STAGING_NAME}:insurer_code",
+        )
+    }
+    assertions = staged["facets"]["dataQualityAssertions"]["assertions"]
+    assert [(a["assertion"], a["success"]) for a in assertions] == [
+        ("not_null_stg_sodra__monthly_insurer_code", True),
+        ("unique_stg_sodra__monthly_insurer_code", False),
+    ]
+    assert marquez_api.job(STAGING_NAME)["facets"]["sql"]["query"] == STAGING_SQL
+
+
+def test_a_resent_event_is_the_same_run_in_marquez(
+    postgres_instance: dg.DagsterInstance, marquez_api: Marquez, services_config: Configuration
+) -> None:
+    # Arrange
+    definitions = sending_to(services_config)
+    dg.materialize([raw], instance=postgres_instance, partition_key="2026-09")
+    dg.materialize([raw], instance=postgres_instance, partition_key="2026-09")
+
+    # Act
+    tick(definitions, postgres_instance)
+    tick(definitions, postgres_instance)  # from no cursor again: the same events, resent
+
+    # Assert
+    runs = marquez_api.runs(RAW_NAME)
+    assert len(runs) == 2
+    assert {run["state"] for run in runs} == {"COMPLETED"}
