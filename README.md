@@ -75,15 +75,15 @@ Logs go to stderr at INFO and to `logs/owl.log` at DEBUG.
 ### Machine size
 
 This was tested on a machine with 15 GB of usable RAM and an 8-core CPU. With the current local
-settings it will not work on less. On a more powerful machine, raise the settings below: the
-solution should scale well vertically.
+settings it will not work on less. On a more powerful machine, raise the settings below, starting
+with the dev container's memory cap: the solution should scale well vertically.
 
 | Setting | Where | Local value | What it controls |
 |---|---|---|---|
+| `mem_limit`, `memswap_limit` of `dev` | [.devcontainer/compose.yml:17](.devcontainer/compose.yml#L17) | `8g` | Memory for everything in the dev container: Dagster, dbt and DuckDB, VS Code's server, agents. A process that goes past it is killed in the container instead of the machine swapping until the desktop freezes. Raise both together on a machine with more RAM, leaving about 5 GB for the desktop and the other services: the settings below all have to fit inside it. Takes a container rebuild. |
 | `transform.duckdb_memory_limit` | [config/local/orchestration.toml:15](config/local/orchestration.toml#L15) | `2GB` | DuckDB's memory in each dbt process (and in the Google planner and the `lake` MCP server). Beyond it DuckDB spills to disk, so a low limit is slow rather than fatal, up to a point. |
 | `transform.dbt_threads` | [config/local/orchestration.toml:17](config/local/orchestration.toml#L17) | `4` | Models one dbt process builds at once, all sharing that process's memory limit. |
 | `concurrency.runs.max_concurrent_runs` | [.devcontainer/dagster/dagster.yaml:29](.devcontainer/dagster/dagster.yaml#L29) | `1` | Dagster runs at once; the rest wait in the queue. At 1, when both lakes need rebuilding, they rebuild one after the other. |
-| `mem_limit` of `dev` | [.devcontainer/compose.yml:17](.devcontainer/compose.yml#L17) | `8g` | Memory for everything in the dev container, VS Code's server and agents included. A process that goes past it is killed in the container, instead of the whole machine swapping until the desktop freezes. Leave about 5 GB of the machine for the desktop and the other services. |
 | `google_places.workers` | [config/local/pipeline.toml:46](config/local/pipeline.toml#L46) | `16` | Google searches in flight at once. Google's per-minute quota limits this more than the machine does. |
 
 Within one run, each source's dbt step runs in a process of its own, side by side (Dagster's
@@ -119,6 +119,8 @@ within two minutes fails the tests that need it, naming the service. The sources
 never called. dbt's tests are in `services/transform/tests/`.
 
 ### Commits, versions and CI
+
+Why it works this way: [DECISIONS.md](DECISIONS.md#cicd).
 
 The whole repo has one version, which the [conventional commit](https://www.conventionalcommits.org)
 types since the last tag decide. Nothing checks commit messages: one without a type makes no release

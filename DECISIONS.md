@@ -330,11 +330,54 @@ losses without going bankrupt means someone is paying the bills off the books". 
 equity, so a plain loss streak flags hundreds. Counting only loss years in the bottom quarter of
 the same category's margins, it narrows to 92 companies with three such years and 24 with five.
 
+## CI/CD
+
+There is nothing to deploy, so the CD here is releases. It was built with Claude; I made the calls
+below.
+
+**Trunk-based, with main as the release branch.** A main, release and feature branch setup is too
+much for one person, so every commit on main that passes CI can be a version.
+[python-semantic-release](https://python-semantic-release.readthedocs.io) reads the commit messages
+since the last tag: `fix:` bumps the patch, `feat:` (any change in logic) the minor, and a breaking
+change the major, but only after 1.0. It writes that one version into every `pyproject.toml`,
+`dbt_project.yml` and `uv.lock`, updates the changelog, tags, and makes a GitHub release. Nothing
+enforces the message format: a commit without a type just makes no release, which for one person
+beats a hook rejecting commits. The history before v0.1.0 doesn't follow the format, so the
+changelog starts there.
+
+**CI runs in the real dev container.** GitHub builds it the way VS Code does (the devcontainer
+CLI), with every compose service, and runs `.devcontainer/ci.sh`, the same script I run locally.
+With the services there anyway, the integration tests use the real Postgres, s3mock and Marquez
+instead of fakes, each test session in databases, a bucket and Marquez namespaces of its own, so
+they never touch the dev data. The third-party sources stay faked: CI shouldn't go red because
+data.gov.lt is down, and Google costs money per call.
+
+**act only runs the light workflows.** In the dev container it shares the host's Docker, so the
+dev-container job would start a second copy of the whole stack next to the one I work in. For that
+job, `ci.sh` in the dev container is the local equivalent.
+
+**Every tool version lives in one place that Dependabot updates** (the Dockerfile, `uv.lock`, the
+dev container features, the actions' commits), or isn't pinned at all. A version copied into a
+second file gets forgotten there. Dagster and DuckDB are left to update by hand, as they're pinned
+together with things Dependabot can't update.
+
+**No Alpine images.** DuckDB has no musl wheel, so every build would compile it from source.
+Postgres already runs on Alpine, and the other services have no Alpine variants.
+
+**The dev container has a memory cap** (8 GB, no swap), so a runaway process, usually DuckDB, dbt or
+an agent, is killed inside it instead of the whole machine swapping until the desktop freezes. On a
+machine with more RAM, raise it first (the README's machine size section).
+
+CodeQL checks the Python and the workflows, and coverage shows as a badge and as a comment on each
+pull request.
+
 ## What I wanted to add but didn't have time for
 
-**CI/CD**, specifically a build-validation step that runs [Recce](https://github.com/DataRecce/recce)
-to produce schema and data diffs on each pull request, so reviewers can see how a change to the
-domain logic plays out, even across complex data structures. Also that is why currnet git history is so unprofessional. The idea was to have tag based releases, but never got to that point.
+**Recce on pull requests.** CI and releases are in now ([CI/CD](#cicd)), but not the
+build-validation step I wanted most: running [Recce](https://github.com/DataRecce/recce) to produce
+schema and data diffs on each pull request, so reviewers can see how a change to the domain logic
+plays out, even across complex data structures. SonarQube Cloud is on the list too, for coverage
+and code quality over time.
 
 **Matching Google Places listings to companies.** The Google side works: the search areas are
 planned, the listings fetched, archived and cleaned into `stg_google__listings` (name, address,
