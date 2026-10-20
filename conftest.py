@@ -6,6 +6,9 @@ from unittest import mock
 import pytest
 from hypothesis import settings
 
+# The fixtures for the dev container's services, which the integration tests use.
+pytest_plugins = ["owl_testing.services"]
+
 TEST_KINDS = ("unit", "integration")
 
 # The properties are of pure functions: a slow example is a slow machine, not a failure.

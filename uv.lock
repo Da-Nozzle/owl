@@ -1562,14 +1562,24 @@ name = "owl-testing"
 version = "0.1.0"
 source = { editable = "libs/testing" }
 dependencies = [
+    { name = "httpx" },
     { name = "owl-config" },
     { name = "owl-ingest" },
+    { name = "owl-lake" },
+    { name = "psycopg2-binary" },
+    { name = "pytest" },
+    { name = "s3fs" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "httpx", specifier = ">=0.28.1,<1" },
     { name = "owl-config", editable = "services/config" },
     { name = "owl-ingest", editable = "services/ingest" },
+    { name = "owl-lake", editable = "libs/lake" },
+    { name = "psycopg2-binary", specifier = ">=2.9.13" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "s3fs", specifier = ">=2026.9" },
 ]
 
 [[package]]

@@ -173,16 +173,23 @@ def build_config(
 ) -> Configuration:
     """LOCAL_LIKE_VALUES with each dotted key of `overrides` replaced, e.g.
     `{"sodra.history_months": 1}`; a key that is not a setting fails, so a typo cannot pass."""
-    values: dict[str, Any] = deepcopy(dict(LOCAL_LIKE_VALUES))
-    for key, value in (overrides or {}).items():
+    values = with_overrides(LOCAL_LIKE_VALUES, overrides or {})
+    return Configuration(values=values, secret_store=InMemorySecretStore(secrets or {}))
+
+
+def with_overrides(values: Mapping[str, Any], overrides: Mapping[str, object]) -> dict[str, Any]:
+    """A copy of `values` with each dotted key of `overrides` replaced; a key that is not a
+    setting fails."""
+    copied: dict[str, Any] = deepcopy(dict(values))
+    for key, value in overrides.items():
         *parents, leaf = key.split(".")
-        table = values
+        table = copied
         for part in parents:
             table = table[part]
         if leaf not in table:
-            raise KeyError(f"{key!r} is not a setting of the local-like configuration")
+            raise KeyError(f"{key!r} is not a setting of the configuration")
         table[leaf] = value
-    return Configuration(values=values, secret_store=InMemorySecretStore(secrets or {}))
+    return copied
 
 
 def secret_reference(name: str) -> dict[str, str]:
