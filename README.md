@@ -118,9 +118,9 @@ never called. dbt's tests are in `services/transform/tests/`.
 
 ### Commits, versions and CI
 
-Commit messages are [conventional commits](https://www.conventionalcommits.org), checked by
-`.githooks/commit-msg` (post-create turns it on) and, on pull requests, for the title and every
-commit. The whole repo has one version, which the types since the last tag decide:
+The whole repo has one version, which the [conventional commit](https://www.conventionalcommits.org)
+types since the last tag decide. Nothing checks commit messages: one without a type makes no release
+and is left out of the changelog.
 
 | Commit | Version |
 | --- | --- |
@@ -136,7 +136,6 @@ Once CI passes on main, `release.yml` writes the next version into every `pyproj
 | Workflow | Runs |
 | --- | --- |
 | `ci.yml` | actionlint; the dev container as VS Code builds it, with every compose service, running `.devcontainer/ci.sh` |
-| `pull-request.yml` | the title and commits are conventional commits |
 | `release.yml` | the release, after CI on main |
 | `codeql.yml` | CodeQL on the Python and the workflows |
 
@@ -149,13 +148,14 @@ dev stack. The dev-container and CodeQL jobs skip themselves there: run `.devcon
 dev container instead.
 
 ```sh
-act push -j workflows                                    # actionlint
-act workflow_dispatch -W .github/workflows/release.yml --input dry-run=true # the next version (on main)
-act pull_request -W .github/workflows/pull-request.yml -e event.json
+act push -j workflows                                                        # actionlint
+act workflow_dispatch -W .github/workflows/release.yml --input dry-run=true  # the next version (on main)
 ```
 
-`event.json` gives the pull request: `{"pull_request": {"title": "...", "base": {"sha": "..."},
-"head": {"sha": "..."}}}`.
+Tool versions are each kept in one place that Dependabot updates: uv in `.devcontainer/Dockerfile`
+(the release job takes its uv from there too), python-semantic-release in `uv.lock` (the `release`
+dependency group), act as a dev container feature, and the actions by commit. actionlint and the
+devcontainer CLI run their latest.
 
 ### Changing models
 
