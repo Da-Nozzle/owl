@@ -39,7 +39,6 @@ owl-ingest = { workspace = true }
 owl-lake = { workspace = true }
 owl-testing = { workspace = true }
 
-# No requires-python: Dependabot overwrites every requires-python in uv.lock with the project's.
 [[tool.uv.dependency-metadata]]
 name = "dagster-dbt"
 version = "0.29.26"
