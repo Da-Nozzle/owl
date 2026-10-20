@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.14.*"
 resolution-markers = [
     "platform_python_implementation != 'PyPy' and sys_platform != 'emscripten'",
@@ -1398,7 +1398,7 @@ wheels = [
 
 [[package]]
 name = "openlineage-python"
-version = "1.53.0"
+version = "1.54.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "attrs" },
@@ -1409,7 +1409,7 @@ dependencies = [
     { name = "requests" },
 ]
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/fa/69/f1c2a443aae12ba2542e9e6f9bb43cb2a37aa043a9eb90f99932a68c69cc/openlineage_python-1.53.0-py3-none-any.whl", hash = "sha256:7a4723b938a24a753308611b0ac4add19cd396448758db903bfe9cc964a75575", size = 125654, upload-time = "2026-09-01T13:32:33.327Z" },
+    { url = "https://files.pythonhosted.org/packages/70/d2/6637b6a4bcce2a3d46be255279776e29fb2a0816864d2b724baf67122736/openlineage_python-1.54.0-py3-none-any.whl", hash = "sha256:d8df45da51e82131c0f804842c82df4dfbc5dbcf4d70cac7fdb0819c23236f29", size = 128273, upload-time = "2026-10-12T19:46:40.978Z" },
 ]
 
 [[package]]
@@ -1532,7 +1532,7 @@ requires-dist = [
     { name = "dbt-core", specifier = ">=1.12,<1.13" },
     { name = "dbt-duckdb", specifier = ">=1.11,<1.12" },
     { name = "duckdb", specifier = "==1.5.6" },
-    { name = "openlineage-python", specifier = "==1.53.0" },
+    { name = "openlineage-python", specifier = "==1.54.0" },
     { name = "owl-config", editable = "services/config" },
     { name = "owl-http", editable = "libs/http" },
     { name = "owl-ingest", editable = "services/ingest" },
