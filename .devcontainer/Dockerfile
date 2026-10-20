@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 FROM ghcr.io/astral-sh/uv:0.13.4 AS uv
 
-FROM python:3.14.7-slim
+FROM python:3.14.8-slim
 
 ARG USERNAME=dev
 ARG USER_UID=1000
