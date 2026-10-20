@@ -7,21 +7,44 @@ from pathlib import Path
 import httpx
 import pytest
 
+from owl_config.configuration import Configuration
 from owl_ingest.adapters.archive.fsspec_archive import FsspecRawArchive, open_fsspec_archive
+from owl_ingest.adapters.s3.configuration import s3fs_options
 from owl_ingest.ports.downloader import OpenedDownload
 from owl_ingest.ports.raw_archive import SnapshotManifest, file_record
+from owl_lake.settings import load_lake_storage
 from owl_testing.ingest import build_download
 
 COMPLETED_AT = datetime(2026, 10, 21, 3, 5, tzinfo=UTC)
 
 
-@pytest.fixture
-def archive(tmp_path: Path) -> FsspecRawArchive:
-    return open_fsspec_archive(str(tmp_path))
+@pytest.fixture(params=["local", "s3"])
+def archive(request: pytest.FixtureRequest, tmp_path: Path) -> FsspecRawArchive:
+    """In a folder, as replay reads its sample, and on s3mock, as live keeps its archive (in the
+    test's own folder of a bucket of the session's)."""
+    if request.param == "local":
+        return open_fsspec_archive(str(tmp_path))
+    config: Configuration = request.getfixturevalue("local_config")
+    prefix: str = request.getfixturevalue("s3_prefix")
+    return open_fsspec_archive(f"{prefix}/archive/", s3fs_options(load_lake_storage(config)))
+
+
+def stored(archive: FsspecRawArchive, path: str) -> bytes:
+    """The file at `path` below the archive's root."""
+    return archive.filesystem.cat_file(f"{archive.root.rstrip('/')}/{path}")
+
+
+def folder_of(archive: FsspecRawArchive, path: str) -> dict[str, bytes]:
+    """Each file in the folder at `path` below the archive's root, by name."""
+    folder = f"{archive.root.rstrip('/')}/{path}"
+    return {
+        name.rsplit("/", 1)[-1]: archive.filesystem.cat_file(name)
+        for name in archive.filesystem.ls(folder, detail=False)
+    }
 
 
 def test_a_saved_download_is_kept_byte_for_byte_with_its_fetch_beside_it(
-    archive: FsspecRawArchive, tmp_path: Path
+    archive: FsspecRawArchive,
 ) -> None:
     # Arrange
     download = build_download(
@@ -34,9 +57,8 @@ def test_a_saved_download_is_kept_byte_for_byte_with_its_fetch_beside_it(
     archive.save("sodra", "2026-09", "monthly-2026.csv.zip", download)
 
     # Assert
-    path = tmp_path / "sodra" / "2026-09" / "monthly-2026.csv.zip"
-    assert path.read_bytes() == b"PK\x03\x04 raw bytes"
-    sidecar = json.loads(path.with_name("monthly-2026.csv.zip.meta.json").read_text())
+    assert stored(archive, "sodra/2026-09/monthly-2026.csv.zip") == b"PK\x03\x04 raw bytes"
+    sidecar = json.loads(stored(archive, "sodra/2026-09/monthly-2026.csv.zip.meta.json"))
     assert sidecar == file_record(download)
     assert sidecar["sha256"] == download.sha256
 
@@ -60,7 +82,7 @@ def broken_off(chunks: list[bytes]) -> Iterator[bytes]:
 
 
 def test_a_streamed_download_is_kept_as_it_arrived_and_recorded_as_a_saved_one(
-    archive: FsspecRawArchive, tmp_path: Path
+    archive: FsspecRawArchive,
 ) -> None:
     # Arrange
     chunks = [b"_id,darbo_vietos_id\n", b"v1,DV-59-", b"996710668\n"]
@@ -71,15 +93,14 @@ def test_a_streamed_download_is_kept_as_it_arrived_and_recorded_as_a_saved_one(
     archive.complete("uzt_vacancies", "2026-09", {"Vieta.csv": streamed}, COMPLETED_AT)
 
     # Assert
-    path = tmp_path / "uzt_vacancies" / "2026-09" / "Vieta.csv"
-    assert path.read_bytes() == whole.body
-    sidecar = json.loads(path.with_name("Vieta.csv.meta.json").read_text())
+    assert stored(archive, "uzt_vacancies/2026-09/Vieta.csv") == whole.body
+    sidecar = json.loads(stored(archive, "uzt_vacancies/2026-09/Vieta.csv.meta.json"))
     assert sidecar == file_record(streamed) == file_record(whole)
     assert archive.manifest("uzt_vacancies", "2026-09").files == {"Vieta.csv": sidecar}
 
 
 def test_a_streamed_gz_file_is_compressed_and_recorded_as_sent(
-    archive: FsspecRawArchive, tmp_path: Path
+    archive: FsspecRawArchive,
 ) -> None:
     # Arrange
     chunks = [b"_id,kodas\n", b"r1,310\n" * 1000]
@@ -89,15 +110,13 @@ def test_a_streamed_gz_file_is_compressed_and_recorded_as_sent(
     streamed = archive.save_stream("jar", "2026-09", "Finansai.csv.gz", opened(chunks))
 
     # Assert
-    stored = (tmp_path / "jar" / "2026-09" / "Finansai.csv.gz").read_bytes()
-    assert gzip.decompress(stored) == whole.body
-    assert len(stored) < whole.size
+    compressed = stored(archive, "jar/2026-09/Finansai.csv.gz")
+    assert gzip.decompress(compressed) == whole.body
+    assert len(compressed) < whole.size
     assert file_record(streamed) == file_record(whole)
 
 
-def test_a_stream_saved_again_starts_its_file_over(
-    archive: FsspecRawArchive, tmp_path: Path
-) -> None:
+def test_a_stream_saved_again_starts_its_file_over(archive: FsspecRawArchive) -> None:
     # Arrange
     archive.save_stream("jar", "2026-09", "Finansai.csv.gz", opened([b"_id\n", b"r1\n" * 50]))
 
@@ -105,41 +124,41 @@ def test_a_stream_saved_again_starts_its_file_over(
     archive.save_stream("jar", "2026-09", "Finansai.csv.gz", opened([b"_id\nr2\n"]))
 
     # Assert
-    stored = (tmp_path / "jar" / "2026-09" / "Finansai.csv.gz").read_bytes()
-    assert gzip.decompress(stored) == b"_id\nr2\n"
+    assert gzip.decompress(stored(archive, "jar/2026-09/Finansai.csv.gz")) == b"_id\nr2\n"
 
 
 def test_a_stream_is_moved_into_place_only_once_it_arrived_whole(
-    archive: FsspecRawArchive, tmp_path: Path
+    archive: FsspecRawArchive,
 ) -> None:
     # Act
     archive.save_stream("uzt_vacancies", "2026-09", "Vieta.csv", opened([b"_id\n", b"v1\n"]))
 
     # Assert
-    folder = tmp_path / "uzt_vacancies" / "2026-09"
-    assert sorted(path.name for path in folder.iterdir()) == ["Vieta.csv", "Vieta.csv.meta.json"]
+    assert sorted(folder_of(archive, "uzt_vacancies/2026-09")) == [
+        "Vieta.csv",
+        "Vieta.csv.meta.json",
+    ]
 
 
 def test_a_stream_that_broke_off_leaves_the_file_it_would_have_replaced(
-    archive: FsspecRawArchive, tmp_path: Path
+    archive: FsspecRawArchive,
 ) -> None:
     # Arrange
     complete = archive.save_stream("jar", "2026-09", "Finansai.csv.gz", opened([b"_id\nr1\n"]))
-    folder = tmp_path / "jar" / "2026-09"
-    before = {path.name: path.read_bytes() for path in folder.iterdir()}
+    before = folder_of(archive, "jar/2026-09")
 
     # Act
     with pytest.raises(httpx.RemoteProtocolError):
         archive.save_stream("jar", "2026-09", "Finansai.csv.gz", opened(broken_off([b"_id\n"])))
 
     # Assert
-    assert {path.name: path.read_bytes() for path in folder.iterdir()} == before
+    assert folder_of(archive, "jar/2026-09") == before
     assert gzip.decompress(before["Finansai.csv.gz"]) == b"_id\nr1\n"
     assert json.loads(before["Finansai.csv.gz.meta.json"]) == file_record(complete)
 
 
 def test_the_request_a_file_answered_is_kept_beside_it_and_not_in_the_manifest(
-    archive: FsspecRawArchive, tmp_path: Path
+    archive: FsspecRawArchive,
 ) -> None:
     # Arrange
     request = {"field_mask": "places.id", "body": {"textQuery": "kavinė", "pageToken": "t" * 1000}}
@@ -150,8 +169,8 @@ def test_the_request_a_file_answered_is_kept_beside_it_and_not_in_the_manifest(
     archive.complete("google_places", "2026-09", {"places-kavine-r-1.json": download}, COMPLETED_AT)
 
     # Assert
-    path = tmp_path / "google_places" / "2026-09" / "places-kavine-r-1.json.meta.json"
-    assert json.loads(path.read_text()) == {**file_record(download), "request": request}
+    sidecar = stored(archive, "google_places/2026-09/places-kavine-r-1.json.meta.json")
+    assert json.loads(sidecar) == {**file_record(download), "request": request}
     manifest = archive.manifest("google_places", "2026-09")
     assert manifest.files == {"places-kavine-r-1.json": file_record(download)}
     assert "request" not in file_record(download)
