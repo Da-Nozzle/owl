@@ -109,8 +109,12 @@ owl-dbt-vscode                       # the dbt VS Code extension's environment (
 ```
 
 Tests live in each package's `tests/unit/` (in-process) or `tests/integration/` (temporary files,
-DuckDB, a local HTTP server or a throwaway Dagster instance). None needs the compose services. dbt's
-tests are in `services/transform/tests/`.
+DuckDB, a local HTTP server, Dagster's executor or the compose services). The integration tests reach
+Postgres, s3mock and Marquez as `config/local` says, each session in resources of its own that it
+removes afterwards: `owl_test_<random>_*` databases, an `owl-test-<random>` bucket and a Marquez
+namespace per test (Marquez can only hide a deleted namespace). A service that has not answered
+within two minutes fails the tests that need it, naming the service. The sources themselves are
+never called. dbt's tests are in `services/transform/tests/`.
 
 ### Commits, versions and CI
 
