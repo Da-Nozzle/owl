@@ -3,6 +3,13 @@ set -eu
 
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 
+# updateRemoteUserUID gives dev the host user's UID, but moves only its home folder over: uv installs
+# the project into /usr/local, still the image's UID (1000) on hosts whose user is another, like
+# GitHub's runner.
+if [ ! -w /usr/local ]; then
+    sudo chown -R "$(id -u):$(id -g)" /usr/local
+fi
+
 uv sync --frozen --project "$repo_root"
 
 # Commit messages are conventional commits, which the release job versions from.
