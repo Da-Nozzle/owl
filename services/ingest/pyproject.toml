@@ -1,6 +1,6 @@
 [project]
 name = "owl-ingest"
-version = "0.1.0"
+version = "0.1.1"
 description = "Source fetches, the raw archive they write to, and the adapters they reach sources and the lake through"
 requires-python = ">=3.14,<3.15"
 dependencies = [
