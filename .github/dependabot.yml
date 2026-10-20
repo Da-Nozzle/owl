@@ -1,0 +1,76 @@
+# Weekly updates, grouped, a week after each release (cooldown). Commit messages are "build(deps): ..."
+# or "ci(deps): ...", conventional commits that make no release of their own (pyproject.toml).
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+      include: scope
+    ignore:
+      # Pinned together, and by the dagster-dbt metadata override in pyproject.toml: update by hand.
+      - dependency-name: "dagster*"
+      # Must be the DuckDB of [mcp.lake] in config/local/mcp.toml, or the MCP server may not read the
+      # lake's catalog: update both by hand.
+      - dependency-name: duckdb
+    groups:
+      python:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directory: /.devcontainer
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+      include: scope
+    ignore:
+      # requires-python is <3.15 (pyproject.toml): a new Python is a change of its own.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+
+  - package-ecosystem: docker-compose
+    directory: /.devcontainer
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+      include: scope
+    ignore:
+      # A new major can't read the postgres-data volume without pg_upgrade.
+      - dependency-name: postgres
+        update-types: ["version-update:semver-major"]
+    groups:
+      marquez:
+        patterns: ["marquezproject/*"]
+
+  - package-ecosystem: devcontainers
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+      include: scope
