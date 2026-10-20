@@ -1,5 +1,13 @@
 # Owl: Off-books Work Locator (Working Title)
 
+[![CI](https://github.com/Da-Nozzle/owl/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Da-Nozzle/owl/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/Da-Nozzle/owl/actions/workflows/codeql.yml/badge.svg?branch=main)](https://github.com/Da-Nozzle/owl/actions/workflows/codeql.yml)
+[![Version](https://img.shields.io/github/v/tag/Da-Nozzle/owl?sort=semver&label=version)](CHANGELOG.md)
+[![Python](https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2FDa-Nozzle%2Fowl%2Fmain%2Fpyproject.toml)](pyproject.toml)
+[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Conventional Commits](https://img.shields.io/badge/Conventional%20Commits-1.0.0-%23FE5196?logo=conventionalcommits&logoColor=white)](https://www.conventionalcommits.org)
+
 Monthly pipeline that ranks Vilnius businesses which look busy on Google but declare little to Sodra.
 Why it is built the way it is: [DECISIONS.md](DECISIONS.md).
 
@@ -93,6 +101,7 @@ After changing a TOML file, click **Reload definitions** in Dagster. After chang
 ```sh
 pytest                               # all tests; -m unit or -m integration for one kind
 ruff check . && ruff format --check .
+sh .devcontainer/ci.sh               # what CI checks: the lock, ruff, then every test
 owl-dbt --lake replay debug          # dbt on a lake (live or replay), secrets resolved from config
 owl-dbt-dev build -s state:modified+ # your model changes, in a dev copy
 owl-dbt-diff                         # what those changes did to the tables
@@ -102,6 +111,47 @@ owl-dbt-vscode                       # the dbt VS Code extension's environment (
 Tests live in each package's `tests/unit/` (in-process) or `tests/integration/` (temporary files,
 DuckDB, a local HTTP server or a throwaway Dagster instance). None needs the compose services. dbt's
 tests are in `services/transform/tests/`.
+
+### Commits, versions and CI
+
+Commit messages are [conventional commits](https://www.conventionalcommits.org), checked by
+`.githooks/commit-msg` (post-create turns it on) and, on pull requests, for the title and every
+commit. The whole repo has one version, which the types since the last tag decide:
+
+| Commit | Version |
+| --- | --- |
+| `fix:`, `perf:` | patch, 0.1.0 → 0.1.1 |
+| `feat:` (a feature or a change in logic) | minor, 0.1.0 → 0.2.0 |
+| `feat!:`, any type with `!` (breaking) | major from 1.0.0; minor before |
+| `build:`, `chore:`, `ci:`, `docs:`, `refactor:`, `style:`, `test:` | none of its own |
+
+Once CI passes on main, `release.yml` writes the next version into every `pyproject.toml`,
+`dbt_project.yml` and `uv.lock`, adds its changes to [CHANGELOG.md](CHANGELOG.md), commits
+`chore(release): vX.Y.Z`, tags it and makes a GitHub release. Pull before you commit to main again.
+
+| Workflow | Runs |
+| --- | --- |
+| `ci.yml` | actionlint; the dev container as VS Code builds it, with every compose service, running `.devcontainer/ci.sh` |
+| `pull-request.yml` | the title and commits are conventional commits |
+| `release.yml` | the release, after CI on main |
+| `codeql.yml` | CodeQL on the Python and the workflows |
+
+Dependabot (`.github/dependabot.yml`) opens weekly grouped updates for uv, the actions, the image,
+the compose services and the dev container features, all but Dagster and DuckDB, which are updated by
+hand (the comments there say why).
+
+[act](https://nektos.github.io/act/) runs the workflows locally (`.actrc`), in containers beside the
+dev stack. The dev-container and CodeQL jobs skip themselves there: run `.devcontainer/ci.sh` in the
+dev container instead.
+
+```sh
+act push -j workflows                                    # actionlint
+act workflow_dispatch -W .github/workflows/release.yml --input dry-run=true # the next version (on main)
+act pull_request -W .github/workflows/pull-request.yml -e event.json
+```
+
+`event.json` gives the pull request: `{"pull_request": {"title": "...", "base": {"sha": "..."},
+"head": {"sha": "..."}}}`.
 
 ### Changing models
 
