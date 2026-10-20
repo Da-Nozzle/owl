@@ -32,8 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
-          fetch-depth: 0
+          fetch-depth: 0 # every tag and commit since the last release
       # The commit CI passed, not one pushed since: the release commit then fails to push, and the
       # newer commit's own run releases both.
       - name: Check out the commit CI passed

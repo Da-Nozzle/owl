@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # A newer push to a pull request replaces its run; every commit on main is tested, as each may
+  # be released (release.yml).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  workflows:
+    name: Workflows
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The runner's shellcheck checks the workflows' scripts too.
+      - name: actionlint
+        env:
+          VERSION: "1.7.12"
+        run: |
+          curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/actionlint_${VERSION}_linux_amd64.tar.gz" \
+            | tar -xz -C "$RUNNER_TEMP" actionlint
+          "$RUNNER_TEMP/actionlint" -color
+
+  dev-container:
+    name: Lint and test in the dev container
+    # The dev container as VS Code builds it (devcontainer.json): the same image, features, compose
+    # services, config and post-create. Under act, which runs beside the dev stack on the same
+    # Docker, this would start a second one: run .devcontainer/ci.sh in the dev container instead.
+    if: ${{ !vars.ACT }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      DEVCONTAINER_CLI: "@devcontainers/cli@0.89.0"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Start the dev container and its services
+        run: npx --yes "$DEVCONTAINER_CLI" up --workspace-folder .
+      - name: Lint and test
+        run: npx --yes "$DEVCONTAINER_CLI" exec --workspace-folder . sh .devcontainer/ci.sh
+      - name: Service logs
+        if: failure()
+        run: docker compose --file .devcontainer/compose.yml logs --no-color --tail 200
